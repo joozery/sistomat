@@ -179,19 +179,13 @@ export function AppNavbar() {
       <div className="flex items-center gap-2 lg:gap-3">
         {/* Facebook-style Notification Popup Dropdown */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="relative p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors outline-none"
-              title="การแจ้งเตือน"
-            >
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#c62828] text-[10px] font-bold text-white ring-2 ring-white">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
+          <DropdownMenuTrigger className="relative p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors outline-none">
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#c62828] text-[10px] font-bold text-white ring-2 ring-white">
+                {unreadCount}
+              </span>
+            )}
           </DropdownMenuTrigger>
 
           <DropdownMenuContent align="end" className="w-[320px] sm:w-[340px] p-0 rounded-xl border border-gray-200 bg-white font-sans">

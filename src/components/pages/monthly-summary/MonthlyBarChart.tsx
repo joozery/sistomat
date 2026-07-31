@@ -1,7 +1,6 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Bar } from 'react-[#c62828]'
 import { Bar as ChartBar } from 'react-chartjs-2'
 import 'chart.js/auto'
 import { BarChart3, TrendingUp } from 'lucide-react'
