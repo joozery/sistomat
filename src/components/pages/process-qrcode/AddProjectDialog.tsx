@@ -22,7 +22,7 @@ interface AddProjectDialogProps {
 
 export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDialogProps) {
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ projectId: '', receivedDate: '', dueDate: '' })
+  const [form, setForm] = useState({ projectId: '', dwgName: '', receivedDate: '', dueDate: '' })
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,12 +42,12 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         body: JSON.stringify(form),
       })
 
-      setForm({ projectId: '', receivedDate: '', dueDate: '' })
+      setForm({ projectId: '', dwgName: '', receivedDate: '', dueDate: '' })
       onOpenChange(false)
       onSuccess()
     } catch {
       alert('บันทึกข้อมูลเรียบร้อยแล้ว')
-      setForm({ projectId: '', receivedDate: '', dueDate: '' })
+      setForm({ projectId: '', dwgName: '', receivedDate: '', dueDate: '' })
       onOpenChange(false)
       onSuccess()
     } finally {
@@ -77,6 +77,16 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
               onChange={(e) => setForm({ ...form, projectId: e.target.value })}
               className="rounded-xl h-10 text-sm border-gray-200"
               required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-700">เลข DWG / ชื่อแบบ <span className="text-gray-400 font-normal">(ถ้ามี)</span></Label>
+            <Input
+              placeholder="เช่น LED Holder E-673-02"
+              value={form.dwgName}
+              onChange={(e) => setForm({ ...form, dwgName: e.target.value })}
+              className="rounded-xl h-10 text-sm border-gray-200"
             />
           </div>
 

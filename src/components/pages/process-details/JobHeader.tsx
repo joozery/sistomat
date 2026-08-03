@@ -10,20 +10,33 @@ const Barcode = dynamic(() => import('react-barcode'), { ssr: false })
 
 interface JobHeaderProps {
   id: string
+  dwgName?: string
   receivedDate: string
   dueDate: string
 }
 
-export function JobHeader({ id, receivedDate, dueDate }: JobHeaderProps) {
+// บาร์โค้ดรวม JOB|DWG ในแท่งเดียว (คั่นด้วย "|")
+function buildBarcodeValue(jobId: string, dwgName?: string) {
+  if (dwgName && dwgName.trim()) {
+    return `${jobId}|${dwgName.trim()}`
+  }
+  return jobId
+}
+
+export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps) {
   const barcodeRef = useRef<HTMLDivElement>(null)
+  const barcodeValue = buildBarcodeValue(id, dwgName)
 
   const handleDownload = () => {
-    const svg = barcodeRef.current?.querySelector('svg')
+    const container = barcodeRef.current
+    if (!container) return
+
+    const svg = container.querySelector('svg')
     if (!svg) return
 
-    const svgW = svg.getBoundingClientRect().width || 220
-    const svgH = svg.getBoundingClientRect().height || 100
-    const scale = 3 // 3x resolution for sharp print quality
+    const svgW = svg.getBoundingClientRect().width || 260
+    const svgH = svg.getBoundingClientRect().height || 110
+    const scale = 3
 
     const svgString = new XMLSerializer().serializeToString(svg)
     const canvas = document.createElement('canvas')
@@ -61,25 +74,61 @@ export function JobHeader({ id, receivedDate, dueDate }: JobHeaderProps) {
             <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
               รายละเอียดกระบวนการผลิต #{id}
             </h2>
+            {dwgName && (
+              <p className="text-sm font-medium text-gray-600">
+                DWG: <span className="text-gray-800 font-semibold">{dwgName}</span>
+              </p>
+            )}
             <p className="text-xs text-gray-400">
               บาร์โค้ดประจำใบงานสำหรับสแกนเข้าสถานีปฏิบัติงาน
             </p>
           </div>
 
           {/* Barcode + Download */}
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-2">
             <div
               ref={barcodeRef}
-              className="flex items-center justify-center px-4 py-3 bg-white rounded-2xl border border-gray-200"
+              className="flex items-center justify-center px-4 pt-3 pb-1 bg-white rounded-2xl border border-gray-200"
             >
-              <Barcode
-                value={id || 'N/A'}
-                width={1.8}
-                height={52}
-                fontSize={12}
-                background="#ffffff"
-                lineColor="#1a1a1a"
-              />
+              <div className="flex flex-col items-center gap-0">
+                <Barcode
+                  value={barcodeValue}
+                  width={1.5}
+                  height={48}
+                  fontSize={0}
+                  displayValue={false}
+                  background="#ffffff"
+                  lineColor="#1a1a1a"
+                />
+                {/* Label row – JOB | DWG */}
+                <div className="flex items-stretch w-full border border-gray-300 rounded overflow-hidden mt-1">
+                  <div className="flex-1 text-center px-2 py-1 text-[11px] font-semibold text-gray-800 border-r border-gray-300 bg-white">
+                    {id}
+                  </div>
+                  {dwgName && (
+                    <div className="flex-1 text-center px-2 py-1 text-[11px] font-semibold text-gray-800 bg-white">
+                      {dwgName}
+                    </div>
+                  )}
+                </div>
+                {/* Arrows + labels */}
+                {dwgName && (
+                  <div className="flex w-full mt-1">
+                    <div className="flex-1 flex flex-col items-center gap-0.5">
+                      <svg className="h-4 w-4 text-blue-600 fill-blue-600" viewBox="0 0 20 20">
+                        <path d="M10 3l7 7H3l7-7z"/>
+                      </svg>
+                      <span className="text-[10px] font-bold text-blue-600 bg-blue-500 text-white px-2 py-0.5 rounded text-center leading-tight">เลข JOB</span>
+                    </div>
+                    <div className="flex-1 flex flex-col items-center gap-0.5">
+                      <svg className="h-4 w-4 text-blue-600 fill-blue-600" viewBox="0 0 20 20">
+                        <path d="M10 3l7 7H3l7-7z"/>
+                      </svg>
+                      <span className="text-[10px] font-bold text-blue-600 bg-blue-500 text-white px-2 py-0.5 rounded text-center leading-tight">เลข DWG</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <Button
               type="button"

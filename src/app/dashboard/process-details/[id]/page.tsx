@@ -3,16 +3,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2, Printer } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
-import { ProcessTable, type ProcessRow } from '@/components/pages/process-details/ProcessTable'
+import { ProcessTable, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
+import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
 
 interface ProjectData {
   project_id: string
+  dwg_name?: string
   received_date: string
   due_date: string
   status: string
-  processes?: ProcessRow[]
+  processes?: any[]
 }
 
 function formatThaiDate(iso: string) {
@@ -41,6 +43,10 @@ export default function ProcessDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [processList, setProcessList] = useState<ProcessRow[]>([])
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
+  
+  // Scanner states
+  const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null)
+  const [activeWorkerId, setActiveWorkerId] = useState<string>('')
 
   // Fetch project from MongoDB
   useEffect(() => {
@@ -62,7 +68,25 @@ export default function ProcessDetailsPage() {
         const data: ProjectData = await res.json()
         if (cancelled) return
         setProject(data)
-        setProcessList(data.processes ?? [])
+        
+        // Migrate legacy data and format workers array
+        const mappedProcesses = (data.processes ?? []).map((p: any) => {
+          let workers = p.workers || []
+          if (!p.workers && p.worker_id !== undefined) {
+            workers = [
+              { worker_id: p.worker_id || '', start_time: p.start_time || '', stop_time: p.stop_time || '' }
+            ]
+          }
+          while (workers.length < 4) {
+            workers.push({ worker_id: '', start_time: '', stop_time: '' })
+          }
+          return {
+            ...p,
+            skill: p.skill || '0',
+            workers: workers.slice(0, 4)
+          }
+        })
+        setProcessList(mappedProcesses)
       } catch {
         if (!cancelled) setError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
       } finally {
@@ -78,15 +102,33 @@ export default function ProcessDetailsPage() {
     const todayStr = new Date().toISOString().split('T')[0]
     setProcessList((prev) =>
       prev.map((row) => {
-        if (!row.start_time || row.stop_time) return row
-        const start = new Date(`${todayStr}T${row.start_time}:00`)
-        const totalSecs = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000))
+        let totalSecs = 0
+        let isRunning = false
+
+        row.workers?.forEach((w) => {
+          if (!w.start_time) return
+          const start = new Date(`${todayStr}T${w.start_time}:00`).getTime()
+          let end = Date.now()
+          if (w.stop_time) {
+            end = new Date(`${todayStr}T${w.stop_time}:00`).getTime()
+          } else {
+            isRunning = true
+          }
+          if (end > start) {
+            totalSecs += Math.floor((end - start) / 1000)
+          }
+        })
+
         const hrs  = Math.floor(totalSecs / 3600)
         const mins = Math.floor((totalSecs % 3600) / 60)
         const secs = totalSecs % 60
+        const formatted = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+
+        if (row.elapsed_time === formatted) return row
+
         return {
           ...row,
-          elapsed_time: `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
+          elapsed_time: formatted,
         }
       })
     )
@@ -105,18 +147,100 @@ export default function ProcessDetailsPage() {
     })
   }
 
+  useEffect(() => {
+    const handleLocalScan = (e: any) => {
+      if (activeRowIndex === null) return
+      
+      // Stop GlobalBarcodeScanner from navigating
+      e.preventDefault()
+
+      const raw = e.detail.barcode.toUpperCase()
+      const isCommand = ['START', 'STOP', 'FN', 'PASS', 'NG', 'REJ'].includes(raw)
+      
+      if (isCommand) {
+        if (!activeWorkerId) {
+          alert('กรุณาสแกนรหัสพนักงานก่อนทำรายการ!')
+          return
+        }
+        
+        setProcessList(prev => {
+          const next = [...prev]
+          const row = { ...next[activeRowIndex] }
+          const workers = [...row.workers]
+          
+          const nowTime = new Date().toLocaleTimeString('th-TH', { hour12: false, hour: '2-digit', minute: '2-digit' })
+          
+          if (raw === 'START') {
+             // Find slot for worker
+             let slotIdx = workers.findIndex(w => w.worker_id === activeWorkerId && !w.stop_time)
+             if (slotIdx === -1) slotIdx = workers.findIndex(w => !w.worker_id)
+             
+             if (slotIdx !== -1) {
+                workers[slotIdx] = { worker_id: activeWorkerId, start_time: nowTime, stop_time: '' }
+             } else {
+                alert('ช่องพนักงานเต็มแล้ว!')
+                return prev
+             }
+          } else if (raw === 'STOP' || raw === 'FN') {
+             const slotIdx = workers.findIndex(w => w.worker_id === activeWorkerId && w.start_time && !w.stop_time)
+             if (slotIdx !== -1) {
+                workers[slotIdx] = { ...workers[slotIdx], stop_time: nowTime }
+             } else {
+                alert('ไม่พบการเริ่มงานของพนักงานนี้')
+                return prev
+             }
+          }
+          
+          row.workers = workers
+          next[activeRowIndex] = row
+
+          // Auto-save silently so the worker can walk away immediately
+          fetch(`/api/projects/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ processes: next }),
+          }).catch(console.error)
+
+          return next
+        })
+        
+        setActiveWorkerId('') // reset after action
+      } else {
+        // Assume raw string is Worker ID
+        setActiveWorkerId(raw)
+      }
+    }
+    
+    document.addEventListener('onBarcodeScan', handleLocalScan)
+    return () => document.removeEventListener('onBarcodeScan', handleLocalScan)
+  }, [activeRowIndex, activeWorkerId])
+
+  const handleWorkerChange = (index: number, workerIndex: number, field: keyof WorkerLog, value: string) => {
+    setProcessList((prev) => {
+      const next = [...prev]
+      const nextWorkers = [...next[index].workers]
+      nextWorkers[workerIndex] = { ...nextWorkers[workerIndex], [field]: value }
+      next[index] = { ...next[index], workers: nextWorkers }
+      return next
+    })
+  }
+
   const handleAddRow = () => {
     setProcessList((prev) => [
       ...prev,
       {
         id: Date.now(),
         process: 'MATERAIL',
-        target_time: '00:30',
-        worker_id: '',
-        start_time: '',
-        stop_time: '',
-        elapsed_time: '00:00',
-        remark: '-',
+        target_time: '00:00',
+        skill: '0',
+        workers: [
+          { worker_id: '', start_time: '', stop_time: '' },
+          { worker_id: '', start_time: '', stop_time: '' },
+          { worker_id: '', start_time: '', stop_time: '' },
+          { worker_id: '', start_time: '', stop_time: '' },
+        ],
+        elapsed_time: '00:00:00',
+        remark: '',
       },
     ])
   }
@@ -125,7 +249,7 @@ export default function ProcessDetailsPage() {
     setProcessList((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleSave = async () => {
+  const handleSave = async (processesToSave?: ProcessRow[]) => {
     setSaveState('saving')
     try {
       const res = await fetch(`/api/projects/${id}`, {
@@ -134,7 +258,7 @@ export default function ProcessDetailsPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ processes: processList }),
+        body: JSON.stringify({ processes: processesToSave || processList }),
       })
       if (res.ok) {
         setSaveState('success')
@@ -184,7 +308,8 @@ export default function ProcessDetailsPage() {
 
   // ── Main ──
   return (
-    <div className="space-y-6 font-sans">
+    <>
+    <div className="space-y-6 font-sans print:hidden">
       {/* Top Action Bar */}
       <div className="flex items-center justify-between">
         <Button
@@ -215,25 +340,75 @@ export default function ProcessDetailsPage() {
         </div>
       </div>
 
-      {/* Job Header */}
-      <JobHeader
-        id={project.project_id}
-        receivedDate={formatThaiDate(project.received_date)}
-        dueDate={formatThaiDate(project.due_date)}
-      />
+      {/* Error state */}
+      {error ? (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3">
+          <AlertCircle className="h-5 w-5" />
+          <p className="font-semibold">{error}</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <JobHeader
+            id={project.project_id}
+            dwgName={project.dwg_name}
+            receivedDate={formatThaiDate(project.received_date)}
+            dueDate={formatThaiDate(project.due_date)}
+          />
+          
+          {/* Scanner Help Box */}
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl shadow-sm flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div>
+              <h3 className="font-bold text-blue-900 mb-1 flex items-center gap-2">
+                <span className="text-xl">📷</span> ระบบสแกนบาร์โค้ดเริ่มงาน / จบงาน
+              </h3>
+              <p className="text-sm text-blue-800 leading-relaxed">
+                1. <b>คลิกเลือก</b> แถวกระบวนการผลิตที่ต้องการทำ (แถวจะกลายเป็นสีฟ้า)<br/>
+                2. <b>สแกนรหัสพนักงาน</b> เพื่อยืนยันตัวตน {activeWorkerId && <span className="inline-block bg-green-500 text-white px-2 py-0.5 rounded text-xs ml-2 animate-pulse">พนักงานที่เลือก: {activeWorkerId}</span>}<br/>
+                3. <b>สแกนสถานะ</b> (START / STOP / FN) เพื่อบันทึกเวลาอัตโนมัติ
+              </p>
+            </div>
+            {/* กล่องทดสอบ (สำหรับ Dev) */}
+            <div className="bg-white p-3 rounded border border-blue-200 shadow-sm text-xs w-full sm:w-auto">
+              <span className="font-bold text-blue-800 block mb-1">กล่องทดสอบจำลองบาร์โค้ด</span>
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                const val = (e.currentTarget.elements.namedItem('barcode') as HTMLInputElement).value
+                if (val) {
+                  document.dispatchEvent(new CustomEvent('onBarcodeScan', { detail: { barcode: val }, cancelable: true }))
+                  ;(e.currentTarget.elements.namedItem('barcode') as HTMLInputElement).value = ''
+                }
+              }} className="flex gap-2">
+                <input name="barcode" type="text" placeholder="EMP001, START..." className="border border-gray-300 rounded px-2 py-1 h-8 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                <button type="submit" className="bg-blue-600 text-white px-3 rounded font-semibold hover:bg-blue-700 h-8">ยิง!</button>
+              </form>
+            </div>
+          </div>
 
-      {/* Process Table */}
-      <ProcessTable
-        processList={processList}
-        onChange={handleChange}
-        onAddRow={handleAddRow}
-        onDeleteRow={handleDeleteRow}
-      />
+          <ProcessTable
+            processList={processList}
+            activeRowIndex={activeRowIndex}
+            onRowClick={(idx) => setActiveRowIndex(idx)}
+            onChange={handleChange}
+            onWorkerChange={handleWorkerChange}
+            onAddRow={handleAddRow}
+            onDeleteRow={handleDeleteRow}
+          />
+        </div>
+      )}
 
-      {/* Bottom Save */}
-      <div className="flex justify-end pt-2">
+      {/* Bottom Actions */}
+      <div className="flex justify-between items-center pt-2">
         <Button
-          onClick={handleSave}
+          variant="outline"
+          onClick={() => router.push(`/dashboard/process-details/${id}/print`)}
+          className="gap-2 rounded-full h-11 border-gray-200 text-gray-700 hover:bg-gray-50 px-6 text-sm font-semibold"
+        >
+          <Printer className="h-4 w-4" />
+          ปริ้นใบงาน
+        </Button>
+
+        <Button
+          onClick={() => handleSave()}
           disabled={saveState === 'saving'}
           className="gap-2 rounded-full h-11 bg-[#c62828] hover:bg-[#b71c1c] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20 transition-all disabled:opacity-70"
         >
@@ -244,5 +419,15 @@ export default function ProcessDetailsPage() {
         </Button>
       </div>
     </div>
+
+    {/* Print Area — hidden on screen, visible only when printing */}
+    <PrintJobSheet
+      jobId={project.project_id}
+      dwgName={project.dwg_name}
+      receivedDate={formatThaiDate(project.received_date)}
+      dueDate={formatThaiDate(project.due_date)}
+      processList={processList}
+    />
+  </>
   )
 }

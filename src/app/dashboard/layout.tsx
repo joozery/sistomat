@@ -1,6 +1,7 @@
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { AppNavbar } from '@/components/layout/AppNavbar'
+import { GlobalBarcodeScanner } from '@/components/layout/GlobalBarcodeScanner'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,6 +13,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </SidebarInset>
+      {/* Global barcode scanner – ทำงานทุกหน้าใน dashboard */}
+      <GlobalBarcodeScanner />
     </SidebarProvider>
   )
 }

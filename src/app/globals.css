@@ -128,3 +128,31 @@
     @apply font-sans;
   }
 }
+
+/* ── Print Styles ── */
+@media print {
+  /* ซ่อน Sidebar, Navbar, main content */
+  aside,
+  header,
+  nav,
+  [data-sidebar],
+  .print-hidden,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* แสดง print-area */
+  #print-area {
+    display: block !important;
+  }
+
+  /* หน้า A4 ไม่มี margin */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  body {
+    background: #fff !important;
+  }
+}
