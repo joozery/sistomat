@@ -18,6 +18,7 @@ import {
   Sparkles,
   ChevronRight,
   ShieldCheck,
+  Radio,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -37,6 +38,7 @@ const mainMenuItems: MenuItem[] = [
 ]
 
 const managementMenuItems: MenuItem[] = [
+  { label: 'ติดตาม Real-time', path: '/dashboard/realtime', icon: Radio },
   { label: 'การแจ้งเตือน', path: '/dashboard/notifications', icon: Bell, badge: '3' },
   { label: 'สรุปรายการทั้งหมด', path: '/dashboard/monthly-summary', icon: BarChart2 },
   { label: 'แพลนงานทั้งหมด', path: '/dashboard/all-plans', icon: ClipboardList },
