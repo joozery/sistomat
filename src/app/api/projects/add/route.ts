@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import clientPromise from '@/lib/mongodb'
+import { getClientPromise } from '@/lib/mongodb'
 import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET!
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const client = await clientPromise
+    const client = await getClientPromise()
     const db = client.db('sistomat')
 
     // เช็คว่า project_id ซ้ำหรือเปล่า

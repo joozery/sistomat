@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Search, Plus, QrCode, Sparkles, Activity, CheckCircle2, Clock } from 'lucide-react'
+import { QrCode, Activity, CheckCircle2 } from 'lucide-react'
 import { ProjectTable } from '@/components/pages/process-qrcode/ProjectTable'
 import { AddProjectDialog } from '@/components/pages/process-qrcode/AddProjectDialog'
+import { ImportExcelDialog } from '@/components/pages/process-qrcode/ImportExcelDialog'
 
 const API_URL = '/api/projects'
 const ITEMS_PER_PAGE = 10
@@ -16,7 +15,6 @@ interface Project {
   due_date: string
 }
 
-// Fallback demo projects if API is empty or loading
 const demoProjects: Project[] = [
   { project_id: 'PRJ-2025-081', received_date: '2025-07-28', due_date: '2025-08-05' },
   { project_id: 'PRJ-2025-082', received_date: '2025-07-29', due_date: '2025-08-06' },
@@ -31,6 +29,7 @@ export default function ProcessQRCodePage() {
   const [search, setSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const fetchProjects = useCallback(async () => {
     setLoading(true)
@@ -64,7 +63,7 @@ export default function ProcessQRCodePage() {
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner */}
+      {/* Header */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 shadow-sm/50">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -72,15 +71,12 @@ export default function ProcessQRCodePage() {
               <QrCode className="h-3 w-3" /> QR CODE PROCESS TRACKING
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            ติดตามกระบวนการด้วย QR Code
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">ติดตามกระบวนการด้วย QR Code</h1>
           <p className="mt-1 text-xs text-gray-500">
             สแกนและตรวจสอบสถานะการผลิต ระยะเวลาที่ใช้ และกำหนดส่งมอบแต่ละโปรเจค
           </p>
         </div>
 
-        {/* Quick Stats Chips */}
         <div className="flex flex-wrap gap-2.5">
           <div className="flex items-center gap-2 rounded-xl px-3.5 py-2 bg-gray-50 border border-gray-100">
             <Activity className="h-4 w-4 text-purple-600" />
@@ -89,7 +85,6 @@ export default function ProcessQRCodePage() {
               <p className="text-xs font-bold text-gray-800">{projects.length} รายการ</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 rounded-xl px-3.5 py-2 bg-emerald-50/60 border border-emerald-100">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <div>
@@ -100,7 +95,6 @@ export default function ProcessQRCodePage() {
         </div>
       </div>
 
-      {/* Main Table Section */}
       <ProjectTable
         projects={paginated}
         loading={loading}
@@ -112,11 +106,18 @@ export default function ProcessQRCodePage() {
         search={search}
         onSearchChange={setSearch}
         onOpenAddDialog={() => setDialogOpen(true)}
+        onOpenImportDialog={() => setImportOpen(true)}
       />
 
       <AddProjectDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+        onSuccess={fetchProjects}
+      />
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
         onSuccess={fetchProjects}
       />
     </div>

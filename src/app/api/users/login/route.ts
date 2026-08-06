@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import clientPromise from '@/lib/mongodb'
+import { getClientPromise } from '@/lib/mongodb'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const client = await clientPromise
+    const client = await getClientPromise()
     const db = client.db('sistomat')
     const usersCollection = db.collection('users')
 

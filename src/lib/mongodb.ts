@@ -6,24 +6,34 @@ if (!uri) {
   throw new Error('MONGODB_URI is not defined in environment variables')
 }
 
-// ใช้ singleton pattern เพื่อไม่ให้ connection ถูกสร้างใหม่ทุกครั้งใน dev mode
 declare global {
   // eslint-disable-next-line no-var
   var _mongoClientPromise: Promise<MongoClient> | undefined
 }
 
-let client: MongoClient
-let clientPromise: Promise<MongoClient>
-
-if (process.env.NODE_ENV === 'development') {
-  if (!global._mongoClientPromise) {
-    client = new MongoClient(uri)
-    global._mongoClientPromise = client.connect()
-  }
-  clientPromise = global._mongoClientPromise
-} else {
-  client = new MongoClient(uri)
-  clientPromise = client.connect()
+const mongoOptions = {
+  directConnection: true,
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 10000,
 }
 
-export default clientPromise
+function createClientPromise(): Promise<MongoClient> {
+  const c = new MongoClient(uri, mongoOptions)
+  return c.connect().catch((err) => {
+    global._mongoClientPromise = undefined
+    throw err
+  })
+}
+
+export function getClientPromise(): Promise<MongoClient> {
+  if (process.env.NODE_ENV === 'development') {
+    if (!global._mongoClientPromise) {
+      global._mongoClientPromise = createClientPromise()
+    }
+    return global._mongoClientPromise
+  }
+  return createClientPromise()
+}
+
+// backward-compat default export
+export default getClientPromise

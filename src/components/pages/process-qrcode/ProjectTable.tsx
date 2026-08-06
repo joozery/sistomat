@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode } from 'lucide-react'
+import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet } from 'lucide-react'
 
 interface Project {
   project_id: string
@@ -31,6 +31,7 @@ interface ProjectTableProps {
   search: string
   onSearchChange: (value: string) => void
   onOpenAddDialog: () => void
+  onOpenImportDialog: () => void
 }
 
 function formatDate(dateString: string) {
@@ -65,6 +66,7 @@ export function ProjectTable({
   search,
   onSearchChange,
   onOpenAddDialog,
+  onOpenImportDialog,
 }: ProjectTableProps) {
   const router = useRouter()
 
@@ -82,13 +84,23 @@ export function ProjectTable({
           />
         </div>
 
-        <Button
-          onClick={onOpenAddDialog}
-          className="gap-2 rounded-full h-10 bg-[#c62828] hover:bg-[#b71c1c] text-white px-5 shadow-sm transition-all shrink-0"
-        >
-          <Plus className="h-4 w-4" />
-          <span>เพิ่มกระบวนการ</span>
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            onClick={onOpenImportDialog}
+            variant="outline"
+            className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#c62828] hover:text-[#c62828] px-4 text-sm"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>นำเข้า Excel</span>
+          </Button>
+          <Button
+            onClick={onOpenAddDialog}
+            className="gap-2 rounded-full h-10 bg-[#c62828] hover:bg-[#b71c1c] text-white px-5 shadow-sm transition-all"
+          >
+            <Plus className="h-4 w-4" />
+            <span>เพิ่มกระบวนการ</span>
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -175,7 +187,14 @@ export function ProjectTable({
                           variant="ghost"
                           size="sm"
                           className="h-8 rounded-full text-[#c62828] hover:bg-red-50 hover:text-[#b71c1c] text-xs font-semibold gap-1"
-                          onClick={() => router.push(`/dashboard/process-details/${project.project_id}`)}
+                          onClick={() => {
+                            // Level 1 pattern: J[X]-NNNN → go to job-list
+                            const isLevel1 = /^J[A-Z]-\d{3,4}$/.test(project.project_id)
+                            const href = isLevel1
+                              ? `/dashboard/job-list/${project.project_id}`
+                              : `/dashboard/process-details/${project.project_id}`
+                            router.push(href)
+                          }}
                         >
                           <span>ดูรายละเอียด</span>
                           <ExternalLink className="h-3.5 w-3.5" />
