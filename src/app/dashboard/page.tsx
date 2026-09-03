@@ -28,7 +28,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3 shrink-0">
             <Link
               href="/dashboard/process-qrcode"
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#c62828] hover:bg-[#b71c1c] text-white text-xs font-bold shadow-lg shadow-red-900/40 transition-all"
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white text-xs font-bold shadow-lg shadow-red-900/40 transition-all"
             >
               <QrCode className="h-4 w-4" />
               สแกน QR Code งาน

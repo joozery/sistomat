@@ -329,7 +329,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100 shrink-0">
           <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-[#c62828]" />
+            <FileSpreadsheet className="h-5 w-5 text-[#7B1A1A]" />
             นำเข้าข้อมูลจาก Excel
           </DialogTitle>
           <DialogDescription className="text-xs text-gray-400 mt-0.5">
@@ -348,7 +348,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
                       step >= n
-                        ? 'bg-[#c62828] text-white'
+                        ? 'bg-[#7B1A1A] text-white'
                         : 'bg-gray-100 text-gray-400'
                     }`}
                   >
@@ -377,7 +377,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
                 onClick={() => fileRef.current?.click()}
                 className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed cursor-pointer transition-all py-10 ${
                   dragging
-                    ? 'border-[#c62828] bg-red-50'
+                    ? 'border-[#7B1A1A] bg-red-50'
                     : file
                     ? 'border-emerald-300 bg-emerald-50'
                     : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100/50'
@@ -423,7 +423,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
                         onClick={() => setSelectedSheet(s)}
                         className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                           selectedSheet === s
-                            ? 'bg-[#c62828] text-white border-[#c62828]'
+                            ? 'bg-[#7B1A1A] text-white border-[#7B1A1A]'
                             : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                         }`}
                       >
@@ -474,7 +474,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
                             <ChevronRight className="h-4 w-4 text-gray-400" />
                           )}
                           <span className="font-mono font-bold text-sm text-gray-800">{parentJob}</span>
-                          <span className="text-[11px] bg-[#c62828]/10 text-[#c62828] px-2 py-0.5 rounded-full font-semibold">
+                          <span className="text-[11px] bg-[#7B1A1A]/10 text-[#7B1A1A] px-2 py-0.5 rounded-full font-semibold">
                             {items.length} รายการ
                           </span>
                         </div>
@@ -565,7 +565,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
               <Button
                 onClick={handleParse}
                 disabled={!file || !selectedSheet || parsing}
-                className="rounded-full h-9 bg-[#c62828] hover:bg-[#b71c1c] text-white px-6 text-sm"
+                className="rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6 text-sm"
               >
                 {parsing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {parsing ? 'กำลังอ่านข้อมูล...' : 'อ่านข้อมูล'}
@@ -581,7 +581,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
               <Button
                 onClick={handleImport}
                 disabled={importing}
-                className="rounded-full h-9 bg-[#c62828] hover:bg-[#b71c1c] text-white px-6 text-sm"
+                className="rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6 text-sm"
               >
                 {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 {importing ? 'กำลังนำเข้า...' : `นำเข้า ${jobs.length} รายการ`}
@@ -592,7 +592,7 @@ export function ImportExcelDialog({ open, onOpenChange, onSuccess }: ImportExcel
           {step === 3 && (
             <Button
               onClick={handleClose}
-              className="ml-auto rounded-full h-9 bg-[#c62828] hover:bg-[#b71c1c] text-white px-6 text-sm"
+              className="ml-auto rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6 text-sm"
             >
               เสร็จสิ้น
             </Button>

@@ -159,7 +159,7 @@ export function AppNavbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100/80 border border-slate-200/50 text-xs font-medium text-slate-600">
-            <Calendar className="h-3.5 w-3.5 text-[#c62828]" />
+            <Calendar className="h-3.5 w-3.5 text-[#7B1A1A]" />
             <span>{today}</span>
           </div>
         </div>
@@ -171,7 +171,7 @@ export function AppNavbar() {
         <input
           type="text"
           placeholder="ค้นหาเมนู ข้อมูล หรือรายงาน..."
-          className="w-full pl-10 pr-4 py-1.5 bg-gray-50 border border-gray-200/80 rounded-full text-xs text-gray-700 placeholder-gray-400 focus:bg-white focus:border-[#c62828] focus:ring-1 focus:ring-[#c62828] transition-all outline-none"
+          className="w-full pl-10 pr-4 py-1.5 bg-gray-50 border border-gray-200/80 rounded-full text-xs text-gray-700 placeholder-gray-400 focus:bg-white focus:border-[#7B1A1A] focus:ring-1 focus:ring-[#7B1A1A] transition-all outline-none"
         />
       </div>
 
@@ -182,7 +182,7 @@ export function AppNavbar() {
           <DropdownMenuTrigger className="relative p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors outline-none">
             <Bell className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#c62828] text-[10px] font-bold text-white ring-2 ring-white">
+              <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#7B1A1A] text-[10px] font-bold text-white ring-2 ring-white">
                 {unreadCount}
               </span>
             )}
@@ -194,7 +194,7 @@ export function AppNavbar() {
               <div className="flex items-center gap-1.5">
                 <h3 className="text-xs font-bold text-gray-800">การแจ้งเตือน</h3>
                 {unreadCount > 0 && (
-                  <span className="text-[10px] font-bold text-[#c62828] bg-red-50 px-1.5 py-0.2 rounded-full border border-red-100">
+                  <span className="text-[10px] font-bold text-[#7B1A1A] bg-red-50 px-1.5 py-0.2 rounded-full border border-red-100">
                     {unreadCount} ใหม่
                   </span>
                 )}
@@ -203,7 +203,7 @@ export function AppNavbar() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllRead}
-                  className="text-[11px] text-[#c62828] hover:underline font-semibold flex items-center gap-0.5"
+                  className="text-[11px] text-[#7B1A1A] hover:underline font-semibold flex items-center gap-0.5"
                 >
                   <Check className="h-3 w-3" />
                   อ่านแล้วทั้งหมด
@@ -227,7 +227,7 @@ export function AppNavbar() {
                   n.type === 'warning'
                     ? 'bg-amber-50 text-amber-600 border-amber-100'
                     : n.type === 'error'
-                    ? 'bg-red-50 text-[#c62828] border-red-100'
+                    ? 'bg-red-50 text-[#7B1A1A] border-red-100'
                     : n.type === 'success'
                     ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
                     : 'bg-blue-50 text-blue-600 border-blue-100'
@@ -250,7 +250,7 @@ export function AppNavbar() {
                           {n.title}
                         </p>
                         {!n.read && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#c62828] shrink-0 mt-1" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#7B1A1A] shrink-0 mt-1" />
                         )}
                       </div>
                       <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-tight">
@@ -267,7 +267,7 @@ export function AppNavbar() {
             <div className="p-1.5 border-t border-gray-100 bg-gray-50/50 text-center">
               <button
                 onClick={() => router.push('/dashboard/notifications')}
-                className="w-full py-1 text-xs font-bold text-[#c62828] hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+                className="w-full py-1 text-xs font-bold text-[#7B1A1A] hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center gap-1"
               >
                 <span>ดูการแจ้งเตือนทั้งหมด</span>
                 <ArrowRight className="h-3 w-3" />
@@ -283,7 +283,7 @@ export function AppNavbar() {
           <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full p-1.5 pl-2 hover:bg-gray-50 border border-transparent hover:border-gray-200/60 transition-all outline-none group">
             <div className="relative">
               <Avatar className="h-8 w-8 ring-2 ring-red-100">
-                <AvatarFallback className="bg-gradient-to-tr from-[#c62828] to-[#ef5350] text-white text-xs font-bold">
+                <AvatarFallback className="bg-gradient-to-tr from-[#7B1A1A] to-[#9B3333] text-white text-xs font-bold">
                   {user.username.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -291,10 +291,10 @@ export function AppNavbar() {
             </div>
 
             <div className="text-left hidden sm:block">
-              <p className="text-xs font-bold text-gray-800 leading-none group-hover:text-[#c62828] transition-colors">
+              <p className="text-xs font-bold text-gray-800 leading-none group-hover:text-[#7B1A1A] transition-colors">
                 {user.username}
               </p>
-              <span className="inline-block mt-0.5 text-[10px] font-semibold text-[#c62828] bg-red-50 px-1.5 py-0.2 rounded-md">
+              <span className="inline-block mt-0.5 text-[10px] font-semibold text-[#7B1A1A] bg-red-50 px-1.5 py-0.2 rounded-md">
                 {user.role}
               </span>
             </div>
@@ -330,9 +330,9 @@ export function AppNavbar() {
               <DropdownMenuSeparator className="bg-gray-100" />
               <DropdownMenuItem
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#c62828] rounded-xl cursor-pointer hover:bg-red-50 focus:bg-red-50 focus:text-[#c62828]"
+                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#7B1A1A] rounded-xl cursor-pointer hover:bg-red-50 focus:bg-red-50 focus:text-[#7B1A1A]"
               >
-                <LogOut className="h-4 w-4 text-[#c62828]" />
+                <LogOut className="h-4 w-4 text-[#7B1A1A]" />
                 ออกจากระบบ
               </DropdownMenuItem>
             </DropdownMenuGroup>

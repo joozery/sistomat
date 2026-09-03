@@ -277,7 +277,7 @@ export default function ProcessDetailsPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-72 gap-4 font-sans">
-        <Loader2 className="h-8 w-8 animate-spin text-[#c62828]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#7B1A1A]" />
         <p className="text-sm text-gray-500">กำลังโหลดข้อมูลใบงาน <span className="font-semibold text-gray-700">{id}</span>...</p>
       </div>
     )
@@ -288,7 +288,7 @@ export default function ProcessDetailsPage() {
     return (
       <div className="flex flex-col items-center justify-center h-72 gap-4 font-sans">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 border border-red-100">
-          <AlertCircle className="h-8 w-8 text-[#c62828]" />
+          <AlertCircle className="h-8 w-8 text-[#7B1A1A]" />
         </div>
         <div className="text-center">
           <p className="text-base font-bold text-gray-800">{error ?? 'ไม่พบข้อมูลใบงาน'}</p>
@@ -329,7 +329,7 @@ export default function ProcessDetailsPage() {
             </div>
           )}
           {saveState === 'error' && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-[#c62828] border border-red-200 text-xs font-semibold animate-in fade-in-0">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-[#7B1A1A] border border-red-200 text-xs font-semibold animate-in fade-in-0">
               <AlertCircle className="h-4 w-4" />
               บันทึกไม่สำเร็จ กรุณาลองใหม่
             </div>
@@ -410,7 +410,7 @@ export default function ProcessDetailsPage() {
         <Button
           onClick={() => handleSave()}
           disabled={saveState === 'saving'}
-          className="gap-2 rounded-full h-11 bg-[#c62828] hover:bg-[#b71c1c] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20 transition-all disabled:opacity-70"
+          className="gap-2 rounded-full h-11 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20 transition-all disabled:opacity-70"
         >
           {saveState === 'saving'
             ? <Loader2 className="h-4 w-4 animate-spin" />

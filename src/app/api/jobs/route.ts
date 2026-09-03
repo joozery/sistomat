@@ -14,15 +14,18 @@ function verifyToken(req: NextRequest) {
   jwt.verify(token, process.env.JWT_SECRET!)
 }
 
-// Parse job_code → level1 / level2 / level3
+// Parse job_code → level1 / level2 / level3 (falls back to a flat code when it
+// doesn't match the JX-NNNN-NNN convention, since real job codes vary a lot)
 function parseJobCode(code: string) {
   const m = code.match(/^(J[A-Z]-\d{3,4})(-\d{3})?(-\d{2})?$/)
-  if (!m) return null
-  return {
-    level1: m[1],
-    level2: m[2] ? `${m[1]}${m[2]}` : null,
-    level3: m[3] ? `${m[1]}${m[2]}${m[3]}` : null,
+  if (m) {
+    return {
+      level1: m[1],
+      level2: m[2] ? `${m[1]}${m[2]}` : null,
+      level3: m[3] ? `${m[1]}${m[2]}${m[3]}` : null,
+    }
   }
+  return { level1: code, level2: null, level3: null }
 }
 
 // ─── GET ───────────────────────────────────────────────
@@ -90,7 +93,6 @@ export async function POST(req: NextRequest) {
     if (!job_code) return NextResponse.json({ message: 'กรุณากรอกเลข Job Code' }, { status: 400 })
 
     const levels = parseJobCode(job_code.trim())
-    if (!levels) return NextResponse.json({ message: 'รูปแบบ Job Code ไม่ถูกต้อง (เช่น JB-0298-001 หรือ JB-0298-001-01)' }, { status: 400 })
 
     const client = await getClientPromise()
     const db = client.db('sistomat')

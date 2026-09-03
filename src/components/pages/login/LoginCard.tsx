@@ -51,7 +51,7 @@ export function LoginCard() {
       <CardHeader className="items-center pb-6 pt-2">
         <div className="flex justify-center w-full mb-5">
           <Image
-            src="/logo.png"
+            src="/logo.svg"
             alt="Sistomat Logo"
             width={130}
             height={50}
@@ -60,13 +60,13 @@ export function LoginCard() {
         </div>
         <CardTitle className="text-xl font-bold text-gray-800 flex flex-col items-center">
           เข้าสู่ระบบ
-          <div className="w-8 h-[3px] bg-[#c62828] rounded-full mt-2.5" />
+          <div className="w-8 h-[3px] bg-[#7B1A1A] rounded-full mt-2.5" />
         </CardTitle>
       </CardHeader>
 
       <CardContent className="px-0 pb-0">
         {error && (
-          <p className="text-[#c62828] text-sm text-center mb-5 bg-red-50 border border-red-100 rounded-lg py-2.5 px-4">
+          <p className="text-[#7B1A1A] text-sm text-center mb-5 bg-red-50 border border-red-100 rounded-lg py-2.5 px-4">
             {error}
           </p>
         )}
@@ -83,7 +83,7 @@ export function LoginCard() {
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={loading}
                 required
-                className="pl-11 bg-[#f8fafe] border-transparent focus:border-[#c62828] focus:ring-[#c62828] rounded-xl h-[48px] text-sm transition-all"
+                className="pl-11 bg-[#f8fafe] border-transparent focus:border-[#7B1A1A] focus:ring-[#7B1A1A] rounded-xl h-[48px] text-sm transition-all"
               />
             </div>
           </div>
@@ -100,7 +100,7 @@ export function LoginCard() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
                 required
-                className="pl-11 pr-12 bg-[#f8fafe] border-transparent focus:border-[#c62828] focus:ring-[#c62828] rounded-xl h-[48px] text-sm transition-all"
+                className="pl-11 pr-12 bg-[#f8fafe] border-transparent focus:border-[#7B1A1A] focus:ring-[#7B1A1A] rounded-xl h-[48px] text-sm transition-all"
               />
               <button
                 type="button"
@@ -116,19 +116,19 @@ export function LoginCard() {
             <label className="flex items-center gap-2 cursor-pointer group">
               <input
                 type="checkbox"
-                className="w-3.5 h-3.5 rounded border-gray-300 cursor-pointer accent-[#c62828]"
+                className="w-3.5 h-3.5 rounded border-gray-300 cursor-pointer accent-[#7B1A1A]"
                 defaultChecked
               />
               <span className="text-gray-500 group-hover:text-gray-700 transition-colors">จดจำการเข้าสู่ระบบ</span>
             </label>
-            <a href="#" className="text-[#c62828] font-medium hover:underline hover:text-[#b71c1c] transition-colors">
+            <a href="#" className="text-[#7B1A1A] font-medium hover:underline hover:text-[#5C1212] transition-colors">
               ลืมรหัสผ่าน?
             </a>
           </div>
 
           <Button
             type="submit"
-            className="w-full h-[48px] rounded-xl bg-gradient-to-r from-[#c62828] to-[#d32f2f] hover:from-[#b71c1c] hover:to-[#c62828] text-white font-medium text-[15px] shadow-lg shadow-red-500/30 transition-all gap-2 mt-2"
+            className="w-full h-[48px] rounded-xl bg-gradient-to-r from-[#7B1A1A] to-[#8B2020] hover:from-[#5C1212] hover:to-[#7B1A1A] text-white font-medium text-[15px] shadow-lg shadow-red-500/30 transition-all gap-2 mt-2"
             disabled={loading}
           >
             {loading ? (

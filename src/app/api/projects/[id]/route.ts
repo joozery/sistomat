@@ -46,7 +46,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await req.json()
-    const { processes, status } = body
+    const { processes, status, qc } = body
 
     const client = await getClientPromise()
     const db = client.db('sistomat')
@@ -54,6 +54,7 @@ export async function PUT(
     const update: Record<string, unknown> = { updated_at: new Date() }
     if (processes !== undefined) update.processes = processes
     if (status !== undefined) update.status = status
+    if (qc !== undefined) update.qc = qc
 
     const result = await db
       .collection('projects')
@@ -66,6 +67,39 @@ export async function PUT(
     return NextResponse.json({ message: 'บันทึกสำเร็จ' })
   } catch (e) {
     console.error('PUT /api/projects/[id]:', e)
+    return NextResponse.json({ message: 'เกิดข้อผิดพลาด' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const token = getToken(req)
+    if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    jwt.verify(token, JWT_SECRET)
+
+    const { id } = await params
+    const client = await getClientPromise()
+    const db = client.db('sistomat')
+
+    // เผื่อ id เป็น level1 project ที่มี sub-job ผูกอยู่ (เช่น "A-2917" → level1 "JA-2917")
+    const childLevel1s = /^J[A-Z]-\d{3,4}$/.test(id) ? [id] : [id, `J${id}`]
+
+    const [projectResult] = await Promise.all([
+      db.collection('projects').deleteOne({ project_id: id }),
+      db.collection('projects').deleteMany({ level1: { $in: childLevel1s } }),
+      db.collection('jobs').deleteMany({ level1: { $in: childLevel1s } }),
+    ])
+
+    if (projectResult.deletedCount === 0) {
+      return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })
+    }
+
+    return NextResponse.json({ message: 'ลบสำเร็จ' })
+  } catch (e) {
+    console.error('DELETE /api/projects/[id]:', e)
     return NextResponse.json({ message: 'เกิดข้อผิดพลาด' }, { status: 500 })
   }
 }

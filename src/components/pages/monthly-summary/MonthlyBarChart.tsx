@@ -11,7 +11,7 @@ const barData = {
     {
       label: 'ชิ้นงานผลิตสำเร็จ (ชิ้น)',
       data: [1800, 1650, 2100, 1950, 2400, 2950],
-      backgroundColor: '#c62828',
+      backgroundColor: '#7B1A1A',
       borderRadius: 8,
     },
     {
@@ -49,7 +49,7 @@ export function MonthlyBarChart() {
       <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-gray-100 px-4">
         <div>
           <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-[#c62828]" />
+            <BarChart3 className="h-5 w-5 text-[#7B1A1A]" />
             เปรียบเทียบยอดการผลิตสำเร็จกับเป้าหมายรายเดือน
           </CardTitle>
           <p className="text-xs text-gray-400 mt-0.5">

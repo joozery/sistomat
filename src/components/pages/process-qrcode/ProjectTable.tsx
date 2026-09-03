@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   Table,
   TableBody,
@@ -13,7 +13,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Paperclip } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Paperclip, Trash2, AlertTriangle } from 'lucide-react'
 import { FilePreviewDialog } from './FilePreviewDialog'
 import { FileThumbnail } from './FileThumbnail'
 
@@ -23,6 +31,14 @@ interface Project {
   due_date: string
   file_url?: string
   file_name?: string
+}
+
+interface MatchedJob {
+  job_code: string
+  level1?: string
+  drawing_name?: string
+  quantity?: number
+  status?: string
 }
 
 interface ProjectTableProps {
@@ -37,6 +53,8 @@ interface ProjectTableProps {
   onSearchChange: (value: string) => void
   onOpenAddDialog: () => void
   onOpenImportDialog: () => void
+  onDeleted: () => void
+  matchedJobs: MatchedJob[]
 }
 
 function formatDate(dateString: string) {
@@ -72,9 +90,35 @@ export function ProjectTable({
   onSearchChange,
   onOpenAddDialog,
   onOpenImportDialog,
+  onDeleted,
+  matchedJobs,
 }: ProjectTableProps) {
   const router = useRouter()
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/projects/${encodeURIComponent(deleteTarget)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'ลบไม่สำเร็จ')
+      setDeleteTarget(null)
+      onDeleted()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="rounded-xl border border-gray-200/70 bg-white overflow-hidden font-sans">
@@ -143,9 +187,15 @@ export function ProjectTable({
               ) : (
                 projects.map((project, index) => {
                   const stepObj = processSteps[index % processSteps.length]
+                  const jobsForProject = search
+                    ? matchedJobs.filter(
+                        (j) => j.level1 === project.project_id || j.level1 === `J${project.project_id}`
+                      )
+                    : []
 
                   return (
-                    <TableRow key={project.project_id} className="hover:bg-red-50/20 transition-colors group">
+                  <Fragment key={project.project_id}>
+                    <TableRow className="hover:bg-red-50/20 transition-colors group">
                       <TableCell className="text-xs font-bold text-gray-400 text-center">
                         {String((currentPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}
                       </TableCell>
@@ -198,7 +248,7 @@ export function ProjectTable({
                               onClick={() => setPreview({ url: project.file_url!, name: project.file_name! })}
                             />
                           ) : (
-                            <div className="w-[80px] h-[80px] rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
+                            <div className="w-20 h-20 rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
                               <Paperclip className="h-4 w-4 text-gray-200" />
                             </div>
                           )}
@@ -206,24 +256,79 @@ export function ProjectTable({
                       </TableCell>
 
                       <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 hover:text-[#5C1212] text-xs font-semibold gap-1"
-                          onClick={() => {
-                            // Level 1 pattern: J[X]-NNNN → go to job-list
-                            const isLevel1 = /^J[A-Z]-\d{3,4}$/.test(project.project_id)
-                            const href = isLevel1
-                              ? `/dashboard/job-list/${project.project_id}`
-                              : `/dashboard/process-details/${project.project_id}`
-                            router.push(href)
-                          }}
-                        >
-                          <span>ดูรายละเอียด</span>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 hover:text-[#5C1212] text-xs font-semibold gap-1"
+                            onClick={() => {
+                              // Excel-imported level1 already has the J prefix (e.g. JA-0298);
+                              // projects created via "เพิ่มกระบวนการ" store the raw id (e.g. A-0298)
+                              // and their job hierarchy lives under J + that id.
+                              const isLevel1 = /^J[A-Z]-\d{3,4}$/.test(project.project_id)
+                              const isRawLevel1 = /^[A-Z]-\d{3,4}$/.test(project.project_id)
+                              const href = isLevel1
+                                ? `/dashboard/job-list/${project.project_id}`
+                                : isRawLevel1
+                                ? `/dashboard/job-list/J${project.project_id}`
+                                : `/dashboard/process-details/${project.project_id}`
+                              router.push(href)
+                            }}
+                          >
+                            <span>ดูรายละเอียด</span>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
+                            onClick={() => setDeleteTarget(project.project_id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
+
+                    {jobsForProject.length > 0 && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={9} className="bg-amber-50/40 border-l-2 border-amber-300 px-6 py-2.5">
+                          <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+                            Job ที่ตรงกับคำค้นหา ({jobsForProject.length})
+                          </p>
+                          <div className="space-y-1">
+                            {jobsForProject.map((job) => (
+                              <div
+                                key={job.job_code}
+                                className="flex items-center gap-3 text-xs bg-white rounded-lg border border-amber-100 px-3 py-1.5"
+                              >
+                                <span className="font-mono font-semibold text-gray-800">{job.job_code}</span>
+                                {job.drawing_name && (
+                                  <span className="text-gray-500 truncate flex-1">{job.drawing_name}</span>
+                                )}
+                                {job.quantity != null && (
+                                  <span className="text-gray-400 shrink-0">{job.quantity} ชิ้น</span>
+                                )}
+                                {job.status && (
+                                  <Badge variant="outline" className="rounded-full text-[10px] px-2 py-0 shrink-0">
+                                    {job.status}
+                                  </Badge>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2 shrink-0"
+                                  onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
+                                >
+                                  ใบงาน <ExternalLink className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
                   )
                 })
               )}
@@ -285,6 +390,46 @@ export function ProjectTable({
           fileName={preview.name}
         />
       )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) { setDeleteTarget(null); setDeleteError('') } }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl p-6 bg-white border-0 font-sans">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              ยืนยันการลบโปรเจค
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 text-xs mt-1">
+              ต้องการลบโปรเจค <span className="font-mono font-bold text-gray-700">{deleteTarget}</span> ใช่หรือไม่?
+              การลบจะลบ Job ย่อยที่ผูกอยู่ทั้งหมดด้วย และไม่สามารถย้อนกลับได้
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{deleteError}</p>
+          )}
+
+          <DialogFooter className="pt-2 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setDeleteTarget(null); setDeleteError('') }}
+              disabled={deleting}
+              className="rounded-full h-9 border-gray-200"
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="rounded-full h-9 bg-red-600 hover:bg-red-700 text-white px-5 gap-1"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              {deleting ? 'กำลังลบ...' : 'ลบโปรเจค'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -9,7 +9,7 @@ const stats = [
     up: true,
     subtext: 'เทียบกับเดือนที่แล้ว',
     icon: ClipboardCheck,
-    color: 'text-[#c62828] bg-red-50 border-red-100',
+    color: 'text-[#7B1A1A] bg-red-50 border-red-100',
   },
   {
     title: 'ชิ้นงานผ่าน QC ทั้งหมด',

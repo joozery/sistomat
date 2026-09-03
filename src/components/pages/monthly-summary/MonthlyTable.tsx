@@ -25,7 +25,7 @@ export function MonthlyTable() {
       <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100 px-6 py-4 bg-gray-50/40">
         <div>
           <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
-            <FileText className="h-5 w-5 text-[#c62828]" />
+            <FileText className="h-5 w-5 text-[#7B1A1A]" />
             รายละเอียดสรุปผลการดำเนินงานรายเดือน
           </CardTitle>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -33,7 +33,7 @@ export function MonthlyTable() {
           </p>
         </div>
 
-        <button className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#c62828] bg-red-50 border border-red-100 px-3 py-1.5 rounded-full hover:bg-red-100 transition-colors">
+        <button className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#7B1A1A] bg-red-50 border border-red-100 px-3 py-1.5 rounded-full hover:bg-red-100 transition-colors">
           ดาวน์โหลดรายงาน Excel
           <ArrowUpRight className="h-3.5 w-3.5" />
         </button>
@@ -54,7 +54,7 @@ export function MonthlyTable() {
           <TableBody className="divide-y divide-gray-100">
             {tableRows.map((row) => (
               <TableRow key={row.month} className="hover:bg-red-50/20 transition-colors group">
-                <TableCell className="font-semibold text-sm text-gray-800 px-6 group-hover:text-[#c62828] transition-colors">
+                <TableCell className="font-semibold text-sm text-gray-800 px-6 group-hover:text-[#7B1A1A] transition-colors">
                   {row.month}
                 </TableCell>
                 <TableCell className="text-center font-bold text-xs text-gray-700">
@@ -66,7 +66,7 @@ export function MonthlyTable() {
                 <TableCell className="text-center text-xs font-mono text-gray-600">
                   {row.hours}
                 </TableCell>
-                <TableCell className="text-center font-extrabold text-xs text-[#c62828]">
+                <TableCell className="text-center font-extrabold text-xs text-[#7B1A1A]">
                   {row.oee}
                 </TableCell>
                 <TableCell className="text-center px-6">

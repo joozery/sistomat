@@ -84,7 +84,7 @@ function getInitials(name: string) {
 }
 
 function getPrimaryRole(machines: string[]) {
-  if (machines.some((m) => m.includes('ADMIN'))) return { label: 'ผู้ดูแลระบบ',   color: 'text-[#c62828] bg-red-50 border-red-100' }
+  if (machines.some((m) => m.includes('ADMIN'))) return { label: 'ผู้ดูแลระบบ',   color: 'text-[#7B1A1A] bg-red-50 border-red-100' }
   if (machines.some((m) => m.includes('CAM')))   return { label: 'ช่าง CAM',       color: 'text-blue-700 bg-blue-50 border-blue-100' }
   if (machines.some((m) => m.includes('CNC')))   return { label: 'ช่าง CNC',       color: 'text-purple-700 bg-purple-50 border-purple-100' }
   if (machines.some((m) => m.includes('LATHE'))) return { label: 'ช่างกลึง',       color: 'text-amber-700 bg-amber-50 border-amber-100' }
@@ -96,7 +96,7 @@ function getPrimaryRole(machines: string[]) {
 function getMachineBadge(machine: string) {
   if (machine.includes('LATHE')) return 'bg-amber-50 text-amber-800 border-amber-200/80'
   if (machine.includes('CNC'))   return 'bg-purple-50 text-purple-800 border-purple-200/80'
-  if (machine.includes('ADMIN')) return 'bg-red-50 text-[#c62828] border-red-200/80'
+  if (machine.includes('ADMIN')) return 'bg-red-50 text-[#7B1A1A] border-red-200/80'
   if (machine.includes('MAT'))   return 'bg-emerald-50 text-emerald-800 border-emerald-200/80'
   if (machine.includes('QC'))    return 'bg-rose-50 text-rose-800 border-rose-200/80'
   if (machine.includes('CAM'))   return 'bg-blue-50 text-blue-800 border-blue-200/80'
@@ -239,13 +239,13 @@ export function UserTable() {
             placeholder="ค้นหาชื่อ หรือรหัสพนักงาน..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 h-10 rounded-full border-gray-200 bg-white text-sm focus:border-[#c62828] transition-all"
+            className="pl-10 h-10 rounded-full border-gray-200 bg-white text-sm focus:border-[#7B1A1A] transition-all"
           />
         </div>
 
         <Button
           onClick={() => setIsAddOpen(true)}
-          className="gap-2 rounded-full h-10 bg-[#c62828] hover:bg-[#b71c1c] text-white px-5 shadow-sm transition-all"
+          className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 shadow-sm transition-all"
         >
           <UserPlus className="h-4 w-4" />
           <span>เพิ่มผู้ใช้งาน</span>
@@ -291,7 +291,7 @@ export function UserTable() {
                         {initials}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-800 group-hover:text-[#c62828] transition-colors">
+                        <p className="text-sm font-semibold text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                           {user.name}
                         </p>
                         <p className="text-[11px] font-mono text-gray-400">รหัส: #{user.code}</p>
@@ -347,9 +347,9 @@ export function UserTable() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDeleteUser(user.id)}
-                            className="gap-2 text-xs font-semibold text-[#c62828] cursor-pointer rounded-lg hover:bg-red-50 focus:bg-red-50"
+                            className="gap-2 text-xs font-semibold text-[#7B1A1A] cursor-pointer rounded-lg hover:bg-red-50 focus:bg-red-50"
                           >
-                            <Trash2 className="h-3.5 w-3.5 text-[#c62828]" />
+                            <Trash2 className="h-3.5 w-3.5 text-[#7B1A1A]" />
                             ลบผู้ใช้งาน
                           </DropdownMenuItem>
                         </DropdownMenuGroup>
@@ -380,7 +380,7 @@ export function UserTable() {
         <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-white border-0">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-[#c62828]" />
+              <Sparkles className="h-5 w-5 text-[#7B1A1A]" />
               เพิ่มผู้ใช้งานใหม่
             </DialogTitle>
             <DialogDescription className="text-gray-500 text-xs mt-1">
@@ -476,7 +476,7 @@ export function UserTable() {
               </Button>
               <Button
                 type="submit"
-                className="rounded-full h-10 bg-[#c62828] hover:bg-[#b71c1c] text-white px-6"
+                className="rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6"
               >
                 บันทึกข้อมูล
               </Button>

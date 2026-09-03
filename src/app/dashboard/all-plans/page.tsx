@@ -222,18 +222,18 @@ export default function AllPlansPage() {
             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             <input type="date" value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
-              className="pl-9 pr-3 h-9 rounded-full border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#c62828] transition-all" />
+              className="pl-9 pr-3 h-9 rounded-full border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
           </div>
           <span className="text-gray-300 text-xs shrink-0">—</span>
           <div className="relative shrink-0">
             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             <input type="date" value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
-              className="pl-9 pr-3 h-9 rounded-full border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#c62828] transition-all" />
+              className="pl-9 pr-3 h-9 rounded-full border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
           </div>
           {(search || dateFrom || dateTo) && (
             <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setPage(1) }}
-              className="shrink-0 h-9 rounded-full text-gray-500 hover:text-[#c62828] hover:bg-red-50 gap-1.5 text-xs">
+              className="shrink-0 h-9 rounded-full text-gray-500 hover:text-[#7B1A1A] hover:bg-red-50 gap-1.5 text-xs">
               <X className="h-3.5 w-3.5" /> ล้าง
             </Button>
           )}
@@ -250,7 +250,7 @@ export default function AllPlansPage() {
 
           {jobsLoading && jobs.length === 0 ? (
             <div className="flex justify-center items-center py-16">
-              <Loader2 className="h-7 w-7 animate-spin text-[#c62828]" />
+              <Loader2 className="h-7 w-7 animate-spin text-[#7B1A1A]" />
             </div>
           ) : jobs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-2 text-gray-400">
@@ -270,7 +270,7 @@ export default function AllPlansPage() {
                   return (
                     <div key={`${job.job_code}-${idx}`}
                       className="grid grid-cols-[2fr_3fr_auto_auto_auto_auto] gap-4 px-5 py-3 items-center hover:bg-gray-50/60 transition-colors group">
-                      <span className="font-mono text-xs font-bold text-gray-800 group-hover:text-[#c62828] transition-colors truncate">
+                      <span className="font-mono text-xs font-bold text-gray-800 group-hover:text-[#7B1A1A] transition-colors truncate">
                         {job.job_code}
                       </span>
                       <span className="text-xs text-gray-500 truncate">{job.drawing_name || '-'}</span>
@@ -285,7 +285,7 @@ export default function AllPlansPage() {
                       }`}>{job.status || '-'}</span>
                       <Button size="sm" variant="ghost"
                         onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
-                        className="h-7 rounded-full text-[#c62828] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         ใบงาน <ExternalLink className="h-3 w-3" />
                       </Button>
                     </div>
@@ -311,7 +311,7 @@ export default function AllPlansPage() {
                         <Button key={p} size="sm"
                           variant={page === p ? 'default' : 'outline'}
                           onClick={() => setPage(p)}
-                          className={`h-8 w-8 p-0 rounded-full text-xs ${page === p ? 'bg-[#c62828] hover:bg-[#b71c1c] text-white border-none' : 'border-gray-200'}`}>
+                          className={`h-8 w-8 p-0 rounded-full text-xs ${page === p ? 'bg-[#7B1A1A] hover:bg-[#5C1212] text-white border-none' : 'border-gray-200'}`}>
                           {p}
                         </Button>
                       )
@@ -371,7 +371,7 @@ export default function AllPlansPage() {
       {/* Cards */}
       {summaryLoading ? (
         <div className="flex justify-center items-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-[#c62828]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#7B1A1A]" />
         </div>
       ) : summary.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-16 text-gray-400 gap-2">
@@ -440,7 +440,7 @@ export default function AllPlansPage() {
                             <span>กำหนดส่งใกล้สุด {formatDate(s.min_due)}</span>
                           </div>
                         )}
-                        <p className="text-[11px] text-[#c62828] font-semibold">คลิกเพื่อดูรายการ →</p>
+                        <p className="text-[11px] text-[#7B1A1A] font-semibold">คลิกเพื่อดูรายการ →</p>
                       </div>
                     </div>
                   </div>

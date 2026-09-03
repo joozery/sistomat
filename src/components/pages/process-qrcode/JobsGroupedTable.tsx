@@ -143,14 +143,14 @@ export function JobsGroupedTable({
           <Button
             onClick={onOpenImportDialog}
             variant="outline"
-            className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#c62828] hover:text-[#c62828] px-4 text-sm"
+            className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#7B1A1A] hover:text-[#7B1A1A] px-4 text-sm"
           >
             <FileSpreadsheet className="h-4 w-4" />
             นำเข้า Excel
           </Button>
           <Button
             onClick={onOpenAddDialog}
-            className="gap-2 rounded-full h-10 bg-[#c62828] hover:bg-[#b71c1c] text-white px-5 text-sm"
+            className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-sm"
           >
             <Plus className="h-4 w-4" />
             เพิ่มกระบวนการ
@@ -161,7 +161,7 @@ export function JobsGroupedTable({
       {/* Content */}
       {loading ? (
         <div className="flex justify-center items-center py-16">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#c62828] border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#7B1A1A] border-t-transparent" />
         </div>
       ) : parentJobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
@@ -194,7 +194,7 @@ export function JobsGroupedTable({
 
                   {/* JOB หลัก */}
                   <div className="w-28 shrink-0">
-                    <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#c62828] transition-colors">
+                    <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                       {parentJob}
                     </span>
                   </div>

@@ -10,7 +10,7 @@ export default function MonthlySummaryPage() {
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 shadow-sm/50">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#c62828] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7B1A1A] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
               <BarChart2 className="h-3 w-3" /> MONTHLY REPORT & ANALYTICS
             </span>
           </div>
@@ -25,10 +25,10 @@ export default function MonthlySummaryPage() {
         {/* Filter & Export Buttons */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-700">
-            <Calendar className="h-4 w-4 text-[#c62828]" />
+            <Calendar className="h-4 w-4 text-[#7B1A1A]" />
             <span>ปี 2568 (ม.ค. - มิ.ย.)</span>
           </div>
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#c62828] hover:bg-[#b71c1c] text-white text-xs font-bold shadow-sm transition-all">
+          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white text-xs font-bold shadow-sm transition-all">
             <Download className="h-4 w-4" />
             ออกรายงานสรุป PDF
           </button>

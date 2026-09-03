@@ -83,7 +83,7 @@ const initialNotifications: NotificationItem[] = [
 const iconMap = {
   success: { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', badge: 'สำเร็จ' },
   warning: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100', badge: 'แจ้งเตือน' },
-  error: { icon: XCircle, color: 'text-[#c62828]', bg: 'bg-red-50 border-red-100', badge: 'ข้อผิดพลาด' },
+  error: { icon: XCircle, color: 'text-[#7B1A1A]', bg: 'bg-red-50 border-red-100', badge: 'ข้อผิดพลาด' },
   info: { icon: Info, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', badge: 'ข้อมูลระบบ' },
 }
 
@@ -122,7 +122,7 @@ export function NotificationList() {
             onClick={() => setActiveTab('all')}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
               activeTab === 'all'
-                ? 'bg-[#c62828] text-white shadow-sm'
+                ? 'bg-[#7B1A1A] text-white shadow-sm'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -132,7 +132,7 @@ export function NotificationList() {
             onClick={() => setActiveTab('unread')}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
               activeTab === 'unread'
-                ? 'bg-[#c62828] text-white shadow-sm'
+                ? 'bg-[#7B1A1A] text-white shadow-sm'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -142,7 +142,7 @@ export function NotificationList() {
             onClick={() => setActiveTab('machine')}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
               activeTab === 'machine'
-                ? 'bg-[#c62828] text-white shadow-sm'
+                ? 'bg-[#7B1A1A] text-white shadow-sm'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -192,7 +192,7 @@ export function NotificationList() {
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2">
                         {!note.read && (
-                          <span className="h-2 w-2 rounded-full bg-[#c62828] animate-pulse" />
+                          <span className="h-2 w-2 rounded-full bg-[#7B1A1A] animate-pulse" />
                         )}
                         <h3 className={`text-sm font-bold ${!note.read ? 'text-gray-900' : 'text-gray-700'}`}>
                           {note.title}
@@ -211,7 +211,7 @@ export function NotificationList() {
                       {note.link && (
                         <Link
                           href={note.link}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#c62828] hover:underline"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#7B1A1A] hover:underline"
                         >
                           <span>ตรวจสอบรายละเอียด</span>
                           <ExternalLink className="h-3 w-3" />
@@ -227,7 +227,7 @@ export function NotificationList() {
 
                       <button
                         onClick={() => deleteItem(note.id)}
-                        className="text-xs font-medium text-gray-400 hover:text-[#c62828] transition-colors ml-auto flex items-center gap-1"
+                        className="text-xs font-medium text-gray-400 hover:text-[#7B1A1A] transition-colors ml-auto flex items-center gap-1"
                       >
                         <Trash2 className="h-3 w-3" />
                         <span>ลบ</span>

@@ -27,7 +27,7 @@ import { usePathname } from 'next/navigation'
 interface MenuItem {
   label: string
   path: string
-  icon: React.ElementType
+  icon: React.ComponentType<{ className?: string }>
   badge?: string | number
 }
 
@@ -62,7 +62,7 @@ export function AppSidebar() {
               title={item.label}
               className={`group flex items-center justify-between px-3.5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 w-full group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-2xl ${
                 isActive
-                  ? 'bg-gradient-to-r from-red-50 via-red-50/80 to-transparent text-[#c62828] font-semibold border border-red-100/60 group-data-[collapsible=icon]:bg-[#c62828] group-data-[collapsible=icon]:text-white group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:shadow-md group-data-[collapsible=icon]:shadow-red-500/20'
+                  ? 'bg-gradient-to-r from-red-50 via-red-50/80 to-transparent text-[#7B1A1A] font-semibold border border-red-100/60 group-data-[collapsible=icon]:bg-[#7B1A1A] group-data-[collapsible=icon]:text-white group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:shadow-md group-data-[collapsible=icon]:shadow-red-500/20'
                   : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 group-data-[collapsible=icon]:hover:bg-gray-100'
               }`}
             >
@@ -70,7 +70,7 @@ export function AppSidebar() {
                 <div
                   className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors shrink-0 group-data-[collapsible=icon]:h-full group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:text-current ${
                     isActive
-                      ? 'bg-[#c62828] text-white shadow-md shadow-red-500/20'
+                      ? 'bg-[#7B1A1A] text-white shadow-md shadow-red-500/20'
                       : 'bg-gray-100/80 text-gray-500 group-hover:bg-white group-hover:text-gray-700 group-hover:shadow-sm'
                   }`}
                 >
@@ -85,14 +85,14 @@ export function AppSidebar() {
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full group-data-[collapsible=icon]:hidden ${
                     isActive
-                      ? 'bg-[#c62828] text-white'
-                      : 'bg-red-100 text-[#c62828]'
+                      ? 'bg-[#7B1A1A] text-white'
+                      : 'bg-red-100 text-[#7B1A1A]'
                   }`}
                 >
                   {item.badge}
                 </span>
               ) : isActive ? (
-                <ChevronRight className="h-4 w-4 text-[#c62828] opacity-70 group-data-[collapsible=icon]:hidden" />
+                <ChevronRight className="h-4 w-4 text-[#7B1A1A] opacity-70 group-data-[collapsible=icon]:hidden" />
               ) : null}
             </Link>
           </SidebarMenuItem>
@@ -108,18 +108,18 @@ export function AppSidebar() {
         <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
           <Link href="/dashboard" className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
             <Image
-              src="/logo.png"
+              src="/logo.svg"
               alt="Sistomat"
-              width={130}
-              height={40}
-              className="h-8 w-auto object-contain"
+              width={160}
+              height={52}
+              className="h-11 w-auto object-contain"
               priority
             />
           </Link>
 
           {/* Compact Logo Mark for Icon Mode */}
           <Link href="/dashboard" className="hidden group-data-[collapsible=icon]:flex items-center justify-center">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#c62828] to-[#ef5350] text-white font-bold text-base shadow-sm shadow-red-500/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#7B1A1A] to-[#9B3333] text-white font-bold text-base shadow-sm shadow-red-500/20">
               S
             </div>
           </Link>
@@ -149,7 +149,7 @@ export function AppSidebar() {
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-50 via-white to-red-50/40 p-4 border border-red-100/80 shadow-sm">
             <div className="absolute -right-3 -bottom-3 w-16 h-16 bg-red-500/10 rounded-full blur-lg" />
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#c62828] to-[#ef5350] text-white shadow-md shadow-red-500/20">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#7B1A1A] to-[#9B3333] text-white shadow-md shadow-red-500/20">
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>

@@ -67,7 +67,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
 
           {/* Job Details */}
           <div className="space-y-1.5 text-center md:text-left">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-[#c62828] border border-red-100 text-xs font-bold">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-[#7B1A1A] border border-red-100 text-xs font-bold">
               <Tag className="h-3.5 w-3.5" />
               JOB ID: {id}
             </div>
@@ -152,10 +152,10 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
             </div>
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-red-50/60 border border-red-100 text-xs">
               <span className="text-gray-500 font-medium flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-[#c62828]" />
+                <Calendar className="h-3.5 w-3.5 text-[#7B1A1A]" />
                 กำหนดส่ง:
               </span>
-              <span className="font-bold text-[#c62828]">{dueDate}</span>
+              <span className="font-bold text-[#7B1A1A]">{dueDate}</span>
             </div>
           </div>
 

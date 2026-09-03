@@ -7,10 +7,18 @@ import { Loader2, Printer, ArrowLeft } from 'lucide-react'
 import type { ProcessRow } from '@/components/pages/process-details/ProcessTable'
 
 const Barcode = dynamic(() => import('react-barcode'), { ssr: false })
+const PdfPagePreview = dynamic(
+  () => import('@/components/pages/process-details/PdfPagePreview').then((m) => m.PdfPagePreview),
+  { ssr: false }
+)
 
 function getToken() {
   if (typeof window === 'undefined') return ''
   return localStorage.getItem('token') ?? ''
+}
+
+function getExt(name: string) {
+  return name.split('.').pop()?.toLowerCase() ?? ''
 }
 
 function formatThaiDate(dateStr: string) {
@@ -22,8 +30,6 @@ function formatThaiDate(dateStr: string) {
     return dateStr
   }
 }
-
-const QC_POINTS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P']
 
 function splitProcesses(list: ProcessRow[]) {
   const padded = [...list]
@@ -45,6 +51,7 @@ export default function PrintPreviewPage() {
   const [loading, setLoading] = useState(true)
   const [project, setProject] = useState<any>(null)
   const [processList, setProcessList] = useState<ProcessRow[]>([])
+  const [drawingLandscape, setDrawingLandscape] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -101,6 +108,7 @@ export default function PrintPreviewPage() {
   const receivedDate = formatThaiDate(project.received_date)
   const dueDate = formatThaiDate(project.due_date)
   const { left, right } = splitProcesses(processList)
+  const drawingIsPdf = project.file_url && getExt(project.file_name ?? '') === 'pdf'
 
   const b = '1px solid #666'
   const th = (extra?: React.CSSProperties): React.CSSProperties => ({
@@ -190,6 +198,8 @@ export default function PrintPreviewPage() {
           }
           .print-page:last-child { page-break-after: auto; }
           @page { size: A4 portrait; margin: 0; }
+          @page landscape-drawing { size: A4 landscape; margin: 0; }
+          .print-page.landscape-page { page: landscape-drawing; }
         }
       `}</style>
 
@@ -208,7 +218,7 @@ export default function PrintPreviewPage() {
           onClick={() => window.print()}
           style={{
             display: 'flex', alignItems: 'center', gap: '8px',
-            backgroundColor: '#c62828', color: '#fff', border: 'none',
+            backgroundColor: '#7B1A1A', color: '#fff', border: 'none',
             borderRadius: '20px', padding: '8px 20px',
             fontSize: '13px', fontWeight: 'bold', cursor: 'pointer',
           }}
@@ -219,6 +229,22 @@ export default function PrintPreviewPage() {
 
       {/* ── Pages ── */}
       <div id="pages-wrap">
+
+        {/* ═══ PAGE 0 — แบบ Drawing (PDF) ═══ */}
+        {drawingIsPdf && (
+          <div
+            className={`print-page ${drawingLandscape ? 'landscape-page' : ''}`}
+            style={{
+              ...pageStyle,
+              padding: 0,
+              width: drawingLandscape ? '297mm' : '210mm',
+              height: drawingLandscape ? '210mm' : '297mm',
+              minHeight: drawingLandscape ? '210mm' : '297mm',
+            }}
+          >
+            <PdfPagePreview fileUrl={project.file_url} onOrientation={setDrawingLandscape} />
+          </div>
+        )}
 
         {/* ═══ PAGE 1 — กระบวนการผลิต ═══ */}
         <div className="print-page" style={pageStyle}>
@@ -272,13 +298,13 @@ export default function PrintPreviewPage() {
                 return (
                   <tr key={i}>
                     <td style={tdc({ height: '24px' })}>{rowL.process ? i + 1 : '\u00A0'}</td>
-                    <td style={td({ color: isQcFnL ? '#c62828' : '#000', fontWeight: isQcFnL ? 'bold' : 'normal', backgroundColor: isQcFnL ? '#fef08a' : '#fff' })}>
+                    <td style={td({ color: isQcFnL ? '#7B1A1A' : '#000', fontWeight: isQcFnL ? 'bold' : 'normal', backgroundColor: isQcFnL ? '#fef08a' : '#fff' })}>
                       {rowL.process || '\u00A0'}
                     </td>
                     <td style={tdc()}>{rowL.target_time || '\u00A0'}</td>
 
                     <td style={tdc({ borderLeft: '2px solid #333' })}>{rowR?.process ? i + 11 : '\u00A0'}</td>
-                    <td style={td({ color: isQcFnR ? '#c62828' : '#000', fontWeight: isQcFnR ? 'bold' : 'normal', backgroundColor: isQcFnR ? '#fef08a' : '#fff' })}>
+                    <td style={td({ color: isQcFnR ? '#7B1A1A' : '#000', fontWeight: isQcFnR ? 'bold' : 'normal', backgroundColor: isQcFnR ? '#fef08a' : '#fff' })}>
                       {rowR?.process || '\u00A0'}
                     </td>
                     <td style={tdc()}>{rowR?.target_time || '\u00A0'}</td>
@@ -289,87 +315,6 @@ export default function PrintPreviewPage() {
             </tbody>
           </table>
         </div>
-
-        {/* ═══ PAGE 2 — QC Inspection ═══ */}
-        <div className="print-page" style={pageStyle}>
-
-          {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '11px' }}>
-            <span style={{ fontWeight: 'bold', fontSize: '14px' }}>For QC Inspection</span>
-            <span>JOB No.: <strong style={{ color: '#c62828' }}>{jobId}</strong></span>
-            <span>Date: ___________________________</span>
-          </div>
-
-          {/* Inspection table */}
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th colSpan={2} style={th({ backgroundColor: '#c0c0c0', fontSize: '10px' })}>INSPECTION</th>
-                <th colSpan={10} style={th({ backgroundColor: '#c0c0c0', fontSize: '10px' })}>No.</th>
-                <th style={th({ backgroundColor: '#c0c0c0', fontSize: '9px', width: '44px' })}>EQUIPMENT<br />SYMBOL</th>
-              </tr>
-              <tr>
-                <th style={th({ backgroundColor: '#d8d8d8', width: '36px' })}>POINT</th>
-                <th style={th({ backgroundColor: '#d8d8d8', minWidth: '100px' })}>SPEC</th>
-                {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                  <th key={n} style={th({ backgroundColor: '#d8d8d8', width: '30px' })}>{n}</th>
-                ))}
-                <th style={th({ backgroundColor: '#d8d8d8' })}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {QC_POINTS.map((pt) => (
-                <tr key={pt}>
-                  <td style={tdc({ height: '24px' })}>{pt}</td>
-                  <td style={td()}>{'\u00A0'}</td>
-                  {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                    <td key={n} style={tdc()}>{'\u00A0'}</td>
-                  ))}
-                  <td style={tdc()}>
-                    <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '1px solid #555', margin: '0 auto' }} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Remark */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '6px' }}>
-            <tbody>
-              <tr>
-                <td style={td({ width: '80px', fontWeight: 'bold' })}>REMARK :</td>
-                <td style={td()}></td>
-                <td style={tdc({ whiteSpace: 'nowrap', width: '200px', fontSize: '11px' })}>
-                  □ &nbsp;ACCEPT &nbsp;&nbsp;&nbsp; □ &nbsp;REJECT
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* Equipment + Signature */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '6px' }}>
-            <tbody>
-              <tr>
-                <td style={td({ verticalAlign: 'top', padding: '6px', width: '40%', fontSize: '9px' })}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '10px' }}>EQUIPMENT SYMBOL</div>
-                  {['VERNIER CALIPER','MICRO METER','PIN GAUGE','VISUAL (APPEARANCE)','OTHER'].map((label, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', border: '1px solid #555', flexShrink: 0 }} />
-                      {label}
-                    </div>
-                  ))}
-                </td>
-                <td style={td({ textAlign: 'center', height: '80px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px' })}>
-                  <strong>INSPECTER / QC</strong>
-                </td>
-                <td style={td({ textAlign: 'center', height: '80px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px' })}>
-                  <strong>APPROVE</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
       </div>
     </div>
   )

@@ -160,22 +160,22 @@ export default function ProfilePage() {
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Account</p>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           โปรไฟล์ของฉัน
-          <User className="h-5 w-5 text-[#c62828]" />
+          <User className="h-5 w-5 text-[#7B1A1A]" />
         </h1>
       </div>
 
       {/* Profile Card — full width */}
       <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden">
-        <div className="h-28 bg-gradient-to-r from-[#c62828] via-red-500 to-rose-400" />
+        <div className="h-28 bg-gradient-to-r from-[#7B1A1A] via-red-500 to-rose-400" />
         <div className="px-6 pb-6">
           <div className="-mt-10 mb-4 flex items-end justify-between">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#c62828] to-[#ef5350] text-white text-2xl font-bold shadow-lg ring-4 ring-white">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7B1A1A] to-[#9B3333] text-white text-2xl font-bold shadow-lg ring-4 ring-white">
               {initials}
             </div>
             <Button
               onClick={handleLogout}
               variant="outline"
-              className="gap-2 rounded-full h-9 text-xs border-red-200 text-[#c62828] hover:bg-red-50"
+              className="gap-2 rounded-full h-9 text-xs border-red-200 text-[#7B1A1A] hover:bg-red-50"
             >
               <LogOut className="h-3.5 w-3.5" />
               ออกจากระบบ
@@ -184,7 +184,7 @@ export default function ProfilePage() {
 
           <h2 className="text-xl font-bold text-gray-900 capitalize">{user.username}</h2>
           <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-100 px-3 py-0.5 text-xs font-semibold text-[#c62828]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-100 px-3 py-0.5 text-xs font-semibold text-[#7B1A1A]">
               <ShieldCheck className="h-3 w-3" />
               {user.role}
             </span>
@@ -350,7 +350,7 @@ export default function ProfilePage() {
               <div className={`flex items-center gap-2 rounded-xl px-4 py-3 text-xs font-medium ${
                 pwMsg.type === 'success'
                   ? 'bg-emerald-50 border border-emerald-100 text-emerald-700'
-                  : 'bg-red-50 border border-red-100 text-[#c62828]'
+                  : 'bg-red-50 border border-red-100 text-[#7B1A1A]'
               }`}>
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 {pwMsg.text}

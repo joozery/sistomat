@@ -15,6 +15,14 @@ interface Project {
   due_date: string
 }
 
+interface MatchedJob {
+  job_code: string
+  level1?: string
+  drawing_name?: string
+  quantity?: number
+  status?: string
+}
+
 const demoProjects: Project[] = [
   { project_id: 'PRJ-2025-081', received_date: '2025-07-28', due_date: '2025-08-05' },
   { project_id: 'PRJ-2025-082', received_date: '2025-07-29', due_date: '2025-08-06' },
@@ -27,6 +35,7 @@ export default function ProcessQRCodePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -55,9 +64,41 @@ export default function ProcessQRCodePage() {
     fetchProjects()
   }, [fetchProjects])
 
-  const filtered = projects.filter((p) =>
-    p.project_id.toLowerCase().includes(search.toLowerCase())
-  )
+  // Also search inside sub-jobs (job_code / drawing_name) so a match there
+  // surfaces its parent project row (and the matched jobs themselves), even
+  // if the project_id itself doesn't match.
+  useEffect(() => {
+    const term = search.trim()
+    if (!term) {
+      setMatchedJobs([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/jobs?search=${encodeURIComponent(term)}&limit=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const json = await res.json()
+        const jobs: MatchedJob[] = Array.isArray(json) ? json : (json.jobs ?? [])
+        setMatchedJobs(jobs)
+      } catch {
+        setMatchedJobs([])
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const normalize = (s: string) => s.toLowerCase().replace(/[-\s]/g, '')
+  const matchedLevel1s = new Set(matchedJobs.map((j) => j.level1).filter((l): l is string => Boolean(l)))
+
+  const filtered = projects.filter((p) => {
+    if (!search) return true
+    const term = normalize(search)
+    if (normalize(p.project_id).includes(term)) return true
+    // Excel-imported project_id IS the level1 code; dialog-created ones need a "J" prefix to match level1
+    return matchedLevel1s.has(p.project_id) || matchedLevel1s.has(`J${p.project_id}`)
+  })
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE))
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
@@ -104,9 +145,11 @@ export default function ProcessQRCodePage() {
         itemsPerPage={ITEMS_PER_PAGE}
         onPageChange={setCurrentPage}
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={(v) => { setSearch(v); setCurrentPage(1) }}
+        matchedJobs={matchedJobs}
         onOpenAddDialog={() => setDialogOpen(true)}
         onOpenImportDialog={() => setImportOpen(true)}
+        onDeleted={fetchProjects}
       />
 
       <AddProjectDialog

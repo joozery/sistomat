@@ -34,7 +34,7 @@ function Toggle({
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-        checked ? 'bg-[#c62828]' : 'bg-gray-200'
+        checked ? 'bg-[#7B1A1A]' : 'bg-gray-200'
       }`}
     >
       <span
@@ -55,7 +55,7 @@ function Section({
   description,
   children,
 }: {
-  icon: React.ElementType
+  icon: React.ComponentType<{ className?: string }>
   iconBg: string
   iconColor: string
   title: string
@@ -140,7 +140,7 @@ export default function SettingsPage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">System</p>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             ตั้งค่าระบบ
-            <Settings className="h-5 w-5 text-[#c62828]" />
+            <Settings className="h-5 w-5 text-[#7B1A1A]" />
           </h1>
         </div>
 
@@ -153,7 +153,7 @@ export default function SettingsPage() {
           )}
           <Button
             onClick={handleSave}
-            className="gap-2 rounded-full h-10 bg-[#c62828] hover:bg-[#b71c1c] text-white px-5 text-sm font-semibold shadow-sm"
+            className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-sm font-semibold shadow-sm"
           >
             <Save className="h-4 w-4" />
             บันทึกการตั้งค่า
@@ -196,7 +196,7 @@ export default function SettingsPage() {
               id="tz"
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-[#c62828] focus:outline-none transition-colors"
+              className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-[#7B1A1A] focus:outline-none transition-colors"
             >
               <option value="Asia/Bangkok">Asia/Bangkok (UTC+7)</option>
               <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
@@ -258,7 +258,7 @@ export default function SettingsPage() {
               id="datefmt"
               value={dateFormat}
               onChange={(e) => setDateFormat(e.target.value)}
-              className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-[#c62828] focus:outline-none transition-colors"
+              className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-[#7B1A1A] focus:outline-none transition-colors"
             >
               <option value="th-TH">ไทย — วันที่ เดือน ปี พ.ศ.</option>
               <option value="en-GB">อังกฤษ — DD/MM/YYYY</option>
@@ -289,7 +289,7 @@ export default function SettingsPage() {
         <Section
           icon={Shield}
           iconBg="bg-red-50 border-red-100"
-          iconColor="text-[#c62828]"
+          iconColor="text-[#7B1A1A]"
           title="ความปลอดภัย"
           description="Session, 2FA และ activity log"
         >
@@ -376,7 +376,7 @@ export default function SettingsPage() {
       <div className="flex justify-end pb-4">
         <Button
           onClick={handleSave}
-          className="gap-2 rounded-full h-11 bg-[#c62828] hover:bg-[#b71c1c] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20"
+          className="gap-2 rounded-full h-11 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20"
         >
           <Save className="h-4 w-4" />
           บันทึกการตั้งค่าทั้งหมด

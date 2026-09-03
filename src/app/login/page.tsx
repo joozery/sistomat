@@ -19,7 +19,7 @@ export default function LoginPage() {
         </div>
         <h1 className="text-3xl xl:text-4xl font-bold text-gray-800 leading-[1.3] mb-4">
           ยินดีต้อนรับ<br />
-          สู่ <span className="text-[#c62828]">ระบบบริหารจัดการ</span>
+          สู่ <span className="text-[#7B1A1A]">ระบบบริหารจัดการ</span>
         </h1>
         <p className="text-gray-500 text-base leading-relaxed">
           ลงชื่อเข้าใช้งานเพื่อเข้าถึงระบบ<br />

@@ -118,7 +118,7 @@ export function PrintJobSheet({ jobId, dwgName, receivedDate, dueDate, processLi
                   <td style={{ ...tdC, height: rowH }}>{rowL.process ? i + 1 : ''}</td>
                   <td style={{
                     ...td,
-                    color: isQcFnL ? '#c62828' : '#000',
+                    color: isQcFnL ? '#7B1A1A' : '#000',
                     fontWeight: isQcFnL ? 'bold' : 'normal',
                     backgroundColor: isQcFnL ? '#fef08a' : '#fff',
                   }}>
@@ -129,7 +129,7 @@ export function PrintJobSheet({ jobId, dwgName, receivedDate, dueDate, processLi
                   <td style={{ ...tdC, borderLeft: '2px solid #333' }}>{rowR?.process ? i + 11 : ''}</td>
                   <td style={{
                     ...td,
-                    color: isQcFnR ? '#c62828' : '#000',
+                    color: isQcFnR ? '#7B1A1A' : '#000',
                     fontWeight: isQcFnR ? 'bold' : 'normal',
                     backgroundColor: isQcFnR ? '#fef08a' : '#fff',
                   }}>
@@ -154,7 +154,7 @@ export function PrintJobSheet({ jobId, dwgName, receivedDate, dueDate, processLi
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px' }}>
           <span style={{ fontWeight: 'bold', fontSize: '13px' }}>For QC Inspection</span>
-          <span>JOB No.: <strong style={{ color: '#c62828' }}>{jobId}</strong></span>
+          <span>JOB No.: <strong style={{ color: '#7B1A1A' }}>{jobId}</strong></span>
           <span>Date: ___________________________</span>
         </div>
 

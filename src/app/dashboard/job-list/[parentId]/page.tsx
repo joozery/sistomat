@@ -15,6 +15,8 @@ import {
   QrCode,
   Loader2,
   Plus,
+  Receipt,
+  ClipboardCheck,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
@@ -120,13 +122,23 @@ export default function JobListPage() {
           <ArrowLeft className="h-4 w-4" />
           ย้อนกลับ
         </Button>
-        <Button
-          onClick={() => setAddOpen(true)}
-          className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่ม Job ย่อย
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(parentId)}`)}
+            className="gap-2 rounded-full border-gray-200 text-gray-600 hover:text-gray-800 h-9 px-4 text-xs font-semibold"
+          >
+            <Receipt className="h-4 w-4" />
+            ใบเสนอราคา
+          </Button>
+          <Button
+            onClick={() => setAddOpen(true)}
+            className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            เพิ่ม Job ย่อย
+          </Button>
+        </div>
       </div>
 
       {/* Header */}
@@ -267,17 +279,27 @@ export default function JobListPage() {
                       )}
 
                       {/* Action */}
-                      <div className="ml-auto shrink-0">
+                      <div className="ml-auto flex items-center gap-1.5 shrink-0">
                         {singleJob ? (
-                          // No BU → link directly to process-details
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => router.push(`/dashboard/process-details/${level2Code}`)}
-                            className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 text-xs font-semibold gap-1"
-                          >
-                            เปิดใบงาน <ExternalLink className="h-3.5 w-3.5" />
-                          </Button>
+                          <>
+                            {/* No BU → link directly to process-details */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => router.push(`/dashboard/process-details/${level2Code}/qc`)}
+                              className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
+                            >
+                              <ClipboardCheck className="h-3.5 w-3.5" /> QC
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => router.push(`/dashboard/process-details/${level2Code}`)}
+                              className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 text-xs font-semibold gap-1"
+                            >
+                              เปิดใบงาน <ExternalLink className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
                         ) : (
                           <button
                             onClick={() => toggle(level2Code)}
@@ -343,14 +365,24 @@ export default function JobListPage() {
                               <span className="text-[11px] text-gray-500">{formatDate(job.due_date)}</span>
                               <StatusChip status={job.status} />
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
-                              className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
-                            >
-                              ใบงาน <ExternalLink className="h-3 w-3" />
-                            </Button>
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
+                                className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
+                              >
+                                <ClipboardCheck className="h-3 w-3" /> QC
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
+                                className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
+                              >
+                                ใบงาน <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -379,6 +411,14 @@ export default function JobListPage() {
                             <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">{job.job_code}</span>
                             <span className="text-xs text-gray-500 flex-1 truncate">{job.drawing_name}</span>
                             <StatusChip status={job.status} />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
+                              className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
+                            >
+                              <ClipboardCheck className="h-3 w-3" /> QC
+                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"

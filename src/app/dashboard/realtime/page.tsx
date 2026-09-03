@@ -133,7 +133,7 @@ function TableRow({ ev, tick, idx }: { ev: RealtimeEvent; tick: number; idx: num
 
       {/* JOB / DWG */}
       <td className="px-3 py-3 min-w-[160px]">
-        <p className="font-mono text-xs font-bold text-gray-800 group-hover:text-[#c62828] transition-colors">
+        <p className="font-mono text-xs font-bold text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
           {ev.project_id}
         </p>
         {ev.dwg_name && (
@@ -228,7 +228,7 @@ function TableRow({ ev, tick, idx }: { ev: RealtimeEvent; tick: number; idx: num
 
       {/* Link */}
       <td className="pr-4 py-3 w-10 text-right">
-        <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-[#c62828] transition-colors" />
+        <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-[#7B1A1A] transition-colors" />
       </td>
     </tr>
   )
@@ -478,7 +478,7 @@ export default function RealtimePage() {
             placeholder="ค้นหา Job, DWG, พนักงาน, Process..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-full border border-gray-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#c62828]/30 focus:border-[#c62828] transition-all"
+            className="w-full pl-9 pr-4 py-2 rounded-full border border-gray-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#7B1A1A]/30 focus:border-[#7B1A1A] transition-all"
           />
         </div>
 
@@ -591,7 +591,7 @@ export default function RealtimePage() {
                 <p className="text-gray-400 text-sm font-medium">ไม่พบข้อมูลที่ตรงกัน</p>
                 <button
                   onClick={() => { setSearch(''); setFilterProcess('ทั้งหมด') }}
-                  className="text-xs text-[#c62828] hover:underline font-semibold"
+                  className="text-xs text-[#7B1A1A] hover:underline font-semibold"
                 >
                   ล้างตัวกรองทั้งหมด
                 </button>

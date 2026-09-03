@@ -9,7 +9,7 @@ const stats = [
     up: true,
     change: '+2',
     icon: Cpu,
-    color: 'text-[#c62828] bg-red-50 border-red-100',
+    color: 'text-[#7B1A1A] bg-red-50 border-red-100',
   },
   {
     title: 'แพลนงานผลิตเดือนนี้',
