@@ -14,7 +14,11 @@ import {
   Calendar,
   QrCode,
   Loader2,
+  Plus,
 } from 'lucide-react'
+import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
+import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
+import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
 
 interface ProcessEntry {
   process: string
@@ -38,6 +42,8 @@ interface Job {
   outsource_process: string
   due_date: string
   sheet_name: string
+  file_url?: string
+  file_name?: string
 }
 
 function formatDate(d: string) {
@@ -65,23 +71,24 @@ export default function JobListPage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [addOpen, setAddOpen] = useState(false)
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(`/api/jobs?level1=${encodeURIComponent(parentId)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const json = await res.json()
-        const data = Array.isArray(json) ? json : (json.jobs ?? [])
-        setJobs(data)
-      } catch { /* ignore */ }
-      finally { setLoading(false) }
-    }
-    load()
-  }, [parentId])
+  async function loadJobs() {
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/jobs?level1=${encodeURIComponent(parentId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json()
+      const data = Array.isArray(json) ? json : (json.jobs ?? [])
+      setJobs(data)
+    } catch { /* ignore */ }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadJobs() }, [parentId])
 
   const toggle = (key: string) =>
     setExpanded((prev) => {
@@ -104,7 +111,7 @@ export default function JobListPage() {
   return (
     <div className="space-y-6 font-sans">
       {/* Top bar */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3">
         <Button
           variant="outline"
           onClick={() => router.back()}
@@ -113,6 +120,13 @@ export default function JobListPage() {
           <ArrowLeft className="h-4 w-4" />
           ย้อนกลับ
         </Button>
+        <Button
+          onClick={() => setAddOpen(true)}
+          className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
+        >
+          <Plus className="h-4 w-4" />
+          เพิ่ม Job ย่อย
+        </Button>
       </div>
 
       {/* Header */}
@@ -120,7 +134,7 @@ export default function JobListPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#c62828] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#7B1A1A] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
                 <Layers className="h-3 w-3" /> JOB HIERARCHY
               </span>
             </div>
@@ -157,7 +171,7 @@ export default function JobListPage() {
       {/* Job list */}
       {loading ? (
         <div className="flex justify-center items-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-[#c62828]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#7B1A1A]" />
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200/70 overflow-hidden">
@@ -183,8 +197,8 @@ export default function JobListPage() {
                 return (
                   <div key={level2Code}>
                     {/* Level 2 row */}
-                    <div className="flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50/70 transition-colors group">
-                      {/* Expand toggle (only when has multiple items or level3) */}
+                    <div className="flex items-center gap-4 px-6 py-3 hover:bg-gray-50/70 transition-colors group">
+                      {/* Expand toggle */}
                       <button
                         onClick={() => toggle(level2Code)}
                         className="text-gray-300 hover:text-gray-500 shrink-0 w-5"
@@ -194,9 +208,21 @@ export default function JobListPage() {
                           : <ChevronRight className="h-4 w-4" />}
                       </button>
 
+                      {/* Thumbnail (single job only) */}
+                      {singleJob?.file_url && singleJob?.file_name ? (
+                        <FileThumbnail
+                          fileUrl={singleJob.file_url}
+                          fileName={singleJob.file_name}
+                          size={56}
+                          onClick={() => setPreview({ url: singleJob.file_url!, name: singleJob.file_name! })}
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg border border-dashed border-gray-100 shrink-0" />
+                      )}
+
                       {/* Code */}
                       <div className="w-48 shrink-0">
-                        <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#c62828] transition-colors">
+                        <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                           {level2Code}
                         </span>
                         {singleJob?.drawing_name && (
@@ -248,7 +274,7 @@ export default function JobListPage() {
                             size="sm"
                             variant="ghost"
                             onClick={() => router.push(`/dashboard/process-details/${level2Code}`)}
-                            className="h-8 rounded-full text-[#c62828] hover:bg-red-50 text-xs font-semibold gap-1"
+                            className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 text-xs font-semibold gap-1"
                           >
                             เปิดใบงาน <ExternalLink className="h-3.5 w-3.5" />
                           </Button>
@@ -267,7 +293,8 @@ export default function JobListPage() {
                     {isOpen && hasLevel3 && (
                       <div className="bg-gray-50/40 border-t border-gray-100">
                         {/* Sub-header */}
-                        <div className="grid grid-cols-[1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                        <div className="grid grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                          <span></span>
                           <span>BU Code</span>
                           <span>ชื่อแบบ</span>
                           <span className="text-center">จำนวน</span>
@@ -279,10 +306,21 @@ export default function JobListPage() {
                         {items.map((job, idx) => (
                           <div
                             key={job.job_code}
-                            className={`grid grid-cols-[1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2.5 items-center ${
+                            className={`grid grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 items-center ${
                               idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                             } hover:bg-red-50/20 transition-colors`}
                           >
+                            {/* Thumbnail */}
+                            {job.file_url && job.file_name ? (
+                              <FileThumbnail
+                                fileUrl={job.file_url}
+                                fileName={job.file_name}
+                                size={48}
+                                onClick={() => setPreview({ url: job.file_url!, name: job.file_name! })}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg border border-dashed border-gray-100" />
+                            )}
                             <span className="font-mono text-xs font-semibold text-gray-700">{job.job_code}</span>
                             <span className="text-xs text-gray-500 truncate">{job.drawing_name}</span>
                             <div className="text-center">
@@ -309,7 +347,7 @@ export default function JobListPage() {
                               size="sm"
                               variant="ghost"
                               onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
-                              className="h-7 rounded-full text-[#c62828] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
+                              className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
                             >
                               ใบงาน <ExternalLink className="h-3 w-3" />
                             </Button>
@@ -324,10 +362,20 @@ export default function JobListPage() {
                         {items.map((job, idx) => (
                           <div
                             key={job.job_code}
-                            className={`flex items-center gap-4 px-12 py-2.5 ${
+                            className={`flex items-center gap-4 px-12 py-2 ${
                               idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                             } hover:bg-red-50/20 transition-colors`}
                           >
+                            {job.file_url && job.file_name ? (
+                              <FileThumbnail
+                                fileUrl={job.file_url}
+                                fileName={job.file_name}
+                                size={48}
+                                onClick={() => setPreview({ url: job.file_url!, name: job.file_name! })}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg border border-dashed border-gray-100 shrink-0" />
+                            )}
                             <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">{job.job_code}</span>
                             <span className="text-xs text-gray-500 flex-1 truncate">{job.drawing_name}</span>
                             <StatusChip status={job.status} />
@@ -335,7 +383,7 @@ export default function JobListPage() {
                               size="sm"
                               variant="ghost"
                               onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
-                              className="h-7 rounded-full text-[#c62828] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
+                              className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
                             >
                               ใบงาน <ExternalLink className="h-3 w-3" />
                             </Button>
@@ -349,6 +397,22 @@ export default function JobListPage() {
             </div>
           )}
         </div>
+      )}
+
+      <AddJobDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        parentId={parentId}
+        onSuccess={loadJobs}
+      />
+
+      {preview && (
+        <FilePreviewDialog
+          open={!!preview}
+          onOpenChange={(v) => { if (!v) setPreview(null) }}
+          fileUrl={preview.url}
+          fileName={preview.name}
+        />
       )}
     </div>
   )

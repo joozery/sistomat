@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -12,12 +13,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet } from 'lucide-react'
+import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Paperclip } from 'lucide-react'
+import { FilePreviewDialog } from './FilePreviewDialog'
+import { FileThumbnail } from './FileThumbnail'
 
 interface Project {
   project_id: string
   received_date: string
   due_date: string
+  file_url?: string
+  file_name?: string
 }
 
 interface ProjectTableProps {
@@ -48,7 +53,7 @@ function formatDate(dateString: string) {
 }
 
 const processSteps = [
-  { step: 'QC & Inspection', bg: 'bg-[#c62828] text-white' },
+  { step: 'QC & Inspection', bg: 'bg-[#7B1A1A] text-white' },
   { step: 'LATHE 1 - กลึงชิ้นงาน', bg: 'bg-amber-600 text-white' },
   { step: 'CNC 2 - กัดชิ้นงาน', bg: 'bg-purple-600 text-white' },
   { step: 'CAM - ออกแบบทางเดิน Tool', bg: 'bg-blue-600 text-white' },
@@ -69,6 +74,7 @@ export function ProjectTable({
   onOpenImportDialog,
 }: ProjectTableProps) {
   const router = useRouter()
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null)
 
   return (
     <div className="rounded-xl border border-gray-200/70 bg-white overflow-hidden font-sans">
@@ -80,7 +86,7 @@ export function ProjectTable({
             placeholder="ค้นหาเลขที่โปรเจค..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10 h-10 rounded-full border-gray-200 bg-white text-sm focus:border-[#c62828] transition-all"
+            className="pl-10 h-10 rounded-full border-gray-200 bg-white text-sm focus:border-[#7B1A1A] transition-all"
           />
         </div>
 
@@ -88,14 +94,14 @@ export function ProjectTable({
           <Button
             onClick={onOpenImportDialog}
             variant="outline"
-            className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#c62828] hover:text-[#c62828] px-4 text-sm"
+            className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#7B1A1A] hover:text-[#7B1A1A] px-4 text-sm"
           >
             <FileSpreadsheet className="h-4 w-4" />
             <span>นำเข้า Excel</span>
           </Button>
           <Button
             onClick={onOpenAddDialog}
-            className="gap-2 rounded-full h-10 bg-[#c62828] hover:bg-[#b71c1c] text-white px-5 shadow-sm transition-all"
+            className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 shadow-sm transition-all"
           >
             <Plus className="h-4 w-4" />
             <span>เพิ่มกระบวนการ</span>
@@ -106,7 +112,7 @@ export function ProjectTable({
       {/* Table */}
       {loading ? (
         <div className="flex justify-center items-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-[#c62828]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#7B1A1A]" />
         </div>
       ) : (
         <>
@@ -120,13 +126,14 @@ export function ProjectTable({
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">ระยะเวลาใช้งาน</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">กำหนดส่งมอบ</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">สถานะ</TableHead>
+                <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-24">Preview</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-28">การจัดการ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100">
               {projects.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-32 text-center text-gray-400">
+                  <TableCell colSpan={9} className="h-32 text-center text-gray-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <QrCode className="h-6 w-6 opacity-30" />
                       <p className="text-sm">ไม่พบโปรเจคที่ค้นหา</p>
@@ -145,7 +152,7 @@ export function ProjectTable({
 
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#c62828] transition-colors">
+                          <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                             {project.project_id}
                           </span>
                         </div>
@@ -182,11 +189,27 @@ export function ProjectTable({
                         </Badge>
                       </TableCell>
 
+                      <TableCell className="py-2">
+                        <div className="flex justify-center">
+                          {project.file_url && project.file_name ? (
+                            <FileThumbnail
+                              fileUrl={project.file_url}
+                              fileName={project.file_name}
+                              onClick={() => setPreview({ url: project.file_url!, name: project.file_name! })}
+                            />
+                          ) : (
+                            <div className="w-[80px] h-[80px] rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
+                              <Paperclip className="h-4 w-4 text-gray-200" />
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+
                       <TableCell className="text-center">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 rounded-full text-[#c62828] hover:bg-red-50 hover:text-[#b71c1c] text-xs font-semibold gap-1"
+                          className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 hover:text-[#5C1212] text-xs font-semibold gap-1"
                           onClick={() => {
                             // Level 1 pattern: J[X]-NNNN → go to job-list
                             const isLevel1 = /^J[A-Z]-\d{3,4}$/.test(project.project_id)
@@ -232,7 +255,7 @@ export function ProjectTable({
                     variant={currentPage === p ? 'default' : 'outline'}
                     size="sm"
                     className={`w-8 h-8 rounded-xl text-xs ${
-                      currentPage === p ? 'bg-[#c62828] hover:bg-[#b71c1c] text-white border-none' : ''
+                      currentPage === p ? 'bg-[#7B1A1A] hover:bg-[#5C1212] text-white border-none' : ''
                     }`}
                     onClick={() => onPageChange(p)}
                   >
@@ -252,6 +275,15 @@ export function ProjectTable({
             )}
           </div>
         </>
+      )}
+
+      {preview && (
+        <FilePreviewDialog
+          open={!!preview}
+          onOpenChange={(v) => { if (!v) setPreview(null) }}
+          fileUrl={preview.url}
+          fileName={preview.name}
+        />
       )}
     </div>
   )

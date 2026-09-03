@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     jwt.verify(token, JWT_SECRET)
 
-    const { projectId, dwgName, receivedDate, dueDate } = await request.json()
+    const { projectId, dwgName, receivedDate, dueDate, fileUrl, fileName } = await request.json()
 
     if (!projectId || !receivedDate || !dueDate) {
       return NextResponse.json(
@@ -48,6 +48,8 @@ export async function POST(request: NextRequest) {
       received_date: new Date(receivedDate),
       due_date: new Date(dueDate),
       status: 'กำลังดำเนินการ',
+      file_url: fileUrl || null,
+      file_name: fileName || null,
       created_at: new Date(),
     }
 
