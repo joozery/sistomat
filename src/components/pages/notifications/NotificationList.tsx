@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,17 +9,16 @@ import {
   AlertTriangle,
   XCircle,
   Info,
-  Cpu,
   Check,
   Trash2,
   ExternalLink,
-  Filter,
   BellRing,
+  Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
 
-interface NotificationItem {
-  id: number
+export interface NotificationItem {
+  id: string
   type: 'success' | 'warning' | 'error' | 'info'
   category: 'machine' | 'system' | 'qc' | 'inventory'
   title: string
@@ -29,57 +28,6 @@ interface NotificationItem {
   link?: string
 }
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: 1,
-    type: 'warning',
-    category: 'machine',
-    title: 'เครื่องจักร CNC 2 แจ้งเตือนตรวจเช็กน้ำมันหล่อเย็น',
-    description: 'ระดับน้ำมันหล่อเย็นลดลงต่ำกว่า 20% กรุณาเติมก่อนเริ่มขั้นตอนการผลิตถัดไป',
-    time: '10 นาทีที่แล้ว',
-    read: false,
-    link: '/dashboard/process-details/JD-2025-001',
-  },
-  {
-    id: 2,
-    type: 'success',
-    category: 'qc',
-    title: 'การสแกน QR Code ใบงาน #JOB-8842 เสร็จสิ้น',
-    description: 'ขั้นตอน LATHE 1 ดำเนินการเสร็จสมบูรณ์ ชิ้นงานผ่านการตรวจสอบคุณภาพเบื้องต้น 100%',
-    time: '35 นาทีที่แล้ว',
-    read: false,
-    link: '/dashboard/process-details/JD-2025-001',
-  },
-  {
-    id: 3,
-    type: 'error',
-    category: 'qc',
-    title: 'พบชิ้นงานไม่ผ่านเกณฑ์ QC ในขั้นตอน #JOB-8845',
-    description: 'พบรอยขีดข่วนบนพื้นผิวชิ้นงานเกินค่าพิกัดความคลาดเคลื่อน 0.05 mm กรุณาตรวจสอบ',
-    time: '1 ชั่วโมงที่แล้ว',
-    read: false,
-    link: '/dashboard/process-details/JD-2025-001',
-  },
-  {
-    id: 4,
-    type: 'info',
-    category: 'inventory',
-    title: 'การเบิกจ่ายวัตถุดิบสำเร็จ (เหล็กเพลา S45C)',
-    description: 'ฝ่าย MAT ดำเนินการเบิกจ่ายวัตถุดิบสำหรับแพลนงานประจำสัปดาห์เรียบร้อยแล้ว',
-    time: '3 ชั่วโมงที่แล้ว',
-    read: true,
-  },
-  {
-    id: 5,
-    type: 'info',
-    category: 'system',
-    title: 'อัปเดตระบบ SISTOMAT ERP v2.4 สำเร็จ',
-    description: 'ปรับปรุงประสิทธิภาพการสแกน QR Code และเพิ่มความเร็วในการโหลดตารางกระบวนการ',
-    time: 'เมื่อวานนี้',
-    read: true,
-  },
-]
-
 const iconMap = {
   success: { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', badge: 'สำเร็จ' },
   warning: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100', badge: 'แจ้งเตือน' },
@@ -87,22 +35,96 @@ const iconMap = {
   info: { icon: Info, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', badge: 'ข้อมูลระบบ' },
 }
 
-export function NotificationList() {
-  const [list, setList] = useState<NotificationItem[]>(initialNotifications)
+function getToken() {
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem('token') ?? ''
+}
+
+export function NotificationList({ onUnreadChange }: { onUnreadChange?: (count: number) => void }) {
+  const [list, setList] = useState<NotificationItem[]>([])
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'machine'>('all')
 
-  const toggleRead = (id: number) => {
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true)
+    try {
+      const token = getToken()
+      const res = await fetch('/api/notifications', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const json = await res.json()
+        const items: NotificationItem[] = json.notifications ?? []
+        setList(items)
+        const unread = items.filter((i) => !i.read).length
+        onUnreadChange?.(unread)
+      }
+    } catch {
+      setList([])
+    } finally {
+      setLoading(false)
+    }
+  }, [onUnreadChange])
+
+  useEffect(() => {
+    fetchNotifications()
+  }, [fetchNotifications])
+
+  const toggleRead = async (id: string) => {
+    const item = list.find((i) => i.id === id)
+    if (!item) return
+    const newRead = !item.read
+
     setList((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, read: !item.read } : item))
+      prev.map((i) => (i.id === id ? { ...i, read: newRead } : i))
     )
+
+    try {
+      const token = getToken()
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id, read: newRead }),
+      })
+    } catch {
+      // rollback on error
+    }
   }
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setList((prev) => prev.map((item) => ({ ...item, read: true })))
+    onUnreadChange?.(0)
+
+    try {
+      const token = getToken()
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ markAllRead: true }),
+      })
+    } catch {
+      // ignore
+    }
   }
 
-  const deleteItem = (id: number) => {
+  const deleteItem = async (id: string) => {
     setList((prev) => prev.filter((item) => item.id !== id))
+
+    try {
+      const token = getToken()
+      await fetch(`/api/notifications?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {
+      // ignore
+    }
   }
 
   const filteredList = list.filter((item) => {
@@ -112,6 +134,15 @@ export function NotificationList() {
   })
 
   const unreadCount = list.filter((i) => !i.read).length
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-16 text-gray-400 gap-2">
+        <Loader2 className="h-6 w-6 animate-spin text-[#7B1A1A]" />
+        <span className="text-sm">กำลังโหลดการแจ้งเตือน...</span>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4 font-sans">
@@ -172,7 +203,7 @@ export function NotificationList() {
           </Card>
         ) : (
           filteredList.map((note) => {
-            const { icon: Icon, color, bg, badge } = iconMap[note.type]
+            const { icon: Icon, color, bg, badge } = iconMap[note.type] ?? iconMap.info
 
             return (
               <Card

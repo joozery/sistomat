@@ -4,7 +4,8 @@ import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FileText, Box, Loader2, Download, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
+import { logActivity } from '@/lib/logActivity'
 
 const Viewer3D = dynamic(() => import('./Viewer3D'), { ssr: false, loading: () => <SpinnerBox /> })
 
@@ -63,6 +64,18 @@ export function FilePreviewDialog({ open, onOpenChange, fileUrl, fileName, attac
   const pdfFile = attachments?.find((a) => getExt(a.file_name) === 'pdf')
   const threeDFile = attachments?.find((a) => IS_3D.includes(getExt(a.file_name)))
   const showSplit = !!(pdfFile && threeDFile)
+
+  useEffect(() => {
+    if (!open) return
+    if (showSplit) {
+      logActivity('view_split', fileName, `PDF: ${pdfFile?.file_name} | 3D: ${threeDFile?.file_name}`)
+    } else if (isPdf) {
+      logActivity('view_pdf', fileName)
+    } else if (is3d) {
+      logActivity('view_3d', fileName)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   if (showSplit) {
     return (

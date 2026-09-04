@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Radio,
+  Activity,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -42,6 +43,7 @@ const managementMenuItems: MenuItem[] = [
   { label: 'การแจ้งเตือน', path: '/dashboard/notifications', icon: Bell, badge: '3' },
   { label: 'สรุปรายการทั้งหมด', path: '/dashboard/monthly-summary', icon: BarChart2 },
   { label: 'แพลนงานทั้งหมด', path: '/dashboard/all-plans', icon: ClipboardList },
+  { label: 'ประวัติกิจกรรม', path: '/dashboard/activity-log', icon: Activity },
 ]
 
 export function AppSidebar() {

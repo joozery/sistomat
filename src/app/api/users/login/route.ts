@@ -44,6 +44,17 @@ export async function POST(request: NextRequest) {
       { expiresIn: '7d' }
     )
 
+    // Log login activity (fire-and-forget)
+    const client2 = await getClientPromise()
+    client2.db('sistomat').collection('activity_logs').insertOne({
+      username: user.username,
+      role: user.role || 'Member',
+      action: 'login',
+      target: '',
+      detail: `เข้าสู่ระบบสำเร็จ`,
+      created_at: new Date(),
+    }).catch(() => {})
+
     return NextResponse.json({
       token,
       user: {

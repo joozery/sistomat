@@ -8,10 +8,18 @@ function getToken(req: NextRequest): string | null {
   return req.cookies.get('auth_token')?.value ?? null
 }
 
+interface JwtPayload { id: string; username: string; role: string }
+
 function verifyToken(req: NextRequest) {
   const token = getToken(req)
   if (!token) throw new Error('Unauthorized')
   jwt.verify(token, process.env.JWT_SECRET!)
+}
+
+function decodeToken(req: NextRequest): JwtPayload | null {
+  const token = getToken(req)
+  if (!token) return null
+  try { return jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload } catch { return null }
 }
 
 // Parse job_code → level1 / level2 / level3 (falls back to a flat code when it
@@ -162,6 +170,19 @@ export async function POST(req: NextRequest) {
       },
       { upsert: true }
     )
+
+    // Log activity (fire-and-forget)
+    const actor = decodeToken(req)
+    if (actor) {
+      db.collection('activity_logs').insertOne({
+        username: actor.username,
+        role: actor.role,
+        action: 'create_job',
+        target: job_code.trim(),
+        detail: `${drawing_name?.trim() || ''} | qty: ${Number(quantity) || 1}`,
+        created_at: new Date(),
+      }).catch(() => {})
+    }
 
     return NextResponse.json({ message: 'สร้าง Job สำเร็จ', job_code: job_code.trim() }, { status: 201 })
   } catch (e) {
