@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { job_code, drawing_name, quantity, due_date, status, processes, file_url, file_name } = body
+    const { job_code, drawing_name, quantity, due_date, status, processes, file_url, file_name, attachments } = body
 
     if (!job_code) return NextResponse.json({ message: 'กรุณากรอกเลข Job Code' }, { status: 400 })
 
@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
       sheet_name: 'manual',
       file_url: file_url || null,
       file_name: file_name || null,
+      attachments: Array.isArray(attachments) && attachments.length > 1 ? attachments : null,
       created_at: new Date(),
     }
 
@@ -155,6 +156,7 @@ export async function POST(req: NextRequest) {
           type: 'job',
           file_url: file_url || null,
           file_name: file_name || null,
+          attachments: Array.isArray(attachments) && attachments.length > 1 ? attachments : null,
           created_at: new Date(),
         },
       },

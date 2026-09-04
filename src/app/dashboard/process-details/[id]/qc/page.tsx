@@ -21,6 +21,7 @@ interface PointRow {
 interface QcData {
   date: string
   points: Record<string, PointRow>
+  activePoints: string[]
   equipment: string[]
   result: 'accept' | 'reject' | ''
   remark: string
@@ -35,7 +36,7 @@ function emptyPointRow(): PointRow {
 function emptyQcData(): QcData {
   const points: Record<string, PointRow> = {}
   for (const pt of QC_POINTS) points[pt] = emptyPointRow()
-  return { date: '', points, equipment: [], result: '', remark: '', inspector: '', approver: '' }
+  return { date: '', points, activePoints: [...QC_POINTS], equipment: [], result: '', remark: '', inspector: '', approver: '' }
 }
 
 export default function QcSheetPage() {
@@ -66,6 +67,7 @@ export default function QcSheetPage() {
           ...merged,
           ...data.qc,
           points: { ...merged.points, ...(data.qc.points ?? {}) },
+          activePoints: data.qc.activePoints ?? [...QC_POINTS],
         })
       }
     } catch {
@@ -103,6 +105,28 @@ export default function QcSheetPage() {
 
   function patchQc(patch: Partial<QcData>) {
     setQc((prev) => ({ ...prev, ...patch }))
+    setSaved(false)
+  }
+
+  function addPoint() {
+    const active = qc.activePoints
+    const last = active[active.length - 1]
+    const next = String.fromCharCode(last.charCodeAt(0) + 1)
+    if (next > 'Z') return
+    setQc((prev) => ({
+      ...prev,
+      activePoints: [...prev.activePoints, next],
+      points: { ...prev.points, [next]: emptyPointRow() },
+    }))
+    setSaved(false)
+  }
+
+  function removePoint(pt: string) {
+    if (QC_POINTS.includes(pt)) return // ลบ default A-P ไม่ได้
+    setQc((prev) => {
+      const { [pt]: _, ...rest } = prev.points
+      return { ...prev, activePoints: prev.activePoints.filter((p) => p !== pt), points: rest }
+    })
     setSaved(false)
   }
 
@@ -192,7 +216,9 @@ export default function QcSheetPage() {
           #pages-wrap { padding: 24px; }
         }
 
+        .no-print { }
         @media print {
+          .no-print { display: none !important; }
           html, body, main, .SidebarInset {
             height: auto !important;
             min-height: 0 !important;
@@ -291,25 +317,25 @@ export default function QcSheetPage() {
               </tr>
               <tr>
                 <th style={th({ backgroundColor: '#d8d8d8', width: '36px' })}>POINT</th>
-                <th style={th({ backgroundColor: '#d8d8d8', minWidth: '100px' })}>SPEC</th>
+                <th style={th({ backgroundColor: '#d8d8d8', width: '115px' })}>SPEC</th>
                 {Array.from({ length: VALUE_COLS }, (_, i) => i + 1).map((n) => (
-                  <th key={n} style={th({ backgroundColor: '#d8d8d8', width: '30px' })}>{n}</th>
+                  <th key={n} style={th({ backgroundColor: '#d8d8d8', width: '40px' })}>{n}</th>
                 ))}
                 <th style={th({ backgroundColor: '#d8d8d8' })}></th>
               </tr>
             </thead>
             <tbody>
-              {QC_POINTS.map((pt) => (
+              {qc.activePoints.map((pt) => (
                 <tr key={pt}>
                   <td style={tdc({ height: '24px' })}>{pt}</td>
                   <td style={td()}>
                     <input
-                      value={qc.points[pt].spec}
+                      value={qc.points[pt]?.spec ?? ''}
                       onChange={(e) => updatePoint(pt, { spec: e.target.value })}
                       style={{ ...cellInput, textAlign: 'left' }}
                     />
                   </td>
-                  {qc.points[pt].values.map((v, colIdx) => (
+                  {(qc.points[pt]?.values ?? Array(VALUE_COLS).fill('')).map((v, colIdx) => (
                     <td key={colIdx} style={tdc()}>
                       <input
                         value={v}
@@ -319,10 +345,39 @@ export default function QcSheetPage() {
                     </td>
                   ))}
                   <td style={tdc()}>
-                    <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '1px solid #555', margin: '0 auto' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '1px solid #555', flexShrink: 0 }} />
+                      {!QC_POINTS.includes(pt) && (
+                        <button
+                          className="no-print"
+                          onClick={() => removePoint(pt)}
+                          title="ลบแถวนี้"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: '14px', lineHeight: 1, padding: 0 }}
+                        >×</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
+              {/* Add row button */}
+              {qc.activePoints[qc.activePoints.length - 1] < 'Z' && (
+                <tr className="no-print">
+                  <td colSpan={13} style={{ border: '1px solid #ccc', borderTop: 'none', padding: '0' }}>
+                    <button
+                      onClick={addPoint}
+                      style={{
+                        display: 'block', width: '100%', background: '#f9f9f9',
+                        border: 'none', borderTop: '1px dashed #ccc',
+                        cursor: 'pointer', fontSize: '13px', color: '#888',
+                        padding: '3px 0', fontWeight: 'bold',
+                      }}
+                      title={`เพิ่มแถว ${String.fromCharCode(qc.activePoints[qc.activePoints.length - 1].charCodeAt(0) + 1)}`}
+                    >
+                      + เพิ่มแถว {String.fromCharCode(qc.activePoints[qc.activePoints.length - 1].charCodeAt(0) + 1)}
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
 

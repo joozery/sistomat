@@ -17,6 +17,7 @@ import {
   Plus,
   Receipt,
   ClipboardCheck,
+  FileText,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
@@ -26,6 +27,11 @@ interface ProcessEntry {
   process: string
   person: string
   time_hours: number
+}
+
+interface Attachment {
+  file_url: string
+  file_name: string
 }
 
 interface Job {
@@ -46,6 +52,7 @@ interface Job {
   sheet_name: string
   file_url?: string
   file_name?: string
+  attachments?: Attachment[]
 }
 
 function formatDate(d: string) {
@@ -67,6 +74,44 @@ function StatusChip({ status }: { status: string }) {
   )
 }
 
+
+function JobThumbnail({
+  job,
+  size,
+  onPreview,
+}: {
+  job: Job
+  size: number
+  onPreview: (a: Attachment, attachments?: Attachment[]) => void
+}) {
+  const hasPdf = job.attachments?.some((a) => a.file_name.split('.').pop()?.toLowerCase() === 'pdf')
+  const has3D = job.file_name && ['stl','obj','glb','gltf','step','stp'].includes(job.file_name.split('.').pop()?.toLowerCase() ?? '')
+  const showPdfBadge = hasPdf && has3D
+
+  return (
+    <div className="flex flex-col items-center gap-1 shrink-0">
+      {job.file_url && job.file_name ? (
+        <FileThumbnail
+          fileUrl={job.file_url}
+          fileName={job.file_name}
+          size={size}
+          onClick={() => onPreview({ file_url: job.file_url!, file_name: job.file_name! }, job.attachments)}
+        />
+      ) : (
+        <div style={{ width: size, height: size }} className="rounded-lg border border-dashed border-gray-100" />
+      )}
+      {showPdfBadge && (
+        <button
+          onClick={() => onPreview({ file_url: job.file_url!, file_name: job.file_name! }, job.attachments)}
+          className="flex items-center gap-0.5 text-[9px] font-bold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 rounded px-1.5 py-0.5 transition-colors"
+        >
+          <FileText className="h-2.5 w-2.5" /> PDF
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function JobListPage() {
   const { parentId } = useParams<{ parentId: string }>()
   const router = useRouter()
@@ -74,7 +119,7 @@ export default function JobListPage() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [addOpen, setAddOpen] = useState(false)
-  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null)
+  const [preview, setPreview] = useState<{ url: string; name: string; attachments?: Attachment[] } | null>(null)
 
   async function loadJobs() {
     setLoading(true)
@@ -221,12 +266,11 @@ export default function JobListPage() {
                       </button>
 
                       {/* Thumbnail (single job only) */}
-                      {singleJob?.file_url && singleJob?.file_name ? (
-                        <FileThumbnail
-                          fileUrl={singleJob.file_url}
-                          fileName={singleJob.file_name}
+                      {singleJob ? (
+                        <JobThumbnail
+                          job={singleJob}
                           size={56}
-                          onClick={() => setPreview({ url: singleJob.file_url!, name: singleJob.file_name! })}
+                          onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                         />
                       ) : (
                         <div className="w-14 h-14 rounded-lg border border-dashed border-gray-100 shrink-0" />
@@ -333,16 +377,11 @@ export default function JobListPage() {
                             } hover:bg-red-50/20 transition-colors`}
                           >
                             {/* Thumbnail */}
-                            {job.file_url && job.file_name ? (
-                              <FileThumbnail
-                                fileUrl={job.file_url}
-                                fileName={job.file_name}
-                                size={48}
-                                onClick={() => setPreview({ url: job.file_url!, name: job.file_name! })}
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded-lg border border-dashed border-gray-100" />
-                            )}
+                            <JobThumbnail
+                              job={job}
+                              size={48}
+                              onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
+                            />
                             <span className="font-mono text-xs font-semibold text-gray-700">{job.job_code}</span>
                             <span className="text-xs text-gray-500 truncate">{job.drawing_name}</span>
                             <div className="text-center">
@@ -398,16 +437,11 @@ export default function JobListPage() {
                               idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                             } hover:bg-red-50/20 transition-colors`}
                           >
-                            {job.file_url && job.file_name ? (
-                              <FileThumbnail
-                                fileUrl={job.file_url}
-                                fileName={job.file_name}
-                                size={48}
-                                onClick={() => setPreview({ url: job.file_url!, name: job.file_name! })}
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded-lg border border-dashed border-gray-100 shrink-0" />
-                            )}
+                            <JobThumbnail
+                              job={job}
+                              size={48}
+                              onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
+                            />
                             <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">{job.job_code}</span>
                             <span className="text-xs text-gray-500 flex-1 truncate">{job.drawing_name}</span>
                             <StatusChip status={job.status} />
@@ -452,6 +486,7 @@ export default function JobListPage() {
           onOpenChange={(v) => { if (!v) setPreview(null) }}
           fileUrl={preview.url}
           fileName={preview.name}
+          attachments={preview.attachments}
         />
       )}
     </div>

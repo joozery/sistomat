@@ -37,10 +37,11 @@ type Step = 1 | 2 | 3
 
 interface JobRowInput {
   id: string
-  file: File
+  files: File[]
   drawingName: string
   jobCode: string
   level3: string
+  level3Touched: boolean
 }
 
 function deriveLevel1(code: string) {
@@ -108,6 +109,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   const [files, setFiles] = useState<File[]>([])
   const [fileError, setFileError] = useState('')
   const [rows, setRows] = useState<JobRowInput[]>([])
+  const [syncJobCode, setSyncJobCode] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   function resetAll() {
@@ -116,6 +118,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     setFiles([])
     setFileError('')
     setRows([])
+    setSyncJobCode(false)
     setSaveError('')
     setUploadingFileName('')
     setUploadIndex(0)
@@ -166,13 +169,20 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   }
 
   function goToJobAssign() {
+    const groups = new Map<string, File[]>()
+    for (const f of files) {
+      const base = stripExt(f.name)
+      if (!groups.has(base)) groups.set(base, [])
+      groups.get(base)!.push(f)
+    }
     setRows(
-      files.map((f, i) => ({
-        id: `${f.name}-${i}-${f.lastModified}`,
-        file: f,
-        drawingName: stripExt(f.name),
+      Array.from(groups.entries()).map(([base, groupFiles], i) => ({
+        id: `${base}-${i}`,
+        files: groupFiles,
+        drawingName: base,
         jobCode: '',
         level3: '',
+        level3Touched: false,
       }))
     )
     setStep(3)
@@ -214,10 +224,15 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     }
   }
 
+  const is3DFile = (name: string) =>
+    ['stl', 'step', 'stp', 'obj', '3mf', 'glb', 'gltf'].includes(
+      name.split('.').pop()?.toLowerCase() ?? ''
+    )
+
   async function handleSaveAll() {
     for (const r of rows) {
       if (!r.jobCode.trim()) {
-        setSaveError(`กรุณากรอกหมายเลข JOB สำหรับไฟล์ "${r.file.name}"`)
+        setSaveError(`กรุณากรอกหมายเลข JOB สำหรับ "${r.drawingName}"`)
         return
       }
     }
@@ -249,11 +264,18 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         setUploadIndex(i + 1)
-        setUploadingFileName(r.file.name)
         setUploadProgress(0)
 
-        const fileUrl = await uploadOne(r.file, form.projectId, token, setUploadProgress)
+        const uploaded: { file_url: string; file_name: string }[] = []
+        for (const file of r.files) {
+          setUploadingFileName(file.name)
+          setUploadProgress(0)
+          const url = await uploadOne(file, form.projectId, token, setUploadProgress)
+          uploaded.push({ file_url: url, file_name: file.name })
+        }
 
+        // prefer 3D file as primary (for 3D viewer), fallback to first
+        const primary = uploaded.find((f) => is3DFile(f.file_name)) ?? uploaded[0]
         const fullJobCode = r.level3.trim() || r.jobCode.trim()
 
         const jobRes = await fetch('/api/jobs', {
@@ -264,8 +286,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
             drawing_name: r.drawingName.trim(),
             quantity: 1,
             due_date: form.dueDate,
-            file_url: fileUrl,
-            file_name: r.file.name,
+            file_url: primary.file_url,
+            file_name: primary.file_name,
+            attachments: uploaded,
           }),
         })
         if (!jobRes.ok) {
@@ -298,7 +321,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl rounded-2xl p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-3xl rounded-2xl p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col scrollbar-hide">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <QrCode className="h-5 w-5 text-[#7B1A1A]" />
@@ -361,63 +384,80 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
 
         {/* Step 2: Multi-file upload */}
         {step === 2 && (
-          <div className="space-y-4 py-2 flex-1 overflow-y-auto">
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDrop}
-              onClick={() => inputRef.current?.click()}
-              className="relative border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer border-gray-200 hover:border-[#7B1A1A]/50 hover:bg-red-50/20"
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                multiple
-                accept=".pdf,.stl,.step,.stp,.obj,.3mf,.glb,.gltf"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
-                  <Upload className="h-6 w-6 text-gray-400" />
+          <>
+            <div className="space-y-4 py-2 flex-1 overflow-y-auto scrollbar-hide">
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => inputRef.current?.click()}
+                className="relative border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer border-gray-200 hover:border-[#7B1A1A]/50 hover:bg-red-50/20"
+              >
+                <input
+                  ref={inputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.stl,.step,.stp,.obj,.3mf,.glb,.gltf"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                    <Upload className="h-6 w-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-700">คลิกหรือลากไฟล์มาวางที่นี่ (เลือกได้หลายไฟล์)</p>
+                  <p className="text-xs text-gray-400">PDF, STL, STEP, OBJ, 3MF, GLB (สูงสุด 100 MB ต่อไฟล์)</p>
                 </div>
-                <p className="text-sm font-medium text-gray-700">คลิกหรือลากไฟล์มาวางที่นี่ (เลือกได้หลายไฟล์)</p>
-                <p className="text-xs text-gray-400">PDF, STL, STEP, OBJ, 3MF, GLB (สูงสุด 100 MB ต่อไฟล์)</p>
               </div>
+
+              {fileError && (
+                <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg">
+                  <AlertCircle className="h-4 w-4 shrink-0" /> {fileError}
+                </div>
+              )}
+
+              {files.length > 0 && (
+                <div className="space-y-2">
+                  {(() => {
+                    const jobCount = new Set(files.map((f) => stripExt(f.name))).size
+                    return (
+                      <p className="text-xs font-semibold text-gray-600">
+                        ไฟล์ที่เลือก ({files.length}) — จะสร้างเป็น{' '}
+                        <span className="text-[#7B1A1A]">{jobCount} Job ย่อย</span>
+                        {jobCount < files.length && (
+                          <span className="text-gray-400 font-normal"> (ไฟล์ชื่อเดียวกันรวมเป็น Job เดียว)</span>
+                        )}
+                      </p>
+                    )
+                  })()}
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-hide">
+                    {files.map((f, idx) => (
+                      <div key={`${f.name}-${idx}`} className="flex items-center gap-3 rounded-xl border border-gray-200 px-3 py-2">
+                        {getFileIcon(f.name)}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{f.name}</p>
+                          <p className="text-xs text-gray-400">{formatBytes(f.size)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(idx)}
+                          className="p-1 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {fileError && (
+            {saveError && (
               <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {fileError}
+                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError}
               </div>
             )}
 
-            {files.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-600">
-                  ไฟล์ที่เลือก ({files.length}) — จะสร้างเป็น {files.length} Job ย่อย
-                </p>
-                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                  {files.map((f, idx) => (
-                    <div key={`${f.name}-${idx}`} className="flex items-center gap-3 rounded-xl border border-gray-200 px-3 py-2">
-                      {getFileIcon(f.name)}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800 truncate">{f.name}</p>
-                        <p className="text-xs text-gray-400">{formatBytes(f.size)}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(idx)}
-                        className="p-1 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <DialogFooter className="pt-2 flex justify-between gap-2">
+            <DialogFooter className="flex justify-between gap-2">
               <Button type="button" variant="outline" onClick={() => setStep(1)} className="rounded-full h-10 border-gray-200 gap-1">
                 <ChevronLeft className="h-4 w-4" /> ย้อนกลับ
               </Button>
@@ -442,79 +482,131 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                 </Button>
               </div>
             </DialogFooter>
-
-            {saveError && (
-              <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError}
-              </div>
-            )}
-          </div>
+          </>
         )}
 
         {/* Step 3: Assign job codes */}
         {step === 3 && (
-          <div className="space-y-4 py-2 flex-1 overflow-y-auto">
-            <p className="text-xs text-gray-400">
-              แต่ละไฟล์จะกลายเป็น 1 Job ย่อย — ใส่หมายเลข JOB (บังคับ) และหมายเลข JOB ย่อยถ้ามี
-            </p>
-
-            <div className="space-y-3">
-              {rows.map((r) => {
-                const fullCode = r.level3.trim() || r.jobCode.trim()
-                return (
-                  <div key={r.id} className="rounded-xl border border-gray-200 p-3 space-y-3">
-                    <div className="flex items-center gap-2">
-                      {getFileIcon(r.file.name)}
-                      <span className="text-xs text-gray-400 truncate">{r.file.name}</span>
-                      {r.jobCode.trim() && (
-                        <span className="ml-auto font-mono text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-                          {fullCode}
-                        </span>
-                      )}
+          <>
+            <div className="space-y-4 py-2 flex-1 overflow-y-auto scrollbar-hide">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400">
+                  แต่ละไฟล์จะกลายเป็น 1 Job ย่อย — ใส่หมายเลข JOB (บังคับ) และหมายเลข JOB ย่อยถ้ามี
+                </p>
+                {rows.length > 1 && (
+                  <label className="flex items-center gap-2 cursor-pointer shrink-0 ml-3">
+                    <div
+                      onClick={() => {
+                        const next = !syncJobCode
+                        setSyncJobCode(next)
+                        if (next && rows[0]?.jobCode.trim()) {
+                          const baseCode = rows[0].jobCode.trim()
+                          setRows((prev) =>
+                            prev.map((r, i) => ({
+                              ...r,
+                              jobCode: baseCode,
+                              level3: r.level3Touched
+                                ? r.level3
+                                : `${baseCode}-${String(i + 1).padStart(2, '0')}`,
+                            }))
+                          )
+                        }
+                      }}
+                      className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${syncJobCode ? 'bg-[#7B1A1A]' : 'bg-gray-200'}`}
+                    >
+                      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${syncJobCode ? 'translate-x-4' : 'translate-x-0.5'}`} />
                     </div>
+                    <span className="text-xs font-medium text-gray-600 whitespace-nowrap">ใช้เลข JOB เดียวกันทุกแถว</span>
+                  </label>
+                )}
+              </div>
 
-                    <div className="space-y-1.5">
-                      <Label className="text-[11px] font-semibold text-gray-600">ชื่อ Drawing</Label>
-                      <Input
-                        value={r.drawingName}
-                        onChange={(e) => updateRow(r.id, { drawingName: e.target.value })}
-                        className="rounded-lg h-9 text-sm border-gray-200"
-                      />
-                    </div>
+              <div className="space-y-3">
+                {rows.map((r, rowIdx) => {
+                  const fullCode = r.level3.trim() || r.jobCode.trim()
+                  return (
+                    <div key={r.id} className="rounded-xl border border-gray-200 p-3 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {r.files.map((f) => (
+                          <div key={f.name} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1">
+                            {getFileIcon(f.name)}
+                            <span className="text-xs text-gray-500 truncate max-w-[180px]">{f.name}</span>
+                          </div>
+                        ))}
+                        {r.jobCode.trim() && (
+                          <span className="ml-auto font-mono text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">
+                            {fullCode}
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1.5">
-                        <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
-                          <Hash className="h-3 w-3" /> หมายเลข JOB
-                        </Label>
+                        <Label className="text-[11px] font-semibold text-gray-600">ชื่อ Drawing</Label>
                         <Input
-                          placeholder="เช่น JA-2917-001"
-                          value={r.jobCode}
-                          onChange={(e) => updateRow(r.id, { jobCode: e.target.value })}
-                          className="rounded-lg h-9 text-sm border-gray-200 font-mono"
+                          value={r.drawingName}
+                          onChange={(e) => updateRow(r.id, { drawingName: e.target.value })}
+                          className="rounded-lg h-9 text-sm border-gray-200"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
-                          <Hash className="h-3 w-3" /> หมายเลข JOB ย่อย <span className="text-gray-400 font-normal">(ถ้ามี)</span>
-                        </Label>
-                        <Input
-                          placeholder="เช่น JA-2917-001-02"
-                          value={r.level3}
-                          onChange={(e) => updateRow(r.id, { level3: e.target.value })}
-                          className="rounded-lg h-9 text-sm border-gray-200 font-mono"
-                        />
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
+                            <Hash className="h-3 w-3" /> หมายเลข JOB
+                          </Label>
+                          <Input
+                            placeholder="เช่น JA-2917-001"
+                            value={r.jobCode}
+                            disabled={syncJobCode && rowIdx > 0}
+                            onChange={(e) => {
+                              const code = e.target.value
+                              if (syncJobCode) {
+                                setRows((prev) =>
+                                  prev.map((row, i) => ({
+                                    ...row,
+                                    jobCode: code,
+                                    level3: row.level3Touched
+                                      ? row.level3
+                                      : code.trim()
+                                      ? `${code.trim()}-${String(i + 1).padStart(2, '0')}`
+                                      : '',
+                                  }))
+                                )
+                              } else {
+                                const patch: Partial<JobRowInput> = { jobCode: code }
+                                if (!r.level3Touched) {
+                                  patch.level3 = code.trim()
+                                    ? `${code.trim()}-${String(rowIdx + 1).padStart(2, '0')}`
+                                    : ''
+                                }
+                                updateRow(r.id, patch)
+                              }
+                            }}
+                            className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${syncJobCode && rowIdx > 0 ? 'bg-gray-50 text-gray-400' : ''}`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
+                            <Hash className="h-3 w-3" /> หมายเลข JOB ย่อย <span className="text-gray-400 font-normal">(ถ้ามี)</span>
+                          </Label>
+                          <Input
+                            placeholder="auto จาก JOB"
+                            value={r.level3}
+                            onChange={(e) => updateRow(r.id, { level3: e.target.value, level3Touched: true })}
+                            className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${!r.level3Touched && r.level3 ? 'text-emerald-700 bg-emerald-50/50' : ''}`}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
 
             {saving && uploadingFileName && (
-              <div className="space-y-1">
+              <div className="space-y-1 shrink-0">
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>กำลังอัปโหลด ({uploadIndex}/{rows.length}) — {uploadingFileName}</span>
+                  <span>Job {uploadIndex}/{rows.length} — {uploadingFileName}</span>
                   <span>{uploadProgress}%</span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -527,12 +619,12 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
             )}
 
             {saveError && (
-              <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg shrink-0">
                 <AlertCircle className="h-4 w-4 shrink-0" /> {saveError}
               </div>
             )}
 
-            <DialogFooter className="pt-2 flex justify-between gap-2">
+            <DialogFooter className="flex justify-between gap-2">
               <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={saving} className="rounded-full h-10 border-gray-200 gap-1">
                 <ChevronLeft className="h-4 w-4" /> ย้อนกลับ
               </Button>
@@ -546,7 +638,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                 {saving ? 'กำลังบันทึก...' : `บันทึก ${rows.length} Job`}
               </Button>
             </DialogFooter>
-          </div>
+          </>
         )}
       </DialogContent>
     </Dialog>

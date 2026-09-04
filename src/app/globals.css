@@ -129,6 +129,13 @@
   }
 }
 
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* ── Print Styles ── */
 @media print {
   /* ซ่อน Sidebar, Navbar, main content */
