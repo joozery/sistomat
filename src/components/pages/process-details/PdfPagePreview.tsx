@@ -32,7 +32,7 @@ export function PdfPagePreview({ fileUrl, className, onOrientation }: PdfPagePre
         const isLandscape = baseViewport.width > baseViewport.height
         onOrientation?.(isLandscape)
 
-        const targetWidthPx = (isLandscape ? 297 : 210) * PX_PER_MM
+        const targetWidthPx = 210 * PX_PER_MM
         const scale = targetWidthPx / baseViewport.width
         const viewport = page.getViewport({ scale })
 
@@ -61,7 +61,7 @@ export function PdfPagePreview({ fileUrl, className, onOrientation }: PdfPagePre
     >
       {status === 'loading' && <span style={{ fontSize: 12, color: '#999' }}>กำลังโหลด PDF...</span>}
       {status === 'error' && <span style={{ fontSize: 12, color: '#c00' }}>ไม่สามารถโหลด PDF ได้</span>}
-      <canvas ref={canvasRef} style={{ maxWidth: '100%', maxHeight: '100%', display: status === 'done' ? 'block' : 'none' }} />
+      <canvas ref={canvasRef} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: status === 'done' ? 'block' : 'none' }} />
     </div>
   )
 }

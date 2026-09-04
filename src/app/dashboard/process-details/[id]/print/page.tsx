@@ -108,7 +108,10 @@ export default function PrintPreviewPage() {
   const receivedDate = formatThaiDate(project.received_date)
   const dueDate = formatThaiDate(project.due_date)
   const { left, right } = splitProcesses(processList)
-  const drawingIsPdf = project.file_url && getExt(project.file_name ?? '') === 'pdf'
+  // Primary file may be 3D — fallback to PDF found in attachments
+  const pdfAttachment = (project.attachments ?? []).find((a: { file_name: string }) => getExt(a.file_name) === 'pdf')
+  const drawingPdfUrl = getExt(project.file_name ?? '') === 'pdf' ? project.file_url : (pdfAttachment?.file_url ?? null)
+  const drawingIsPdf = !!drawingPdfUrl
 
   const b = '1px solid #666'
   const th = (extra?: React.CSSProperties): React.CSSProperties => ({
@@ -142,15 +145,25 @@ export default function PrintPreviewPage() {
       overflowY: 'auto',
       fontFamily: 'Arial, sans-serif'
     }}>
-      {/* ── Print CSS (injected into <head> via style tag) ── */}
+      {/* ── Print CSS ── */}
       <style>{`
+        /* @page rules */
+        @page { size: A4 portrait; margin: 0; }
+
         @media screen {
           .print-page {
             border: 1px solid #bbb;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             margin-bottom: 20px;
+            width: 210mm;
             min-height: 297mm;
             background-color: #fff;
+          }
+          .print-page.drawing-print-page {
+            min-height: 297mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
           #toolbar {
             position: sticky;
@@ -168,38 +181,81 @@ export default function PrintPreviewPage() {
         }
 
         @media print {
-          /* Reset Next.js layout containers so they don't clip content */
-          html, body, main, .SidebarInset {
-            height: auto !important;
+          html, body {
+            background: #fff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 210mm !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          /* Hide sidebar and GlobalBarcodeScanner; keep only sidebar-inset */
+          [data-slot="sidebar-wrapper"] > *:not([data-slot="sidebar-inset"]) {
+            display: none !important;
+          }
+          /* Break flex, remove the min-h-svh that creates blank pages */
+          [data-slot="sidebar-wrapper"] {
+            display: block !important;
             min-height: 0 !important;
-            max-height: none !important;
-            overflow: visible !important;
-            position: static !important;
+            height: auto !important;
+          }
+
+          /* Hide navbar */
+          header { display: none !important; }
+
+          /* Reset both <main> elements (sidebar-inset + inner main) */
+          main {
             padding: 0 !important;
             margin: 0 !important;
+            min-height: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: #fff !important;
+            flex: none !important;
           }
-          html, body { 
-            background: #fff !important; 
-          }
+
+          /* Lift fixed overlay into document flow */
           #print-overlay {
             position: static !important;
             width: 100% !important;
             height: auto !important;
+            overflow: visible !important;
             background: #fff !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
+
           #toolbar { display: none !important; }
-          #pages-wrap { padding: 0 !important; background: #fff !important; }
+          #pages-wrap { padding: 0 !important; margin: 0 !important; background: #fff !important; }
+
           .print-page {
+            width: 210mm !important;
+            max-width: 210mm !important;
+            height: 295mm !important;
+            max-height: 295mm !important;
+            min-height: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            margin: 0 !important;
-            page-break-after: always;
-            page-break-inside: avoid;
+            margin: 0 auto !important;
+            padding: 10mm 12mm !important;
+            box-sizing: border-box !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            overflow: hidden !important;
           }
-          .print-page:last-child { page-break-after: auto; }
-          @page { size: A4 portrait; margin: 0; }
-          @page landscape-drawing { size: A4 landscape; margin: 0; }
-          .print-page.landscape-page { page: landscape-drawing; }
+          .print-page.drawing-print-page {
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .print-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
         }
       `}</style>
 
@@ -233,16 +289,13 @@ export default function PrintPreviewPage() {
         {/* ═══ PAGE 0 — แบบ Drawing (PDF) ═══ */}
         {drawingIsPdf && (
           <div
-            className={`print-page ${drawingLandscape ? 'landscape-page' : ''}`}
+            className="print-page drawing-print-page"
             style={{
               ...pageStyle,
               padding: 0,
-              width: drawingLandscape ? '297mm' : '210mm',
-              height: drawingLandscape ? '210mm' : '297mm',
-              minHeight: drawingLandscape ? '210mm' : '297mm',
             }}
           >
-            <PdfPagePreview fileUrl={project.file_url} onOrientation={setDrawingLandscape} />
+            <PdfPagePreview fileUrl={drawingPdfUrl!} onOrientation={setDrawingLandscape} />
           </div>
         )}
 

@@ -265,17 +265,6 @@ export default function JobListPage() {
                           : <ChevronRight className="h-4 w-4" />}
                       </button>
 
-                      {/* Thumbnail (single job only) */}
-                      {singleJob ? (
-                        <JobThumbnail
-                          job={singleJob}
-                          size={56}
-                          onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-lg border border-dashed border-gray-100 shrink-0" />
-                      )}
-
                       {/* Code */}
                       <div className="w-48 shrink-0">
                         <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
