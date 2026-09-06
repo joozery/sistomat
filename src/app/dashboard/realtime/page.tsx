@@ -6,6 +6,7 @@ import {
   Activity, RefreshCw, Wifi, WifiOff, Clock, User, CheckCircle2,
   Play, Search, Filter, ChevronDown, Layers, Zap, ExternalLink,
 } from 'lucide-react'
+import { findWorker } from '@/lib/workers'
 
 interface RealtimeEvent {
   project_id: string
@@ -39,11 +40,18 @@ function getToken() {
   return localStorage.getItem('token') ?? ''
 }
 
+// รองรับทั้ง "HH:MM" (เก่า) และ "HH:MM:SS" (ใหม่)
+function parseTime(timeStr: string): number {
+  const todayStr = new Date().toISOString().split('T')[0]
+  const parts = timeStr.split(':')
+  const normalized = parts.length === 2 ? `${timeStr}:00` : timeStr
+  return new Date(`${todayStr}T${normalized}`).getTime()
+}
+
 function calcElapsed(start: string, stop?: string | null): string {
   try {
-    const todayStr = new Date().toISOString().split('T')[0]
-    const startMs = new Date(`${todayStr}T${start}:00`).getTime()
-    const endMs = stop ? new Date(`${todayStr}T${stop}:00`).getTime() : Date.now()
+    const startMs = parseTime(start)
+    const endMs = stop ? parseTime(stop) : Date.now()
     const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
     const h = Math.floor(secs / 3600)
     const m = Math.floor((secs % 3600) / 60)
@@ -54,12 +62,11 @@ function calcElapsed(start: string, stop?: string | null): string {
 
 function calcProgress(start: string, target: string, stop?: string | null): number {
   try {
-    const todayStr = new Date().toISOString().split('T')[0]
-    const startMs = new Date(`${todayStr}T${start}:00`).getTime()
-    const endMs = stop ? new Date(`${todayStr}T${stop}:00`).getTime() : Date.now()
+    const startMs = parseTime(start)
+    const endMs = stop ? parseTime(stop) : Date.now()
     const elapsed = Math.max(0, Math.floor((endMs - startMs) / 1000))
-    const [h, m] = (target ?? '00:00').split(':').map(Number)
-    const targetSecs = (h || 0) * 3600 + (m || 0) * 60
+    const targetParts = (target ?? '00:00').split(':').map(Number)
+    const targetSecs = (targetParts[0] || 0) * 3600 + (targetParts[1] || 0) * 60
     if (!targetSecs) return 0
     return Math.min(100, Math.round((elapsed / targetSecs) * 100))
   } catch { return 0 }
@@ -83,12 +90,37 @@ function getProcessColor(process: string): string {
   return key ? PROCESS_COLORS[key] : 'bg-gray-100 text-gray-600 border-gray-200'
 }
 
-function TableRow({ ev, tick, idx }: { ev: RealtimeEvent; tick: number; idx: number }) {
+function TableRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
   const router = useRouter()
   const isRunning = ev.status === 'running'
   const isIdle = ev.status === 'idle'
-  const elapsed = isRunning || ev.status === 'completed' ? calcElapsed(ev.start_time, ev.stop_time) : null
-  const progress = isRunning ? calcProgress(ev.start_time, ev.target_time, ev.stop_time) : ev.status === 'completed' ? 100 : null
+
+  const [elapsed, setElapsed] = useState<string | null>(() =>
+    isRunning || ev.status === 'completed' ? calcElapsed(ev.start_time, ev.stop_time) : null
+  )
+  const [progress, setProgress] = useState<number | null>(() =>
+    isRunning ? calcProgress(ev.start_time, ev.target_time) : ev.status === 'completed' ? 100 : null
+  )
+
+  useEffect(() => {
+    if (!isRunning) return
+    const update = () => {
+      setElapsed(calcElapsed(ev.start_time, null))
+      setProgress(calcProgress(ev.start_time, ev.target_time))
+    }
+    update()
+    // หน่วงให้ tick ตรงกับวินาทีของ start_time จริง
+    const startMs = parseTime(ev.start_time)
+    const msIntoCurrentSecond = (Date.now() - startMs) % 1000
+    const delay = 1000 - msIntoCurrentSecond
+    let intervalId: ReturnType<typeof setInterval>
+    const timeoutId = setTimeout(() => {
+      update()
+      intervalId = setInterval(update, 1000)
+    }, delay)
+    return () => { clearTimeout(timeoutId); clearInterval(intervalId) }
+  }, [ev.start_time, ev.target_time, isRunning])
+
   const isOvertime = isRunning && (progress ?? 0) >= 100
 
   return (
@@ -157,21 +189,31 @@ function TableRow({ ev, tick, idx }: { ev: RealtimeEvent; tick: number; idx: num
       </td>
 
       {/* พนักงาน */}
-      <td className="px-3 py-3 w-32">
-        {ev.worker_id ? (
-          <>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
-              <User className="h-3 w-3" />
-              {ev.worker_id}
-            </span>
-            {ev.skill && ev.skill !== '0' && (
-              <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                <Zap className="h-2.5 w-2.5" />
-                {ev.skill}
-              </span>
-            )}
-          </>
-        ) : (
+      <td className="px-3 py-3 w-36">
+        {ev.worker_id ? (() => {
+          const worker = findWorker(ev.worker_id)
+          return (
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                  <User className="h-3 w-3" />
+                  #{ev.worker_id}
+                </span>
+                {ev.skill && ev.skill !== '0' && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                    <Zap className="h-2.5 w-2.5" />
+                    {ev.skill}
+                  </span>
+                )}
+              </div>
+              {worker && (
+                <span className="text-[11px] text-gray-500 font-medium truncate max-w-[140px]">
+                  {worker.name}
+                </span>
+              )}
+            </div>
+          )
+        })() : (
           <span className="text-[11px] text-gray-300">—</span>
         )}
       </td>
@@ -254,12 +296,22 @@ function CompletedRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
           <Layers className="h-3 w-3" />{ev.process}
         </span>
       </td>
-      <td className="px-3 py-3 w-28">
-        {ev.worker_id ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
-            <User className="h-3 w-3" />{ev.worker_id}
-          </span>
-        ) : <span className="text-gray-300 text-xs">—</span>}
+      <td className="px-3 py-3 w-36">
+        {ev.worker_id ? (() => {
+          const worker = findWorker(ev.worker_id)
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200 w-fit">
+                <User className="h-3 w-3" />#{ev.worker_id}
+              </span>
+              {worker && (
+                <span className="text-[11px] text-gray-500 font-medium truncate max-w-[140px]">
+                  {worker.name}
+                </span>
+              )}
+            </div>
+          )
+        })() : <span className="text-gray-300 text-xs">—</span>}
       </td>
       <td className="px-3 py-3 w-28 text-xs text-gray-500 whitespace-nowrap">
         {ev.start_time && (
@@ -323,7 +375,6 @@ export default function RealtimePage() {
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [tick, setTick] = useState(0)
   const [search, setSearch] = useState('')
   const [filterProcess, setFilterProcess] = useState('ทั้งหมด')
   const [showFilter, setShowFilter] = useState(false)
@@ -365,10 +416,6 @@ export default function RealtimePage() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [fetchData])
 
-  useEffect(() => {
-    const t = setInterval(() => setTick((p) => p + 1), 1000)
-    return () => clearInterval(t)
-  }, [])
 
   const filtered = (data?.events ?? []).filter((ev) => {
     if (ev.status !== 'running') return false
@@ -617,7 +664,6 @@ export default function RealtimePage() {
                       <TableRow
                         key={`${ev.project_id}-${ev.process}-${ev.worker_id}-${i}`}
                         ev={ev}
-                        tick={tick}
                         idx={(page - 1) * PAGE_SIZE + i}
                       />
                     ))}

@@ -1,12 +1,103 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2, Printer } from 'lucide-react'
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
 import { ProcessTable, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
+import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess } from '@/lib/workers'
+
+const QRCodeSVG = dynamic(() => import('qrcode.react').then((m) => m.QRCodeSVG), { ssr: false })
+
+function getLoggedInWorker() {
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) return null
+    const { username } = JSON.parse(atob(token.split('.')[1]))
+    return findWorkerByUsername(username) ?? null
+  } catch { return null }
+}
+
+type ToastType = 'success' | 'error' | 'warning'
+interface Toast { id: number; type: ToastType; title: string; subtitle?: string }
+
+function ScanToast({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  const latest = toasts[toasts.length - 1]
+  if (!latest) return null
+
+  const cfg = {
+    success: {
+      overlay: 'bg-black/40',
+      card: 'bg-emerald-950 border-emerald-700/60',
+      icon: 'bg-emerald-500/20 text-emerald-300',
+      title: 'text-emerald-100',
+      sub: 'text-emerald-400',
+      ring: 'ring-emerald-500/30',
+      IconEl: CheckCircle2,
+    },
+    warning: {
+      overlay: 'bg-black/50',
+      card: 'bg-amber-950 border-amber-600/60',
+      icon: 'bg-amber-500/20 text-amber-300',
+      title: 'text-amber-100',
+      sub: 'text-amber-400',
+      ring: 'ring-amber-500/30',
+      IconEl: ShieldX,
+    },
+    error: {
+      overlay: 'bg-black/55',
+      card: 'bg-red-950 border-red-700/60',
+      icon: 'bg-red-500/20 text-red-300',
+      title: 'text-red-100',
+      sub: 'text-red-400',
+      ring: 'ring-red-500/30',
+      IconEl: UserX,
+    },
+  }[latest.type]
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center ${cfg.overlay} backdrop-blur-[2px]`}
+      onClick={() => onDismiss(latest.id)}
+    >
+      <div
+        className={`relative flex flex-col items-center gap-5 px-10 py-8 rounded-3xl border shadow-2xl ring-4 font-sans max-w-sm w-full mx-6 animate-in zoom-in-90 fade-in duration-200 ${cfg.card} ${cfg.ring}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ไอคอน */}
+        <div className={`flex h-20 w-20 items-center justify-center rounded-full ${cfg.icon}`}>
+          <cfg.IconEl className="h-10 w-10" strokeWidth={1.5} />
+        </div>
+
+        {/* ข้อความ */}
+        <div className="text-center space-y-1.5">
+          <p className={`text-xl font-bold leading-tight ${cfg.title}`}>{latest.title}</p>
+          {latest.subtitle && (
+            <p className={`text-sm leading-relaxed ${cfg.sub}`}>{latest.subtitle}</p>
+          )}
+        </div>
+
+        {/* ปุ่มปิด */}
+        <button
+          onClick={() => onDismiss(latest.id)}
+          className={`mt-1 px-8 py-2.5 rounded-full text-sm font-semibold transition-all ${cfg.icon} hover:opacity-80 active:scale-95`}
+        >
+          ตกลง
+        </button>
+
+        {/* progress bar */}
+        <div className="absolute bottom-0 left-0 right-0 h-1 rounded-b-3xl overflow-hidden opacity-40">
+          <div
+            className={`h-full ${latest.type === 'success' ? 'bg-emerald-400' : latest.type === 'warning' ? 'bg-amber-400' : 'bg-red-400'} animate-[shrink_3.5s_linear_forwards]`}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface ProjectData {
   project_id: string
@@ -18,15 +109,10 @@ interface ProjectData {
 }
 
 function formatThaiDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString('th-TH', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  } catch {
-    return iso
-  }
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function getToken() {
@@ -46,7 +132,21 @@ export default function ProcessDetailsPage() {
   
   // Scanner states
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null)
-  const [activeWorkerId, setActiveWorkerId] = useState<string>('')
+  const processListRef = useRef<ProcessRow[]>([])
+  useEffect(() => { processListRef.current = processList }, [processList])
+
+  // Special command barcodes
+  const pendingResetRef = useRef(false)
+  const pendingResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Toast
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const toastCounterRef = useRef(0)
+  const showToast = useCallback((type: ToastType, title: string, subtitle?: string) => {
+    const id = ++toastCounterRef.current
+    setToasts((prev) => [...prev, { id, type, title, subtitle }])
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500)
+  }, [])
 
   // Fetch project from MongoDB
   useEffect(() => {
@@ -99,22 +199,29 @@ export default function ProcessDetailsPage() {
 
   // Real-time elapsed timer for running processes
   const updateElapsedTime = useCallback(() => {
+    const now = Date.now()
     const todayStr = new Date().toISOString().split('T')[0]
+    const d = new Date(); d.setDate(d.getDate() - 1)
+    const yesterdayStr = d.toISOString().split('T')[0]
+
+    // แปลง "HH:MM" หรือ "HH:MM:SS" → ms โดยถ้าผลลัพธ์อยู่ในอนาคต ให้ใช้วันเมื่อวาน
+    function parseTimeMs(t: string, refNow: number): number {
+      let ms = new Date(`${todayStr}T${t}`).getTime()
+      if (isNaN(ms)) return NaN
+      if (ms > refNow + 60_000) ms = new Date(`${yesterdayStr}T${t}`).getTime()
+      return ms
+    }
+
     setProcessList((prev) =>
       prev.map((row) => {
         let totalSecs = 0
-        let isRunning = false
 
         row.workers?.forEach((w) => {
           if (!w.start_time) return
-          const start = new Date(`${todayStr}T${w.start_time}:00`).getTime()
-          let end = Date.now()
-          if (w.stop_time) {
-            end = new Date(`${todayStr}T${w.stop_time}:00`).getTime()
-          } else {
-            isRunning = true
-          }
-          if (end > start) {
+          const start = parseTimeMs(w.start_time, now)
+          if (isNaN(start)) return
+          const end = w.stop_time ? parseTimeMs(w.stop_time, now) : now
+          if (!isNaN(end) && end > start) {
             totalSecs += Math.floor((end - start) / 1000)
           }
         })
@@ -149,71 +256,170 @@ export default function ProcessDetailsPage() {
 
   useEffect(() => {
     const handleLocalScan = (e: any) => {
-      if (activeRowIndex === null) return
-      
-      // Stop GlobalBarcodeScanner from navigating
-      e.preventDefault()
+      const raw = e.detail.barcode.trim()
+      const list = processListRef.current
+      const rawUpper = raw.toUpperCase()
 
-      const raw = e.detail.barcode.toUpperCase()
-      const isCommand = ['START', 'STOP', 'FN', 'PASS', 'NG', 'REJ'].includes(raw)
-      
-      if (isCommand) {
-        if (!activeWorkerId) {
-          alert('กรุณาสแกนรหัสพนักงานก่อนทำรายการ!')
+      // ── CMD_CANCEL: ลบ entry ของ logged-in worker ที่กำลัง running ──
+      if (rawUpper === 'CMD_CANCEL') {
+        e.preventDefault()
+        const loggedWorker = getLoggedInWorker()
+        if (!loggedWorker) {
+          showToast('error', 'ไม่พบข้อมูลพนักงาน', 'กรุณา login ก่อน')
           return
         }
-        
-        setProcessList(prev => {
+        const codeStr = String(loggedWorker.code)
+        const runningRowIdx = list.findIndex((row) =>
+          row.workers.some((w) => w.worker_id === codeStr && w.start_time && !w.stop_time)
+        )
+        if (runningRowIdx === -1) {
+          showToast('warning', 'ไม่มีงานที่กำลังทำอยู่', 'ไม่พบ entry ที่จะยกเลิก')
+          return
+        }
+        const canceledProcess = list[runningRowIdx].process
+        setProcessList((prev) => {
           const next = [...prev]
-          const row = { ...next[activeRowIndex] }
-          const workers = [...row.workers]
-          
-          const nowTime = new Date().toLocaleTimeString('th-TH', { hour12: false, hour: '2-digit', minute: '2-digit' })
-          
-          if (raw === 'START') {
-             // Find slot for worker
-             let slotIdx = workers.findIndex(w => w.worker_id === activeWorkerId && !w.stop_time)
-             if (slotIdx === -1) slotIdx = workers.findIndex(w => !w.worker_id)
-             
-             if (slotIdx !== -1) {
-                workers[slotIdx] = { worker_id: activeWorkerId, start_time: nowTime, stop_time: '' }
-             } else {
-                alert('ช่องพนักงานเต็มแล้ว!')
-                return prev
-             }
-          } else if (raw === 'STOP' || raw === 'FN') {
-             const slotIdx = workers.findIndex(w => w.worker_id === activeWorkerId && w.start_time && !w.stop_time)
-             if (slotIdx !== -1) {
-                workers[slotIdx] = { ...workers[slotIdx], stop_time: nowTime }
-             } else {
-                alert('ไม่พบการเริ่มงานของพนักงานนี้')
-                return prev
-             }
-          }
-          
-          row.workers = workers
-          next[activeRowIndex] = row
-
-          // Auto-save silently so the worker can walk away immediately
+          const row = { ...next[runningRowIdx] }
+          row.workers = row.workers.map((w) =>
+            w.worker_id === codeStr && w.start_time && !w.stop_time
+              ? { worker_id: '', start_time: '', stop_time: '' }
+              : w
+          )
+          next[runningRowIdx] = row
           fetch(`/api/projects/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
             body: JSON.stringify({ processes: next }),
           }).catch(console.error)
-
           return next
         })
-        
-        setActiveWorkerId('') // reset after action
-      } else {
-        // Assume raw string is Worker ID
-        setActiveWorkerId(raw)
+        showToast('success', `ยกเลิกเรียบร้อย — ${loggedWorker.name}`, `ลบ entry ออกจาก "${canceledProcess}"`)
+        return
       }
+
+      // ── CMD_RESET: ล้างพนักงานทั้งใบงาน (ต้อง scan 2 ครั้งเพื่อยืนยัน) ──
+      if (rawUpper === 'CMD_RESET') {
+        e.preventDefault()
+        if (pendingResetRef.current) {
+          if (pendingResetTimerRef.current) clearTimeout(pendingResetTimerRef.current)
+          pendingResetRef.current = false
+          setProcessList((prev) => {
+            const next = prev.map((row) => ({
+              ...row,
+              workers: [
+                { worker_id: '', start_time: '', stop_time: '' },
+                { worker_id: '', start_time: '', stop_time: '' },
+                { worker_id: '', start_time: '', stop_time: '' },
+                { worker_id: '', start_time: '', stop_time: '' },
+              ],
+              elapsed_time: '00:00:00',
+            }))
+            fetch(`/api/projects/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+              body: JSON.stringify({ processes: next }),
+            }).catch(console.error)
+            return next
+          })
+          showToast('success', 'รีเซ็ตใบงานเรียบร้อย', 'ล้างข้อมูลพนักงานทุกกระบวนการแล้ว')
+        } else {
+          pendingResetRef.current = true
+          showToast('warning', 'สแกนอีกครั้งเพื่อยืนยัน', 'การรีเซ็ตจะล้างข้อมูลพนักงานทั้งใบงาน (5 วินาที)')
+          pendingResetTimerRef.current = setTimeout(() => {
+            pendingResetRef.current = false
+          }, 5000)
+        }
+        return
+      }
+
+      // ตรวจว่าเป็น QR ของใบงานนี้เอง — compare case-insensitive (scanner อาจส่ง lowercase)
+      const rawLower = raw.toLowerCase()
+      const idLower = id.toLowerCase()
+      const isCurrentJobQR = rawLower === idLower || rawLower.startsWith(idLower + '|')
+
+      let worker
+      let rowIndex: number
+
+      if (isCurrentJobQR) {
+        // ใช้ logged-in user
+        e.preventDefault()
+        worker = getLoggedInWorker()
+        if (!worker) {
+          showToast('error', 'ไม่พบข้อมูลพนักงาน', 'username ไม่ตรงกับรหัสพนักงานในระบบ')
+          return
+        }
+        const eligible = findEligibleRowIndex(list, String(worker.code), worker.machines)
+        if (eligible.blockedByRow !== null) {
+          const blockName = list[eligible.blockedByRow]?.process ?? `ลำดับที่ ${eligible.blockedByRow + 1}`
+          showToast('warning', 'รอกระบวนการก่อนหน้าให้เสร็จก่อน', `"${blockName}" ยังไม่เสร็จ`)
+          return
+        }
+        if (eligible.index === -1) {
+          showToast('warning', 'ไม่มีกระบวนการที่ทำได้', 'ไม่มีสิทธิ์หรือทุกช่องเต็มแล้ว')
+          return
+        }
+        rowIndex = eligible.index
+      } else if (activeRowIndex !== null) {
+        // สแกนรหัสพนักงานโดยตรง (เลือกแถวไว้แล้ว)
+        e.preventDefault()
+        worker = findWorker(raw)
+        if (!worker) {
+          showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${raw}" ไม่มีในระบบ`)
+          return
+        }
+        rowIndex = activeRowIndex
+      } else {
+        // ไม่ใช่ job QR และไม่ได้เลือกแถว → ปล่อยให้ GlobalBarcodeScanner navigate
+        return
+      }
+
+      const targetRow = list[rowIndex]
+      if (!canWorkerDoProcess(worker.machines, targetRow.process)) {
+        showToast('warning', 'ไม่มีสิทธิ์', `${worker.name} ไม่มีสิทธิ์ในกระบวนการ "${targetRow.process}"`)
+        return
+      }
+
+      const nowTime = new Date().toLocaleTimeString('th-TH', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      const workerIdStr = String(worker.code)
+
+      setProcessList((prev) => {
+        const next = [...prev]
+        const row = { ...next[rowIndex] }
+        const workers = [...row.workers]
+
+        const runningIdx = workers.findIndex(
+          (w) => w.worker_id === workerIdStr && w.start_time && !w.stop_time
+        )
+
+        if (runningIdx !== -1) {
+          workers[runningIdx] = { ...workers[runningIdx], stop_time: nowTime }
+          showToast('success', `จบงาน — ${worker!.name}`, `${targetRow.process} • ${nowTime}`)
+        } else {
+          const emptyIdx = workers.findIndex((w) => !w.worker_id)
+          if (emptyIdx === -1) {
+            showToast('error', 'ช่องพนักงานเต็ม', 'รองรับสูงสุด 4 คนต่อกระบวนการ')
+            return prev
+          }
+          workers[emptyIdx] = { worker_id: workerIdStr, start_time: nowTime, stop_time: '' }
+          showToast('success', `เริ่มงาน — ${worker!.name}`, `${targetRow.process} • ${nowTime}`)
+        }
+
+        row.workers = workers
+        next[rowIndex] = row
+
+        fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ processes: next }),
+        }).catch(console.error)
+
+        return next
+      })
     }
-    
+
     document.addEventListener('onBarcodeScan', handleLocalScan)
     return () => document.removeEventListener('onBarcodeScan', handleLocalScan)
-  }, [activeRowIndex, activeWorkerId])
+  }, [activeRowIndex, id])
 
   const handleWorkerChange = (index: number, workerIndex: number, field: keyof WorkerLog, value: string) => {
     setProcessList((prev) => {
@@ -309,6 +515,7 @@ export default function ProcessDetailsPage() {
   // ── Main ──
   return (
     <>
+    <ScanToast toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
     <div className="space-y-6 font-sans print:hidden">
       {/* Top Action Bar */}
       <div className="flex items-center justify-between">
@@ -355,35 +562,6 @@ export default function ProcessDetailsPage() {
             dueDate={formatThaiDate(project.due_date)}
           />
           
-          {/* Scanner Help Box */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl shadow-sm flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div>
-              <h3 className="font-bold text-blue-900 mb-1 flex items-center gap-2">
-                <span className="text-xl">📷</span> ระบบสแกนบาร์โค้ดเริ่มงาน / จบงาน
-              </h3>
-              <p className="text-sm text-blue-800 leading-relaxed">
-                1. <b>คลิกเลือก</b> แถวกระบวนการผลิตที่ต้องการทำ (แถวจะกลายเป็นสีฟ้า)<br/>
-                2. <b>สแกนรหัสพนักงาน</b> เพื่อยืนยันตัวตน {activeWorkerId && <span className="inline-block bg-green-500 text-white px-2 py-0.5 rounded text-xs ml-2 animate-pulse">พนักงานที่เลือก: {activeWorkerId}</span>}<br/>
-                3. <b>สแกนสถานะ</b> (START / STOP / FN) เพื่อบันทึกเวลาอัตโนมัติ
-              </p>
-            </div>
-            {/* กล่องทดสอบ (สำหรับ Dev) */}
-            <div className="bg-white p-3 rounded border border-blue-200 shadow-sm text-xs w-full sm:w-auto">
-              <span className="font-bold text-blue-800 block mb-1">กล่องทดสอบจำลองบาร์โค้ด</span>
-              <form onSubmit={(e) => {
-                e.preventDefault()
-                const val = (e.currentTarget.elements.namedItem('barcode') as HTMLInputElement).value
-                if (val) {
-                  document.dispatchEvent(new CustomEvent('onBarcodeScan', { detail: { barcode: val }, cancelable: true }))
-                  ;(e.currentTarget.elements.namedItem('barcode') as HTMLInputElement).value = ''
-                }
-              }} className="flex gap-2">
-                <input name="barcode" type="text" placeholder="EMP001, START..." className="border border-gray-300 rounded px-2 py-1 h-8 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                <button type="submit" className="bg-blue-600 text-white px-3 rounded font-semibold hover:bg-blue-700 h-8">ยิง!</button>
-              </form>
-            </div>
-          </div>
-
           <ProcessTable
             processList={processList}
             activeRowIndex={activeRowIndex}
@@ -393,6 +571,43 @@ export default function ProcessDetailsPage() {
             onAddRow={handleAddRow}
             onDeleteRow={handleDeleteRow}
           />
+
+          {/* Special Command QR Codes */}
+          <div className="flex gap-4">
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-gray-100 bg-white px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-1.5">
+                <QRCodeSVG value="CMD_CANCEL" size={72} bgColor="#ffffff" fgColor="#1a1a1a" />
+                <span className="text-[10px] font-mono text-gray-400">CMD_CANCEL</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <XCircle className="h-4 w-4 text-amber-600" />
+                  <span className="text-sm font-bold text-gray-800">ยกเลิก entry ตัวเอง</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  สแกน QR นี้เพื่อลบการเริ่มงานของตัวเองออก<br />
+                  (ใช้เมื่อสแกนเริ่มงานผิดพลาด)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-red-100 bg-red-50/40 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-1.5">
+                <QRCodeSVG value="CMD_RESET" size={72} bgColor="#fff8f8" fgColor="#7B1A1A" />
+                <span className="text-[10px] font-mono text-red-400">CMD_RESET</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <RotateCcw className="h-4 w-4 text-[#7B1A1A]" />
+                  <span className="text-sm font-bold text-gray-800">เริ่มใหม่ทั้งใบงาน</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  สแกน QR นี้ 2 ครั้งเพื่อล้างข้อมูลพนักงาน<br />
+                  ทุกกระบวนการในใบงานนี้ทั้งหมด
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

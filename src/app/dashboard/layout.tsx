@@ -11,7 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <AppSidebar />
         <SidebarInset>
           <AppNavbar />
-          <main className="flex-1 overflow-auto p-6 bg-gray-50/80 min-h-[calc(100vh-4rem)]">
+          <main className="flex-1 overflow-auto p-6 pb-10 bg-gray-50/80 min-h-[calc(100vh-4rem)]">
             {children}
           </main>
         </SidebarInset>

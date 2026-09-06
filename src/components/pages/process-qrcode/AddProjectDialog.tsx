@@ -285,6 +285,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
             job_code: fullJobCode,
             drawing_name: r.drawingName.trim(),
             quantity: 1,
+            received_date: form.receivedDate,
             due_date: form.dueDate,
             file_url: primary.file_url,
             file_name: primary.file_name,

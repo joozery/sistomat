@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { job_code, drawing_name, quantity, due_date, status, processes, file_url, file_name, attachments } = body
+    const { job_code, drawing_name, quantity, received_date, due_date, status, processes, file_url, file_name, attachments } = body
 
     if (!job_code) return NextResponse.json({ message: 'กรุณากรอกเลข Job Code' }, { status: 400 })
 
@@ -158,6 +158,7 @@ export async function POST(req: NextRequest) {
         $set: {
           project_id: job_code.trim(),
           dwg_name: drawing_name?.trim() || '',
+          received_date: received_date ? new Date(received_date) : null,
           due_date: due_date ? new Date(due_date) : null,
           status: status || 'กำลังดำเนินการ',
           quantity: Number(quantity) || 1,

@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Calendar, Tag, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-const Barcode = dynamic(() => import('react-barcode'), { ssr: false })
+const QRCodeSVG = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ssr: false })
 
 interface JobHeaderProps {
   id: string
@@ -15,43 +15,28 @@ interface JobHeaderProps {
   dueDate: string
 }
 
-// บาร์โค้ดรวม JOB|DWG ในแท่งเดียว (คั่นด้วย "|")
-function buildBarcodeValue(jobId: string, dwgName?: string) {
-  if (dwgName && dwgName.trim()) {
-    return `${jobId}|${dwgName.trim()}`
-  }
-  return jobId
-}
-
 export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps) {
   const barcodeRef = useRef<HTMLDivElement>(null)
-  const barcodeValue = buildBarcodeValue(id, dwgName)
+  const qrValue = dwgName?.trim() ? `${id}|${dwgName.trim()}` : id
 
   const handleDownload = () => {
     const container = barcodeRef.current
     if (!container) return
-
     const svg = container.querySelector('svg')
     if (!svg) return
 
-    const svgW = svg.getBoundingClientRect().width || 260
-    const svgH = svg.getBoundingClientRect().height || 110
-    const scale = 3
-
     const svgString = new XMLSerializer().serializeToString(svg)
     const canvas = document.createElement('canvas')
-    canvas.width = svgW * scale
-    canvas.height = svgH * scale
-
+    canvas.width = svg.width.baseVal.value * 2
+    canvas.height = svg.height.baseVal.value * 2
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.scale(scale, scale)
     ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, svgW, svgH)
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     const img = new Image()
     img.onload = () => {
-      ctx.drawImage(img, 0, 0, svgW, svgH)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       const link = document.createElement('a')
       link.download = `barcode-${id}.png`
       link.href = canvas.toDataURL('image/png')
@@ -88,45 +73,20 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
           <div className="flex flex-col items-center gap-2">
             <div
               ref={barcodeRef}
-              className="flex items-center justify-center px-4 pt-3 pb-1 bg-white rounded-2xl border border-gray-200"
+              className="flex items-center justify-center px-4 pt-3 pb-2 bg-white rounded-2xl border border-gray-200"
             >
-              <div className="flex flex-col items-center gap-0">
-                <Barcode
-                  value={barcodeValue}
-                  width={1.5}
-                  height={48}
-                  fontSize={0}
-                  displayValue={false}
-                  background="#ffffff"
-                  lineColor="#1a1a1a"
+              <div className="flex flex-col items-center gap-1">
+                <QRCodeSVG
+                  value={qrValue}
+                  size={160}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                  level="M"
+                  marginSize={1}
                 />
-                {/* Label row – JOB | DWG */}
-                <div className="flex items-stretch w-full border border-gray-300 rounded overflow-hidden mt-1">
-                  <div className="flex-1 text-center px-2 py-1 text-[11px] font-semibold text-gray-800 border-r border-gray-300 bg-white">
-                    {id}
-                  </div>
-                  {dwgName && (
-                    <div className="flex-1 text-center px-2 py-1 text-[11px] font-semibold text-gray-800 bg-white">
-                      {dwgName}
-                    </div>
-                  )}
-                </div>
-                {/* Arrows + labels */}
+                <p className="text-[11px] font-bold text-gray-800">{id}</p>
                 {dwgName && (
-                  <div className="flex w-full mt-1">
-                    <div className="flex-1 flex flex-col items-center gap-0.5">
-                      <svg className="h-4 w-4 text-blue-600 fill-blue-600" viewBox="0 0 20 20">
-                        <path d="M10 3l7 7H3l7-7z"/>
-                      </svg>
-                      <span className="text-[10px] font-bold text-blue-600 bg-blue-500 text-white px-2 py-0.5 rounded text-center leading-tight">เลข JOB</span>
-                    </div>
-                    <div className="flex-1 flex flex-col items-center gap-0.5">
-                      <svg className="h-4 w-4 text-blue-600 fill-blue-600" viewBox="0 0 20 20">
-                        <path d="M10 3l7 7H3l7-7z"/>
-                      </svg>
-                      <span className="text-[10px] font-bold text-blue-600 bg-blue-500 text-white px-2 py-0.5 rounded text-center leading-tight">เลข DWG</span>
-                    </div>
-                  </div>
+                  <p className="text-[10px] text-gray-500 text-center max-w-[160px] leading-tight">{dwgName}</p>
                 )}
               </div>
             </div>
@@ -137,7 +97,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
               className="gap-2 rounded-full h-8 text-xs font-semibold border-gray-200 text-gray-600 hover:bg-gray-50 px-4"
             >
               <Download className="h-3.5 w-3.5" />
-              โหลดบาร์โค้ด PNG
+              โหลด QR Code PNG
             </Button>
           </div>
 

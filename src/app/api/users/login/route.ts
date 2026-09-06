@@ -20,7 +20,9 @@ export async function POST(request: NextRequest) {
     const db = client.db('sistomat')
     const usersCollection = db.collection('users')
 
-    const user = await usersCollection.findOne({ username })
+    const user = await usersCollection.findOne({
+      $or: [{ username }, { email: username }],
+    })
 
     if (!user) {
       return NextResponse.json(

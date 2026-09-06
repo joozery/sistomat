@@ -73,12 +73,12 @@ export function LoginCard() {
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div className="space-y-1.5">
-            <Label htmlFor="username" className="text-sm font-semibold text-gray-700">อีเมล</Label>
+            <Label htmlFor="username" className="text-sm font-semibold text-gray-700">ชื่อผู้ใช้งาน</Label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 h-[18px] w-[18px]" />
               <Input
                 id="username"
-                placeholder="admin@yourcompany.com"
+                placeholder="username หรือรหัสพนักงาน"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={loading}

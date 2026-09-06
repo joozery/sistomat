@@ -144,6 +144,18 @@ export function PrintJobSheet({ jobId, dwgName, receivedDate, dueDate, processLi
         </table>
 
 
+        {/* Special Command Barcodes */}
+        <div style={{ marginTop: '8px', border, padding: '5px 10px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', backgroundColor: '#f8f8f8' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>ยกเลิก entry ตัวเอง</div>
+            <Barcode value="CMD_CANCEL" width={1.1} height={28} fontSize={7} displayValue background="#f8f8f8" lineColor="#000" />
+          </div>
+          <div style={{ width: '1px', height: '50px', backgroundColor: '#ccc' }} />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#7B1A1A', marginBottom: '2px' }}>เริ่มใหม่ทั้งใบงาน (scan 2 ครั้ง)</div>
+            <Barcode value="CMD_RESET" width={1.1} height={28} fontSize={7} displayValue background="#f8f8f8" lineColor="#7B1A1A" />
+          </div>
+        </div>
       </div>
 
       {/* ════════════════════════════════

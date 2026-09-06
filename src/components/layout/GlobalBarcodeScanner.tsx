@@ -1,164 +1,158 @@
 'use client'
 
-/**
- * GlobalBarcodeScanner
- * --------------------
- * รับ input จากสแกนเนอร์บาร์โค้ด (USB / Bluetooth) ทุกที่บนเว็บ
- * โดยไม่ต้องคลิก input ก่อน
- *
- * หลักการทำงาน:
- *   - สแกนเนอร์พิมพ์ตัวอักษรเร็วมาก (< 50ms ต่อตัว) แล้วจบด้วย Enter
- *   - ถ้า keydown ติดกันเร็ว ≥ 3 ตัว + Enter → ถือว่าเป็นการสแกน
- *   - parse ค่า  "JOB_ID|DWG_NAME"  แยก '|' เอา part[0] เป็น job id
- *   - navigate ไปที่ /dashboard/process-details/{jobId}
- */
-
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { ScanBarcode, X } from 'lucide-react'
 
-const SCAN_TIMEOUT_MS = 250   // ถ้าพิมพ์ช้ากว่านี้ถือว่าเป็น manual typing (ปรับเพิ่มเป็น 250 ให้รองรับ scanner บางรุ่นที่พิมพ์ช้า)
-const MIN_SCAN_LENGTH = 2    // ต้องได้อย่างน้อยกี่ตัวอักษร
+const SCAN_TIMEOUT_MS = 300
+const MIN_SCAN_LENGTH = 2
+
+function codeToChar(code: string, shift: boolean): string | null {
+  if (code.startsWith('Digit')) {
+    const d = code.slice(5)
+    return shift ? '!@#$%^&*()'[parseInt(d)] ?? null : d
+  }
+  if (code.startsWith('Key')) {
+    const c = code.slice(3)
+    return shift ? c : c.toLowerCase()
+  }
+  const symbols: Record<string, [string, string]> = {
+    Minus: ['-', '_'], Equal: ['=', '+'], BracketLeft: ['[', '{'],
+    BracketRight: [']', '}'], Backslash: ['\\', '|'], Semicolon: [';', ':'],
+    Quote: ["'", '"'], Backquote: ['`', '~'], Comma: [',', '<'],
+    Period: ['.', '>'], Slash: ['/', '?'], Space: [' ', ' '],
+  }
+  const pair = symbols[code]
+  return pair ? pair[shift ? 1 : 0] : null
+}
 
 export function GlobalBarcodeScanner() {
   const router = useRouter()
-  const bufferRef = useRef<string>('')
+  const pathname = usePathname()
+  const bufferRef = useRef('')
   const lastKeyTimeRef = useRef<number>(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isActive, setIsActive] = useState(true)
+  const [lastScan, setLastScan] = useState<string>('')
+  const [navToast, setNavToast] = useState<{
+    visible: boolean; jobId: string; dwgName: string
+  }>({ visible: false, jobId: '', dwgName: '' })
 
-  const [toast, setToast] = useState<{
-    visible: boolean
-    jobId: string
-    dwgName: string
-    status: 'navigating' | 'error'
-  }>({ visible: false, jobId: '', dwgName: '', status: 'navigating' })
-
-  const showToast = (jobId: string, dwgName: string, status: 'navigating' | 'error') => {
-    setToast({ visible: true, jobId, dwgName, status })
-    setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 3500)
-  }
-
-  const handleScan = (raw: string) => {
+  const handleScan = useCallback((raw: string) => {
     const trimmed = raw.trim()
     if (trimmed.length < MIN_SCAN_LENGTH) return
 
-    // Create custom event so other components can intercept the scan
-    const event = new CustomEvent('onBarcodeScan', {
-      detail: { barcode: trimmed },
-      cancelable: true,
-    })
-    document.dispatchEvent(event)
+    setLastScan(trimmed)
 
-    // If a local component intercepted it (e.g. Process Action Scanner), do not navigate
-    if (event.defaultPrevented) {
-      return
-    }
+    const event = new CustomEvent('onBarcodeScan', { detail: { barcode: trimmed }, cancelable: true })
+    document.dispatchEvent(event)
+    if (event.defaultPrevented) return
 
     const parts = trimmed.split('|')
-    const jobId = parts[0]?.trim()
+    const jobId = parts[0]?.trim().toUpperCase()
     const dwgName = parts[1]?.trim() ?? ''
-
     if (!jobId) return
 
-    showToast(jobId, dwgName, 'navigating')
+    setNavToast({ visible: true, jobId, dwgName })
+    setTimeout(() => setNavToast((p) => ({ ...p, visible: false })), 3000)
     router.push(`/dashboard/process-details/${encodeURIComponent(jobId)}`)
-  }
+  }, [router])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // ถ้า focus อยู่ที่ input / textarea / select → ไม่สนใจ
-      const tag = (document.activeElement as HTMLElement)?.tagName
+      // ถ้า focus อยู่ที่ real input → ไม่จับ (ให้ user พิมพ์ตามปกติ)
+      const tag = (document.activeElement as HTMLElement)?.tagName?.toUpperCase()
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
       const now = Date.now()
       const elapsed = now - lastKeyTimeRef.current
       lastKeyTimeRef.current = now
 
-      // ถ้าพิมพ์ช้าเกิน threshold → reset buffer
-      if (elapsed > SCAN_TIMEOUT_MS && bufferRef.current.length > 0) {
-        bufferRef.current = ''
-      }
+      // reset buffer ถ้าช้าเกินไป (คนพิมพ์ ไม่ใช่ scanner)
+      if (elapsed > SCAN_TIMEOUT_MS) bufferRef.current = ''
 
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.code === 'Enter') {
         const captured = bufferRef.current
         bufferRef.current = ''
         if (timerRef.current) clearTimeout(timerRef.current)
-        handleScan(captured)
+        if (captured.length >= MIN_SCAN_LENGTH) {
+          e.preventDefault()
+          handleScan(captured)
+        }
         return
       }
 
-      // สะสมตัวอักษรที่พิมพ์เร็ว
-      if (e.key.length === 1) {
-        bufferRef.current += e.key
+      const char = codeToChar(e.code, e.shiftKey)
+      if (!char) return
 
-        // Auto-clear ถ้าไม่มี Enter ภายใน 500ms
-        if (timerRef.current) clearTimeout(timerRef.current)
-        timerRef.current = setTimeout(() => {
-          bufferRef.current = ''
-        }, 500)
-      }
-    }
+      // กัน default เสมอเมื่อมีการพิมพ์นอก input (ป้องกัน scroll, shortcut)
+      e.preventDefault()
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      bufferRef.current += char
       if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => { bufferRef.current = '' }, 600)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router])
 
-  if (!toast.visible) return null
+    // capture:true → ทำงานก่อน element ทุกตัว, stopPropagation จาก element อื่นไม่กระทบ
+    document.addEventListener('keydown', onKeyDown, { capture: true })
+    setIsActive(true)
+
+    const onWindowBlur = () => setIsActive(false)
+    const onWindowFocus = () => setIsActive(true)
+    window.addEventListener('blur', onWindowBlur)
+    window.addEventListener('focus', onWindowFocus)
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, { capture: true })
+      window.removeEventListener('blur', onWindowBlur)
+      window.removeEventListener('focus', onWindowFocus)
+    }
+  }, [handleScan])
+
+  // reset lastScan label on navigation
+  useEffect(() => { setLastScan('') }, [pathname])
 
   return (
-    <div
-      className="fixed bottom-6 right-6 z-50 flex items-start gap-3 px-4 py-3.5 rounded-2xl shadow-2xl shadow-black/10 border font-sans animate-in slide-in-from-bottom-4 fade-in duration-300 max-w-sm w-full"
-      style={{
-        background: toast.status === 'navigating' ? '#1a1a2e' : '#fff0f0',
-        borderColor: toast.status === 'navigating' ? '#2d2d4e' : '#fca5a5',
-      }}
-    >
-      {/* Icon */}
+    <>
+      {/* Scan indicator bar */}
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-        style={{ background: toast.status === 'navigating' ? '#2d2d4e' : '#fee2e2' }}
+        className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-center gap-2 py-1.5 select-none transition-colors"
+        style={{ background: isActive ? '#052e16' : '#1c1917' }}
       >
-        <ScanBarcode
-          className="h-4.5 w-4.5"
-          style={{ color: toast.status === 'navigating' ? '#7c86ff' : '#dc2626' }}
-        />
+        <div className={`h-2 w-2 rounded-full transition-colors ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+        <span className={`text-[11px] font-semibold transition-colors ${isActive ? 'text-emerald-300' : 'text-zinc-400'}`}>
+          {isActive
+            ? lastScan
+              ? `📷 สแกนล่าสุด: ${lastScan.length > 30 ? lastScan.slice(0, 30) + '…' : lastScan}`
+              : '📷 พร้อมสแกน — สแกนบาร์โค้ดได้เลย'
+            : '📷 คลิกที่หน้าต่างนี้เพื่อเปิดใช้สแกนเนอร์'}
+        </span>
       </div>
 
-      {/* Text */}
-      <div className="flex-1 min-w-0">
-        <p
-          className="text-xs font-bold leading-tight"
-          style={{ color: toast.status === 'navigating' ? '#e0e0ff' : '#dc2626' }}
+      {/* Navigation toast */}
+      {navToast.visible && (
+        <div
+          className="fixed bottom-12 right-6 z-50 flex items-start gap-3 px-4 py-3.5 rounded-2xl shadow-2xl border font-sans max-w-sm"
+          style={{ background: '#1a1a2e', borderColor: '#2d2d4e' }}
         >
-          {toast.status === 'navigating' ? '🔍 กำลังเปิดใบงาน...' : '❌ ไม่พบใบงาน'}
-        </p>
-        <p
-          className="text-[11px] mt-0.5 font-semibold truncate"
-          style={{ color: toast.status === 'navigating' ? '#a5b4fc' : '#ef4444' }}
-        >
-          JOB: {toast.jobId}
-        </p>
-        {toast.dwgName && (
-          <p
-            className="text-[11px] truncate"
-            style={{ color: toast.status === 'navigating' ? '#6b7db3' : '#fca5a5' }}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-900">
+            <ScanBarcode className="h-5 w-5 text-indigo-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-indigo-100">🔍 กำลังเปิดใบงาน...</p>
+            <p className="text-[11px] font-semibold text-indigo-300 truncate mt-0.5">JOB: {navToast.jobId}</p>
+            {navToast.dwgName && (
+              <p className="text-[11px] text-indigo-500 truncate">{navToast.dwgName}</p>
+            )}
+          </div>
+          <button
+            onClick={() => setNavToast((p) => ({ ...p, visible: false }))}
+            className="text-zinc-500 hover:text-white mt-0.5"
           >
-            DWG: {toast.dwgName}
-          </p>
-        )}
-      </div>
-
-      {/* Close */}
-      <button
-        onClick={() => setToast((prev) => ({ ...prev, visible: false }))}
-        className="shrink-0 text-gray-500 hover:text-white transition-colors mt-0.5"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </>
   )
 }
