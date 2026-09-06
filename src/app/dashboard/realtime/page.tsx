@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { io as socketIO, Socket } from 'socket.io-client'
 import {
@@ -41,36 +41,40 @@ function getToken() {
   return localStorage.getItem('token') ?? ''
 }
 
-// รองรับทั้ง "HH:MM" (เก่า) และ "HH:MM:SS" (ใหม่)
-function parseTime(timeStr: string): number {
-  const todayStr = new Date().toISOString().split('T')[0]
-  const parts = timeStr.split(':')
-  const normalized = parts.length === 2 ? `${timeStr}:00` : timeStr
-  return new Date(`${todayStr}T${normalized}`).getTime()
+// รองรับทั้ง "HH:MM" และ "HH:MM:SS" — ถ้าผลลัพธ์อยู่ในอนาคตให้ใช้เมื่อวาน (กรณีข้ามวัน)
+function parseTime(timeStr: string, refNow = Date.now()): number {
+  if (!timeStr) return NaN
+  const todayStr = new Date(refNow).toISOString().split('T')[0]
+  const yesterdayStr = new Date(refNow - 86400000).toISOString().split('T')[0]
+  const normalized = timeStr.split(':').length === 2 ? `${timeStr}:00` : timeStr
+  let ms = new Date(`${todayStr}T${normalized}`).getTime()
+  if (isNaN(ms)) return NaN
+  if (ms > refNow + 60_000) ms = new Date(`${yesterdayStr}T${normalized}`).getTime()
+  return ms
 }
 
 function calcElapsed(start: string, stop?: string | null, now?: number): string {
-  try {
-    const startMs = parseTime(start)
-    const endMs = stop ? parseTime(stop) : (now ?? Date.now())
-    const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
-    const h = Math.floor(secs / 3600)
-    const m = Math.floor((secs % 3600) / 60)
-    const s = secs % 60
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  } catch { return '—' }
+  const refNow = now ?? Date.now()
+  const startMs = parseTime(start, refNow)
+  const endMs = stop ? parseTime(stop, refNow) : refNow
+  if (isNaN(startMs) || isNaN(endMs)) return '—'
+  const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
 function calcProgress(start: string, target: string, stop?: string | null, now?: number): number {
-  try {
-    const startMs = parseTime(start)
-    const endMs = stop ? parseTime(stop) : (now ?? Date.now())
-    const elapsed = Math.max(0, Math.floor((endMs - startMs) / 1000))
-    const targetParts = (target ?? '00:00').split(':').map(Number)
-    const targetSecs = (targetParts[0] || 0) * 3600 + (targetParts[1] || 0) * 60
-    if (!targetSecs) return 0
-    return Math.min(100, Math.round((elapsed / targetSecs) * 100))
-  } catch { return 0 }
+  const refNow = now ?? Date.now()
+  const startMs = parseTime(start, refNow)
+  const endMs = stop ? parseTime(stop, refNow) : refNow
+  if (isNaN(startMs) || isNaN(endMs)) return 0
+  const elapsed = Math.max(0, Math.floor((endMs - startMs) / 1000))
+  const targetParts = (target ?? '00:00').split(':').map(Number)
+  const targetSecs = (targetParts[0] || 0) * 3600 + (targetParts[1] || 0) * 60
+  if (!targetSecs) return 0
+  return Math.min(100, Math.round((elapsed / targetSecs) * 100))
 }
 
 const PROCESS_COLORS: Record<string, string> = {
@@ -96,17 +100,14 @@ function TableRow({ ev, idx, now }: { ev: RealtimeEvent; idx: number; now: numbe
   const isRunning = ev.status === 'running'
   const isIdle = ev.status === 'idle'
 
-  const elapsed = useMemo(() => {
-    if (isRunning) return calcElapsed(ev.start_time, null, now)
-    if (ev.status === 'completed') return calcElapsed(ev.start_time, ev.stop_time)
-    return null
-  }, [isRunning, ev.start_time, ev.stop_time, ev.status, now])
+  // คำนวณตรงๆ ทุก render — now เปลี่ยนทุกวินาที ทำให้ค่าอัปเดตแน่นอน
+  const elapsed = isRunning
+    ? calcElapsed(ev.start_time, null, now)
+    : ev.status === 'completed' ? calcElapsed(ev.start_time, ev.stop_time, now) : null
 
-  const progress = useMemo(() => {
-    if (isRunning) return calcProgress(ev.start_time, ev.target_time, null, now)
-    if (ev.status === 'completed') return 100
-    return null
-  }, [isRunning, ev.start_time, ev.target_time, ev.status, now])
+  const progress = isRunning
+    ? calcProgress(ev.start_time, ev.target_time, null, now)
+    : ev.status === 'completed' ? 100 : null
 
   const isOvertime = isRunning && (progress ?? 0) >= 100
 
