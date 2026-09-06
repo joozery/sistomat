@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { io as socketIO, Socket } from 'socket.io-client'
 import {
   Activity, RefreshCw, Wifi, WifiOff, Clock, User, CheckCircle2,
   Play, Search, Filter, ChevronDown, Layers, Zap, ExternalLink,
@@ -48,10 +49,10 @@ function parseTime(timeStr: string): number {
   return new Date(`${todayStr}T${normalized}`).getTime()
 }
 
-function calcElapsed(start: string, stop?: string | null): string {
+function calcElapsed(start: string, stop?: string | null, now?: number): string {
   try {
     const startMs = parseTime(start)
-    const endMs = stop ? parseTime(stop) : Date.now()
+    const endMs = stop ? parseTime(stop) : (now ?? Date.now())
     const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
     const h = Math.floor(secs / 3600)
     const m = Math.floor((secs % 3600) / 60)
@@ -60,10 +61,10 @@ function calcElapsed(start: string, stop?: string | null): string {
   } catch { return '—' }
 }
 
-function calcProgress(start: string, target: string, stop?: string | null): number {
+function calcProgress(start: string, target: string, stop?: string | null, now?: number): number {
   try {
     const startMs = parseTime(start)
-    const endMs = stop ? parseTime(stop) : Date.now()
+    const endMs = stop ? parseTime(stop) : (now ?? Date.now())
     const elapsed = Math.max(0, Math.floor((endMs - startMs) / 1000))
     const targetParts = (target ?? '00:00').split(':').map(Number)
     const targetSecs = (targetParts[0] || 0) * 3600 + (targetParts[1] || 0) * 60
@@ -90,36 +91,22 @@ function getProcessColor(process: string): string {
   return key ? PROCESS_COLORS[key] : 'bg-gray-100 text-gray-600 border-gray-200'
 }
 
-function TableRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
+function TableRow({ ev, idx, now }: { ev: RealtimeEvent; idx: number; now: number }) {
   const router = useRouter()
   const isRunning = ev.status === 'running'
   const isIdle = ev.status === 'idle'
 
-  const [elapsed, setElapsed] = useState<string | null>(() =>
-    isRunning || ev.status === 'completed' ? calcElapsed(ev.start_time, ev.stop_time) : null
-  )
-  const [progress, setProgress] = useState<number | null>(() =>
-    isRunning ? calcProgress(ev.start_time, ev.target_time) : ev.status === 'completed' ? 100 : null
-  )
+  const elapsed = useMemo(() => {
+    if (isRunning) return calcElapsed(ev.start_time, null, now)
+    if (ev.status === 'completed') return calcElapsed(ev.start_time, ev.stop_time)
+    return null
+  }, [isRunning, ev.start_time, ev.stop_time, ev.status, now])
 
-  useEffect(() => {
-    if (!isRunning) return
-    const update = () => {
-      setElapsed(calcElapsed(ev.start_time, null))
-      setProgress(calcProgress(ev.start_time, ev.target_time))
-    }
-    update()
-    // หน่วงให้ tick ตรงกับวินาทีของ start_time จริง
-    const startMs = parseTime(ev.start_time)
-    const msIntoCurrentSecond = (Date.now() - startMs) % 1000
-    const delay = 1000 - msIntoCurrentSecond
-    let intervalId: ReturnType<typeof setInterval>
-    const timeoutId = setTimeout(() => {
-      update()
-      intervalId = setInterval(update, 1000)
-    }, delay)
-    return () => { clearTimeout(timeoutId); clearInterval(intervalId) }
-  }, [ev.start_time, ev.target_time, isRunning])
+  const progress = useMemo(() => {
+    if (isRunning) return calcProgress(ev.start_time, ev.target_time, null, now)
+    if (ev.status === 'completed') return 100
+    return null
+  }, [isRunning, ev.start_time, ev.target_time, ev.status, now])
 
   const isOvertime = isRunning && (progress ?? 0) >= 100
 
@@ -384,11 +371,19 @@ export default function RealtimePage() {
   const [tableTab, setTableTab] = useState<'active' | 'idle' | 'completed'>('active')
   const [idleSearch, setIdleSearch] = useState('')
   const [completedSearch, setCompletedSearch] = useState('')
+  const [now, setNow] = useState(() => Date.now())
   const PAGE_SIZE = 50
 
   useEffect(() => { setPage(1) }, [search, filterProcess])
   useEffect(() => { setIdlePage(1) }, [idleSearch])
   useEffect(() => { setCompletedPage(1) }, [completedSearch])
+
+  // single clock for all elapsed timers — ticks every second
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchData = useCallback(async () => {
@@ -411,8 +406,18 @@ export default function RealtimePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // socket.io — re-fetch immediately when server emits realtime:update
   useEffect(() => {
-    intervalRef.current = setInterval(fetchData, 5000)
+    const socket: Socket = socketIO({ path: '/api/socket', transports: ['websocket', 'polling'] })
+    socket.on('connect', () => setConnected(true))
+    socket.on('disconnect', () => setConnected(false))
+    socket.on('realtime:update', () => fetchData())
+    return () => { socket.disconnect() }
+  }, [fetchData])
+
+  // fallback poll every 30s in case socket misses something
+  useEffect(() => {
+    intervalRef.current = setInterval(fetchData, 30000)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [fetchData])
 
@@ -662,9 +667,10 @@ export default function RealtimePage() {
                   <tbody>
                     {paginated.map((ev, i) => (
                       <TableRow
-                        key={`${ev.project_id}-${ev.process}-${ev.worker_id}-${i}`}
+                        key={`${ev.project_id}-${ev.process}-${ev.worker_id}`}
                         ev={ev}
                         idx={(page - 1) * PAGE_SIZE + i}
+                        now={now}
                       />
                     ))}
                   </tbody>

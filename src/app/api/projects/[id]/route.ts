@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
+import { emitRealtimeUpdate } from '@/lib/socket-server'
 import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET!
@@ -63,6 +64,9 @@ export async function PUT(
     if (result.matchedCount === 0) {
       return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })
     }
+
+    // notify realtime page clients immediately
+    if (processes !== undefined) emitRealtimeUpdate()
 
     return NextResponse.json({ message: 'บันทึกสำเร็จ' })
   } catch (e) {
