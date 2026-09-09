@@ -1,7 +1,8 @@
 'use client'
 
-import { Plus, Trash2, ScanBarcode } from 'lucide-react'
+import { Plus, Trash2, ScanBarcode, CheckCircle2 } from 'lucide-react'
 import { Fragment, useMemo } from 'react'
+import { isRowCompleted } from '@/lib/workers'
 
 function parseTimeParts(t: string): { date: string; time: string } | null {
   if (!t) return null
@@ -164,24 +165,30 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               const isCompleted = row.process === 'เสร็จงาน'
               const isActive = activeRowIndex === index
               const isRunning = row.workers?.some(w => w.start_time && !w.stop_time)
+              const isDone = isRowCompleted(row)
 
               // Visual styling for active row
-              const rowClass = isActive 
-                ? 'bg-blue-100 ring-2 ring-blue-500 ring-inset shadow-inner' 
-                : 'hover:bg-gray-50 transition-colors border-b border-gray-100'
+              const rowClass = isActive
+                ? 'bg-blue-100 ring-2 ring-blue-500 ring-inset shadow-inner'
+                : isDone
+                  ? 'bg-emerald-50/60 border-b border-emerald-100/80'
+                  : 'hover:bg-gray-50 transition-colors border-b border-gray-100'
 
               return (
-                <tr 
-                  key={row.id} 
+                <tr
+                  key={row.id}
                   onClick={() => onRowClick?.(index)}
                   className={`cursor-pointer ${rowClass}`}
                 >
-                  <td className={`border border-slate-200 text-center text-gray-500 font-medium px-2 py-1 ${isActive ? 'bg-blue-100' : 'bg-gray-50'}`}>
-                    {index + 1}
+                  <td className={`border border-slate-200 text-center font-medium px-2 py-1 ${isActive ? 'bg-blue-100 text-gray-500' : isDone ? 'bg-emerald-100/60 text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>
+                    {isDone
+                      ? <CheckCircle2 className="h-3.5 w-3.5 mx-auto text-emerald-500" />
+                      : index + 1
+                    }
                   </td>
 
                   {/* กระบวนการ */}
-                  <td className={`border border-slate-300 p-0 relative ${isActive ? 'bg-blue-100' : ''}`}>
+                  <td className={`border border-slate-300 p-0 relative ${isActive ? 'bg-blue-100' : isDone ? 'bg-emerald-50/40' : ''}`}>
                     <select
                       value={row.process}
                       onChange={(e) => onChange(index, 'process', e.target.value)}

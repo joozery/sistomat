@@ -458,17 +458,14 @@ export default function QcSheetPage() {
                     </td>
                   ))}
                   <td style={tdc()}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '1px solid #555', flexShrink: 0 }} />
-                      {!QC_POINTS.includes(pt) && (
-                        <button
-                          className="no-print"
-                          onClick={() => removePoint(pt)}
-                          title="ลบแถวนี้"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: '14px', lineHeight: 1, padding: 0 }}
-                        >×</button>
-                      )}
-                    </div>
+                    {!QC_POINTS.includes(pt) && (
+                      <button
+                        className="no-print"
+                        onClick={() => removePoint(pt)}
+                        title="ลบแถวนี้"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: '14px', lineHeight: 1, padding: 0 }}
+                      >×</button>
+                    )}
                   </td>
                 </tr>
               ))}

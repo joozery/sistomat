@@ -82,7 +82,37 @@ export async function GET(req: NextRequest) {
       db.collection('jobs').countDocuments(filter),
     ])
 
-    return NextResponse.json({ jobs, total, page: pageNum, limit })
+    // Enrich with current process info from projects collection
+    const jobCodes = jobs.map((j) => j.job_code as string)
+    const projectDocs = await db
+      .collection('projects')
+      .find({ project_id: { $in: jobCodes } }, { projection: { project_id: 1, processes: 1 } })
+      .toArray()
+
+    type ProjectProcess = {
+      process: string
+      next_confirmed_at?: string | Date | null
+      workers?: Array<{ worker_id: string; start_time: string; stop_time: string }>
+    }
+    const projectMap = new Map(projectDocs.map((p) => [p.project_id as string, p.processes as ProjectProcess[]]))
+
+    const enrichedJobs = jobs.map((job) => {
+      const processes = projectMap.get(job.job_code as string)
+      if (!Array.isArray(processes) || processes.length === 0) return job
+
+      const currentIdx = processes.findIndex((p) => !p.next_confirmed_at)
+      if (currentIdx === -1) {
+        // All processes confirmed — waiting for final barcode
+        return { ...job, current_process_name: null, current_process_active: false }
+      }
+
+      const cur = processes[currentIdx]
+      const isActive = cur.workers?.some((w) => w.worker_id && w.start_time && !w.stop_time) ?? false
+
+      return { ...job, current_process_name: cur.process, current_process_active: isActive }
+    })
+
+    return NextResponse.json({ jobs: enrichedJobs, total, page: pageNum, limit })
   } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }

@@ -70,6 +70,11 @@ export async function PUT(
       return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })
     }
 
+    // sync status to jobs collection so job-list page shows latest status
+    if (status !== undefined) {
+      await db.collection('jobs').updateMany({ job_code: id }, { $set: { status } })
+    }
+
     // notify realtime page clients immediately
     if (processes !== undefined) emitRealtimeUpdate()
 

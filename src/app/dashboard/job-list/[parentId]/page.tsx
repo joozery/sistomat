@@ -54,6 +54,8 @@ interface Job {
   file_url?: string
   file_name?: string
   attachments?: Attachment[]
+  current_process_name?: string | null
+  current_process_active?: boolean
 }
 
 function formatDate(d: string) {
@@ -63,34 +65,66 @@ function formatDate(d: string) {
   } catch { return d }
 }
 
-// สถานะจริงที่บันทึกจากการสแกน CMD บาร์โค้ดในหน้าใบงาน (process-details):
-//   ACPT_FN → "รับงาน", FN_GOOD → "จบงาน", CANCEL_FN → "ไม่รับงาน"
-// นอกนั้นคือยังไม่จบ ("กำลังดำเนินการ" หรือ legacy "in_progress" จากการ import Excel)
-function isJobDone(status: string) {
-  return status === 'จบงาน' || status === 'รับงาน'
+function normalizeStatus(s: string) {
+  if (s === 'FN_GOOD') return 'จบงาน'
+  if (s === 'ACPT_FN') return 'รับงาน'
+  if (s === 'CANCEL_FN') return 'ไม่รับงาน'
+  return s
 }
 
-function StatusChip({ status }: { status: string }) {
-  if (status === 'จบงาน' || status === 'รับงาน') {
+function isJobDone(status: string) {
+  const s = normalizeStatus(status)
+  return s === 'จบงาน' || s === 'รับงาน'
+}
+
+function StatusChip({
+  status,
+  currentProcessName,
+  currentProcessActive,
+}: {
+  status: string
+  currentProcessName?: string | null
+  currentProcessActive?: boolean
+}) {
+  const s = normalizeStatus(status)
+  if (s === 'จบงาน' || s === 'รับงาน') {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700">
         <CheckCircle2 className="h-2.5 w-2.5" />
-        {status}
+        {s}
       </span>
     )
   }
-  if (status === 'ไม่รับงาน') {
+  if (s === 'ไม่รับงาน') {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-700">
         <XCircle className="h-2.5 w-2.5" />
-        {status}
+        {s}
+      </span>
+    )
+  }
+  // All processes confirmed but no final status yet
+  if (currentProcessName === null) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
+        <CheckCircle2 className="h-2.5 w-2.5" />
+        รอปิดงาน
+      </span>
+    )
+  }
+  // Show current process name
+  if (currentProcessName) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 max-w-[140px] truncate" title={currentProcessName}>
+        <Clock className="h-2.5 w-2.5 shrink-0" />
+        {currentProcessActive ? 'กำลังทำ' : 'รอ'}: {currentProcessName}
       </span>
     )
   }
   return (
     <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700">
       <Clock className="h-2.5 w-2.5" />
-      {status === 'in_progress' || !status ? 'กำลังดำเนินการ' : status}
+      {s === 'in_progress' || !s ? 'กำลังดำเนินการ' : s}
     </span>
   )
 }
@@ -324,6 +358,30 @@ export default function JobListPage() {
                         </div>
                       )}
 
+                      {/* Status — แสดงสถานะในแถวหลักเลย */}
+                      <div className="shrink-0">
+                        {singleJob ? (
+                          <StatusChip
+                            status={singleJob.status}
+                            currentProcessName={singleJob.current_process_name}
+                            currentProcessActive={singleJob.current_process_active}
+                          />
+                        ) : (
+                          doneInGroup === items.length && items.length > 0
+                            ? <StatusChip status="จบงาน" />
+                            : doneInGroup > 0
+                              ? <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
+                                  <Clock className="h-2.5 w-2.5" />
+                                  {doneInGroup}/{items.length} เสร็จ
+                                </span>
+                              : <StatusChip
+                                  status={items[0]?.status ?? ''}
+                                  currentProcessName={items[0]?.current_process_name}
+                                  currentProcessActive={items[0]?.current_process_active}
+                                />
+                        )}
+                      </div>
+
                       {/* Action */}
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
                         <Button
@@ -412,7 +470,11 @@ export default function JobListPage() {
                             </div>
                             <div className="flex items-center gap-1.5">
                               <span className="text-[11px] text-gray-500">{formatDate(job.due_date)}</span>
-                              <StatusChip status={job.status} />
+                              <StatusChip
+                                status={job.status}
+                                currentProcessName={job.current_process_name}
+                                currentProcessActive={job.current_process_active}
+                              />
                             </div>
                             <div className="flex items-center gap-1.5 justify-end">
                               <Button
@@ -454,7 +516,11 @@ export default function JobListPage() {
                             />
                             <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">{job.job_code}</span>
                             <span className="text-xs text-gray-500 flex-1 truncate">{job.drawing_name}</span>
-                            <StatusChip status={job.status} />
+                            <StatusChip
+                              status={job.status}
+                              currentProcessName={job.current_process_name}
+                              currentProcessActive={job.current_process_active}
+                            />
                             <Button
                               size="sm"
                               variant="ghost"

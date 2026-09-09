@@ -312,6 +312,9 @@ export default function ProcessDetailsPage() {
   useEffect(() => { processListRef.current = processList }, [processList])
   useEffect(() => { activeWorkerSlotRef.current = activeWorkerSlot }, [activeWorkerSlot])
 
+  const [editVersion, setEditVersion] = useState(0)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Blocked workers
   const blockedCodesRef = useRef<Set<number>>(new Set())
 
@@ -457,6 +460,7 @@ export default function ProcessDetailsPage() {
       next[index] = { ...next[index], [field]: value }
       return next
     })
+    setEditVersion((v) => v + 1)
   }
 
   useEffect(() => {
@@ -785,10 +789,12 @@ export default function ProcessDetailsPage() {
         remark: '',
       },
     ])
+    setEditVersion((v) => v + 1)
   }
 
   const handleDeleteRow = (index: number) => {
     setProcessList((prev) => prev.filter((_, i) => i !== index))
+    setEditVersion((v) => v + 1)
   }
 
   const handleActionFromModal = useCallback((workerId: string, workerName: string, nowTime: string) => {
@@ -858,6 +864,19 @@ export default function ProcessDetailsPage() {
       setTimeout(() => setSaveState('idle'), 3000)
     }
   }
+
+  // Auto-save: debounce 1.5s after user edits (editVersion increments in handleChange/handleAddRow/handleDeleteRow only, NOT from elapsed timer)
+  useEffect(() => {
+    if (editVersion === 0) return
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      handleSave(processListRef.current)
+    }, 1500)
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editVersion])
 
   // ── Loading ──
   if (loading) {
@@ -1024,6 +1043,7 @@ export default function ProcessDetailsPage() {
                 </p>
               </div>
             </div>
+
           </div>
 
           {/* Special Command Barcodes */}

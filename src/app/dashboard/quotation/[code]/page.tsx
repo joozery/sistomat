@@ -19,6 +19,44 @@ interface QuoteRow {
   unit: string
   quantity: number
   unit_price: number
+  // ประเมินราคา fields
+  mat_type?: string
+  mat_size?: string
+  mat_cost?: number
+  coating_cost?: number
+  wc_cost?: number
+  extra_price?: number
+}
+
+interface MachineRate {
+  process: string
+  rate: number
+}
+
+const DEFAULT_MACHINE_RATES: MachineRate[] = [
+  { process: 'Material-PO',  rate: 200 },
+  { process: 'Material-CUT', rate: 200 },
+  { process: 'QC',           rate: 200 },
+  { process: 'CAM',          rate: 500 },
+  { process: 'CNC',          rate: 500 },
+  { process: 'Spar',         rate: 200 },
+  { process: 'ML',           rate: 200 },
+  { process: 'Lathe',        rate: 200 },
+  { process: 'TAP',          rate: 200 },
+]
+
+// สูตร ประเมินราคา
+function calcRow(r: QuoteRow) {
+  const qty        = r.quantity    || 0
+  const matCost    = r.mat_cost    || 0
+  const coating    = r.coating_cost|| 0
+  const wc         = r.wc_cost     || 0
+  const extra      = r.extra_price || 0
+  const totalMat   = matCost * qty
+  const totalOut   = wc + coating * qty
+  const netPer     = matCost + coating + wc + extra
+  const total      = netPer * qty
+  return { totalMat, totalOut, netPer, total }
 }
 
 function getToken() {
@@ -116,6 +154,9 @@ export default function QuotationPage() {
   const [submitDate, setSubmitDate] = useState(todayISO())
   const [priceValidDays, setPriceValidDays] = useState('30')
 
+  const [activeTab, setActiveTab] = useState<'quote' | 'estimate'>('quote')
+  const [machineRates, setMachineRates] = useState<MachineRate[]>(DEFAULT_MACHINE_RATES)
+
   // Discount & Tax state
   const [discountPercent, setDiscountPercent] = useState(10)
   const [vatEnabled, setVatEnabled] = useState(false)
@@ -185,6 +226,7 @@ export default function QuotationPage() {
         if (saved.sales_date) setSalesDate(saved.sales_date)
         if (saved.approval_date) setApprovalDate(saved.approval_date)
         if (saved.buyer_date) setBuyerDate(saved.buyer_date)
+        if (Array.isArray(saved.machine_rates) && saved.machine_rates.length > 0) setMachineRates(saved.machine_rates)
 
         if (Array.isArray(saved.rows) && saved.rows.length > 0) {
           const savedRows: QuoteRow[] = saved.rows
@@ -192,13 +234,7 @@ export default function QuotationPage() {
           initialRows = initialRows.map((r) => {
             const savedRow = savedMap.get(r.job_code)
             if (savedRow) {
-              return {
-                ...r,
-                material: savedRow.material ?? r.material,
-                unit: savedRow.unit ?? r.unit,
-                quantity: typeof savedRow.quantity === 'number' ? savedRow.quantity : r.quantity,
-                unit_price: typeof savedRow.unit_price === 'number' ? savedRow.unit_price : r.unit_price,
-              }
+              return { ...r, ...savedRow }
             }
             return r
           })
@@ -237,6 +273,7 @@ export default function QuotationPage() {
         approval_date: approvalDate,
         buyer_date: buyerDate,
         rows: rows,
+        machine_rates: machineRates,
       }
 
       const res = await fetch(`/api/quotations/${encodeURIComponent(code)}`, {
@@ -392,14 +429,59 @@ export default function QuotationPage() {
         >
           <ArrowLeft size={16} /> กลับ
         </button>
-        <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#e0e0ff' }}>
-          ใบเสนอราคา / QUOTATION — JOB {code}
-        </span>
+
+        {/* Tab buttons */}
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button
+            onClick={() => setActiveTab('quote')}
+            style={{
+              padding: '6px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+              fontSize: '13px', fontWeight: 'bold', transition: 'all 0.15s',
+              backgroundColor: activeTab === 'quote' ? '#7B1A1A' : '#2d2d4e',
+              color: activeTab === 'quote' ? '#fff' : '#888',
+            }}
+          >
+            ใบเสนอราคา
+          </button>
+          <button
+            onClick={() => setActiveTab('estimate')}
+            style={{
+              padding: '6px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+              fontSize: '13px', fontWeight: 'bold', transition: 'all 0.15s',
+              backgroundColor: activeTab === 'estimate' ? '#2563eb' : '#2d2d4e',
+              color: activeTab === 'estimate' ? '#fff' : '#888',
+            }}
+          >
+            ประเมินราคาใบที่ 1
+          </button>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {saveSuccess && (
             <span style={{ fontSize: '12px', color: '#4ade80', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
               ✓ บันทึกสำเร็จ
             </span>
+          )}
+          {/* Sync netPer → unit_price when on estimate tab */}
+          {activeTab === 'estimate' && (
+            <button
+              onClick={() => {
+                setRows((prev) => prev.map((r) => {
+                  const c = calcRow(r)
+                  return c.netPer > 0 ? { ...r, unit_price: Math.round(c.netPer * 100) / 100 } : r
+                }))
+                setActiveTab('quote')
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                backgroundColor: '#059669', color: '#fff', border: 'none',
+                borderRadius: '20px', padding: '7px 14px',
+                fontSize: '12px', fontWeight: 'bold', cursor: 'pointer',
+              }}
+              title="นำ ราคาสุทธิ/ชิ้น จากสูตรไปเป็นราคาขายในใบเสนอราคา"
+            >
+              ส่งราคาสุทธิ → ใบเสนอ
+            </button>
           )}
           <button
             onClick={handleSave}
@@ -429,9 +511,15 @@ export default function QuotationPage() {
         </div>
       </div>
 
+      {/* Dynamic print @page size based on active tab */}
+      {activeTab === 'estimate' && (
+        <style>{'@media print { @page { size: A4 landscape; margin: 5mm; } }'}</style>
+      )}
+
       {/* Main A4 Page */}
       <div id="pages-wrap">
-        <div
+        {/* ─── Tab: ใบเสนอราคา ─── */}
+        {activeTab === 'quote' && <div
           className="print-page"
           style={{
             width: '210mm',
@@ -795,7 +883,226 @@ export default function QuotationPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
+
+        {/* ─── Tab: ประเมินราคาใบที่ 1 ─── */}
+        {activeTab === 'estimate' && (() => {
+          const p2Border = '1px solid #555'
+          const p2th = (extra?: React.CSSProperties): React.CSSProperties => ({
+            border: p2Border, padding: '2px 3px', textAlign: 'center',
+            fontWeight: 'bold', fontSize: '9px', backgroundColor: '#d0d0d0', ...extra,
+          })
+          const p2td = (extra?: React.CSSProperties): React.CSSProperties => ({
+            border: p2Border, padding: '1px 3px', fontSize: '9px', ...extra,
+          })
+          const p2tdc = (extra?: React.CSSProperties): React.CSSProperties => ({
+            border: p2Border, padding: '1px 3px', fontSize: '9px', textAlign: 'center', ...extra,
+          })
+          const numInput = (val: number | undefined, onChange: (v: number) => void): React.CSSProperties => ({
+            width: '100%', border: 'none', background: 'transparent', fontSize: '9px',
+            textAlign: 'right', fontFamily: 'Tahoma, Arial, sans-serif',
+          })
+
+          // Totals
+          const totQty  = rows.reduce((s, r) => s + (r.quantity || 0), 0)
+          const totF    = rows.reduce((s, r) => s + (r.mat_cost || 0), 0)
+          const totG    = rows.reduce((s, r) => s + (r.coating_cost || 0), 0)
+          const totH    = rows.reduce((s, r) => s + (r.wc_cost || 0), 0)
+          const totI    = rows.reduce((s, r) => s + (r.extra_price || 0), 0)
+          const totJ    = rows.reduce((s, r) => s + calcRow(r).totalMat, 0)
+          const totK    = rows.reduce((s, r) => s + calcRow(r).totalOut, 0)
+          const totL    = rows.reduce((s, r) => s + calcRow(r).netPer, 0)
+          const totM    = rows.reduce((s, r) => s + calcRow(r).total, 0)
+          const expense = totJ + totK
+          const profit  = totM - expense
+
+          const p2Rows = Array.from({ length: Math.max(25, rows.length) }).map((_, i) =>
+            i < rows.length ? { ...rows[i], index: i + 1, isReal: true } : { index: i + 1, isReal: false }
+          )
+
+          return (
+            <div
+              className="print-page"
+              style={{
+                width: '297mm', minHeight: '210mm',
+                padding: '6mm 8mm', boxSizing: 'border-box',
+                backgroundColor: '#fff', color: '#000',
+                fontFamily: 'Tahoma, Arial, sans-serif',
+                margin: '0 auto',
+              }}
+            >
+              <style>{`
+                @media print {
+                  .print-page + .print-page { page-break-before: always; }
+                  .print-page:nth-child(2) { width: 297mm !important; min-height: 210mm !important; }
+                  @page :nth(2) { size: A4 landscape; }
+                }
+              `}</style>
+
+              <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '6px', color: '#002060' }}>
+                ประเมินราคาใบที่ 1 — JOB {code}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {/* ── Main Table ── */}
+                <div style={{ flex: 1 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={p2th({ width: '22px' })}>ลำดับ</th>
+                        <th style={p2th()}>ชื่องาน</th>
+                        <th style={p2th({ width: '28px' })}>จำนวน</th>
+                        <th style={p2th({ width: '52px' })}>ชนิดแมท</th>
+                        <th style={p2th({ width: '60px' })}>ขนาดแมท</th>
+                        <th style={p2th({ width: '38px' })}>ค่าแมท</th>
+                        <th style={p2th({ width: '30px' })}>ชุบ</th>
+                        <th style={p2th({ width: '36px' })}>WC</th>
+                        <th style={p2th({ width: '36px' })}>ราคา</th>
+                        <th style={p2th({ width: '42px' })}>รวมค่าแมท</th>
+                        <th style={p2th({ width: '50px' })}>รวมค่าจ้างนอก</th>
+                        <th style={p2th({ width: '52px' })}>ราคาสุทธิ/ชิ้น</th>
+                        <th style={p2th({ width: '48px' })}>ราคารวม</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p2Rows.map((r, i) => {
+                        const c = r.isReal ? calcRow(r as QuoteRow) : { totalMat: 0, totalOut: 0, netPer: 0, total: 0 }
+                        const rr = r as QuoteRow
+                        return (
+                          <tr key={i} style={{ height: '18px' }}>
+                            <td style={p2tdc()}>{r.index}</td>
+                            <td style={p2td()}>
+                              {r.isReal ? <span style={{ fontSize: '8px' }}>{rr.job_code}{rr.drawing_name ? ` (${rr.drawing_name})` : ''}</span> : ''}
+                            </td>
+                            <td style={p2tdc()}>
+                              {r.isReal
+                                ? <input type="number" value={rr.quantity} onChange={(e) => updateRow(i, { quantity: Number(e.target.value) || 0 })} style={numInput(rr.quantity, () => {})} />
+                                : ''}
+                            </td>
+                            <td style={p2td()}>
+                              {r.isReal
+                                ? <input value={rr.mat_type || ''} onChange={(e) => updateRow(i, { mat_type: e.target.value })} style={{ ...numInput(0, () => {}), textAlign: 'left' }} />
+                                : ''}
+                            </td>
+                            <td style={p2td()}>
+                              {r.isReal
+                                ? <input value={rr.mat_size || ''} onChange={(e) => updateRow(i, { mat_size: e.target.value })} style={{ ...numInput(0, () => {}), textAlign: 'left' }} />
+                                : ''}
+                            </td>
+                            <td style={p2tdc()}>
+                              {r.isReal
+                                ? <input type="number" value={rr.mat_cost ?? ''} onChange={(e) => updateRow(i, { mat_cost: Number(e.target.value) || 0 })} style={numInput(rr.mat_cost, () => {})} />
+                                : ''}
+                            </td>
+                            <td style={p2tdc()}>
+                              {r.isReal
+                                ? <input type="number" value={rr.coating_cost ?? ''} onChange={(e) => updateRow(i, { coating_cost: Number(e.target.value) || 0 })} style={numInput(rr.coating_cost, () => {})} />
+                                : ''}
+                            </td>
+                            <td style={p2tdc()}>
+                              {r.isReal
+                                ? <input type="number" value={rr.wc_cost ?? ''} onChange={(e) => updateRow(i, { wc_cost: Number(e.target.value) || 0 })} style={numInput(rr.wc_cost, () => {})} />
+                                : ''}
+                            </td>
+                            <td style={p2tdc()}>
+                              {r.isReal
+                                ? <input type="number" value={rr.extra_price ?? ''} onChange={(e) => updateRow(i, { extra_price: Number(e.target.value) || 0 })} style={numInput(rr.extra_price, () => {})} />
+                                : ''}
+                            </td>
+                            <td style={p2tdc({ color: '#333' })}>{r.isReal && c.totalMat ? formatMoney(c.totalMat) : ''}</td>
+                            <td style={p2tdc({ color: '#333' })}>{r.isReal && c.totalOut ? formatMoney(c.totalOut) : ''}</td>
+                            <td style={p2tdc({ fontWeight: 'bold' })}>{r.isReal && c.netPer ? formatMoney(c.netPer) : ''}</td>
+                            <td style={p2tdc({ fontWeight: 'bold', color: '#002060' })}>{r.isReal && c.total ? formatMoney(c.total) : ''}</td>
+                          </tr>
+                        )
+                      })}
+                      {/* Totals row */}
+                      <tr style={{ backgroundColor: '#e8e8e8', fontWeight: 'bold' }}>
+                        <td colSpan={2} style={p2tdc({ fontWeight: 'bold' })}>รวม</td>
+                        <td style={p2tdc()}>{totQty}</td>
+                        <td colSpan={2} style={p2td()}></td>
+                        <td style={p2tdc()}>{totF ? formatMoney(totF) : ''}</td>
+                        <td style={p2tdc()}>{totG ? formatMoney(totG) : ''}</td>
+                        <td style={p2tdc()}>{totH ? formatMoney(totH) : ''}</td>
+                        <td style={p2tdc()}>{totI ? formatMoney(totI) : ''}</td>
+                        <td style={p2tdc()}>{totJ ? formatMoney(totJ) : ''}</td>
+                        <td style={p2tdc()}>{totK ? formatMoney(totK) : ''}</td>
+                        <td style={p2tdc()}>{totL ? formatMoney(totL) : ''}</td>
+                        <td style={p2tdc({ color: '#002060' })}>{totM ? formatMoney(totM) : ''}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Summary */}
+                  <table style={{ width: '60%', borderCollapse: 'collapse', marginTop: '6px', marginLeft: 'auto' }}>
+                    <tbody>
+                      <tr>
+                        <td style={p2th({ width: '80px' })}>QUO.NO</td>
+                        <td style={p2th({ width: '120px' })}>JOB NO</td>
+                        <td style={p2th()}>ค่าใช้จ่าย</td>
+                        <td style={p2th()}>ส่วนลด</td>
+                        <td style={p2th()}>ราคาสุทธิ</td>
+                        <td style={p2th()}>กำไร</td>
+                      </tr>
+                      <tr>
+                        <td style={p2tdc()}>{docNo}</td>
+                        <td style={p2tdc()}>{code}</td>
+                        <td style={p2tdc({ fontWeight: 'bold' })}>{expense ? formatMoney(expense) : '-'}</td>
+                        <td style={p2tdc()}>{discountPercent > 0 ? `${discountPercent}%` : '-'}</td>
+                        <td style={p2tdc({ fontWeight: 'bold', color: '#002060' })}>{totM ? formatMoney(totM) : '-'}</td>
+                        <td style={p2tdc({ fontWeight: 'bold', color: profit >= 0 ? '#006600' : '#cc0000' })}>{totM ? formatMoney(profit) : '-'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ── Machine Rates Table ── */}
+                <div style={{ width: '120px', flexShrink: 0 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th colSpan={2} style={p2th({ backgroundColor: '#b0b0b0' })}>ค่า ชม.เครื่อง</th>
+                      </tr>
+                      <tr>
+                        <th style={p2th({ width: '70px' })}>กระบวนการ</th>
+                        <th style={p2th()}>บาท/ชม.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {machineRates.map((mr, mi) => (
+                        <tr key={mi}>
+                          <td style={p2td()}>
+                            <input
+                              value={mr.process}
+                              onChange={(e) => setMachineRates((prev) => prev.map((x, xi) => xi === mi ? { ...x, process: e.target.value } : x))}
+                              style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '9px', fontFamily: 'Tahoma, Arial, sans-serif' }}
+                            />
+                          </td>
+                          <td style={p2tdc()}>
+                            <input
+                              type="number"
+                              value={mr.rate}
+                              onChange={(e) => setMachineRates((prev) => prev.map((x, xi) => xi === mi ? { ...x, rate: Number(e.target.value) || 0 } : x))}
+                              style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '9px', textAlign: 'right', fontFamily: 'Tahoma, Arial, sans-serif' }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="no-print">
+                        <td colSpan={2} style={{ border: p2Border, padding: '1px' }}>
+                          <button
+                            onClick={() => setMachineRates((prev) => [...prev, { process: '', rate: 0 }])}
+                            style={{ width: '100%', fontSize: '9px', background: 'none', border: 'none', cursor: 'pointer', color: '#666' }}
+                          >+ เพิ่ม</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
