@@ -1303,21 +1303,6 @@ export default function ProcessDetailsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-red-100 bg-red-50/40 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="CMD_RESET" color="#7B1A1A" bg="#fff8f8" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <RotateCcw className="h-4 w-4 text-[#7B1A1A]" />
-                  <span className="text-sm font-bold text-gray-800">QC ไม่ผ่าน — รีเซ็ต</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกน 2 ครั้งเพื่อล้างข้อมูลกระบวนการล่าสุดที่ยืนยันแล้ว<br />
-                  และกระบวนการถัดไปทั้งหมด ให้เริ่มใหม่ตั้งแต่จุดนั้น
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       )}
