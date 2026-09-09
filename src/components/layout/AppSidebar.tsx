@@ -20,21 +20,24 @@ import {
   ShieldCheck,
   Radio,
   Activity,
+  Settings,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface MenuItem {
   label: string
   path: string
   icon: React.ComponentType<{ className?: string }>
   badge?: string | number
+  adminOnly?: boolean
 }
 
 const mainMenuItems: MenuItem[] = [
   { label: 'แดชบอร์ด', path: '/dashboard', icon: LayoutDashboard },
-  { label: 'การจัดการผู้ใช้งาน', path: '/dashboard/user-management', icon: Users },
+  { label: 'การจัดการผู้ใช้งาน', path: '/dashboard/user-management', icon: Users, adminOnly: true },
   { label: 'จัดการ QR Code', path: '/dashboard/process-qrcode', icon: QrCode },
 ]
 
@@ -44,14 +47,17 @@ const managementMenuItems: MenuItem[] = [
   { label: 'สรุปรายการทั้งหมด', path: '/dashboard/monthly-summary', icon: BarChart2 },
   { label: 'แพลนงานทั้งหมด', path: '/dashboard/all-plans', icon: ClipboardList },
   { label: 'ประวัติกิจกรรม', path: '/dashboard/activity-log', icon: Activity },
+  { label: 'ตั้งค่าระบบ', path: '/dashboard/settings', icon: Settings, adminOnly: true },
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { role } = useCurrentUser()
+  const isAdmin = role === 'Admin'
 
   const renderMenuSection = (items: MenuItem[]) => (
     <SidebarMenu className="gap-1.5">
-      {items.map((item) => {
+      {items.filter((item) => !item.adminOnly || isAdmin).map((item) => {
         const isActive =
           item.path === '/dashboard'
             ? pathname === '/dashboard'

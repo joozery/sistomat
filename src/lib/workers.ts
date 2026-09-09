@@ -5,33 +5,19 @@ export interface WorkerData {
   username?: string  // login username ในระบบ (ถ้ามี account)
 }
 
-export const WORKERS_LIST: WorkerData[] = [
-  { code: 0,   name: 'Admin',                       machines: ['ADMIN', 'MAT', 'QC', 'CAM', 'CNC', 'ML', 'LATHE', 'SPAR'], username: 'admin' },
-  { code: 335, name: 'นายธณรัฐ การญจนเวทย์',       machines: ['SPAR', 'LATHE 2', 'ML'] },
-  { code: 361, name: 'นายอาชวัตร ยิ้มโภชน์',       machines: ['LATHE 1', 'LATHE 2', 'ML'] },
-  { code: 367, name: 'นายธีระยุทธ บ้านเปี่ยมขวัญ',  machines: ['CNC 1', 'CNC 2'] },
-  { code: 395, name: 'น.ส.จิรัชพร ปานอร่ามวงศ์',   machines: ['ADMIN 1', 'MAT'],  username: 'jirachporn' },
-  { code: 407, name: 'นายณัฐพงศ์ เปล่งพานิช',      machines: ['LATHE 1', 'LATHE 2', 'ML'] },
-  { code: 413, name: 'นายอาทิตย์ หุ่นสมบูรณ์',     machines: ['ADMIN 2', 'MAT', 'QC'], username: 'arthit' },
-  { code: 417, name: 'นายกิตติคุณ สุขเกษม',        machines: ['LATHE 1', 'LATHE 2', 'ML'] },
-  { code: 419, name: 'นายจารุเดช ปัทมราช',         machines: ['CNC 4'] },
-  { code: 421, name: 'นายพีระพัฒน์ ทับสาร',        machines: ['CNC 3', 'CNC 4'] },
-  { code: 451, name: 'น.ส.ณปภัช มโนรส',            machines: ['QC', 'ADMIN 3'],   username: 'napapat' },
-  { code: 452, name: 'นายจิรพงษ์ พงศ์ภานิช',       machines: ['CAM 2', 'CNC 3', 'CNC 5'] },
-  { code: 453, name: 'นายพัฒนชัย ชูใจ',            machines: ['CAM 1', 'CNC 1', 'CNC 2'] },
-]
-
-export function findWorker(code: string): WorkerData | undefined {
+// รายชื่อพนักงานและสิทธิ์เครื่องจักรมาจาก DB (collection `workers`) ผ่าน
+// GET /api/workers และแก้ไขได้ที่หน้า /dashboard/user-management
+export function findWorker(code: string, list: WorkerData[]): WorkerData | undefined {
   const num = parseInt(code, 10)
-  return WORKERS_LIST.find((w) => w.code === num || String(w.code) === code.trim())
+  return list.find((w) => w.code === num || String(w.code) === code.trim())
 }
 
 // หาจาก login username (ตรงตัว) หรือถ้า username เป็นตัวเลข → หาจาก code
-export function findWorkerByUsername(username: string): WorkerData | undefined {
+export function findWorkerByUsername(username: string, list: WorkerData[]): WorkerData | undefined {
   const lower = username.toLowerCase()
   return (
-    WORKERS_LIST.find((w) => w.username?.toLowerCase() === lower) ??
-    findWorker(username)
+    list.find((w) => w.username?.toLowerCase() === lower) ??
+    findWorker(username, list)
   )
 }
 

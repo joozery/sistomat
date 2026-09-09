@@ -14,10 +14,157 @@ import {
   Smartphone,
   AlertTriangle,
   Info,
+  ListChecks,
+  Plus,
+  X,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useProcessOptions } from '@/lib/useProcessOptions'
+
+function getToken() {
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem('token') ?? ''
+}
+
+/* ── Process Options Manager ── */
+function ProcessOptionsSection() {
+  const { options, loading, refresh } = useProcessOptions()
+  const [draft, setDraft] = useState<string[]>([])
+  const [newOption, setNewOption] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+  const [syncedFrom, setSyncedFrom] = useState<string[] | null>(null)
+
+  // sync draft with fetched options once loaded (or when they change externally)
+  if (!loading && syncedFrom !== options && JSON.stringify(syncedFrom) !== JSON.stringify(options)) {
+    setDraft(options)
+    setSyncedFrom(options)
+  }
+
+  function addOption() {
+    const v = newOption.trim()
+    if (!v || draft.includes(v)) return
+    setDraft((prev) => [...prev, v])
+    setNewOption('')
+    setSaved(false)
+  }
+
+  function removeOption(opt: string) {
+    setDraft((prev) => prev.filter((o) => o !== opt))
+    setSaved(false)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/settings/process-options', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ options: draft }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'บันทึกไม่สำเร็จ')
+        return
+      }
+      setSaved(true)
+      refresh()
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-indigo-50 border-indigo-100">
+            <ListChecks className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">ตัวเลือกกระบวนการผลิต</h3>
+            <p className="text-xs text-gray-400">รายการที่แสดงในดรอปดาวน์ &ldquo;กระบวนการ&rdquo; ของหน้าใบงาน</p>
+          </div>
+        </div>
+        {saved && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+            <CheckCircle2 className="h-4 w-4" />
+            บันทึกแล้ว
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">กำลังโหลด...</span>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {draft.map((opt) => (
+              <span
+                key={opt}
+                className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100"
+              >
+                {opt}
+                <button
+                  onClick={() => removeOption(opt)}
+                  className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-indigo-200/60 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            {draft.length === 0 && (
+              <p className="text-xs text-gray-400">ยังไม่มีตัวเลือก — เพิ่มอย่างน้อย 1 รายการ</p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Input
+              value={newOption}
+              onChange={(e) => setNewOption(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
+              placeholder="เพิ่มกระบวนการใหม่ เช่น CNC 3"
+              className="rounded-xl h-10 text-sm border-gray-200"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addOption}
+              className="gap-1.5 rounded-xl h-10 px-4 text-xs font-semibold shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              เพิ่ม
+            </Button>
+          </div>
+
+          {error && <p className="text-xs text-red-600 font-medium mt-3">{error}</p>}
+
+          <div className="flex justify-end mt-5">
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-xs font-semibold"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              บันทึกตัวเลือกกระบวนการ
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 /* ── Toggle Switch ── */
 function Toggle({
@@ -332,6 +479,9 @@ export default function SettingsPage() {
         </Section>
 
       </div>
+
+      {/* Process options — real, DB-backed */}
+      <ProcessOptionsSection />
 
       {/* Contact channels info */}
       <div className="bg-white rounded-3xl border border-gray-100 p-6">

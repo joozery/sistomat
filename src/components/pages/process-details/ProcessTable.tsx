@@ -37,11 +37,6 @@ function TimeCell({ value, bgColor, onClick, hint }: { value: string; bgColor: s
   )
 }
 
-export const processOptions = [
-  'MATERAIL', 'QC', 'CAM1', 'CNC1', 'ML', 'QC FN', 'เสร็จงาน',
-  'CNC SPAR', 'CAM 1', 'CAM 2', 'CNC 1', 'CNC 2',
-]
-
 export interface WorkerLog {
   worker_id: string
   start_time: string
@@ -61,6 +56,7 @@ export interface ProcessRow {
 
 interface ProcessTableProps {
   processList: ProcessRow[]
+  processOptions: string[]
   onChange: (index: number, field: keyof ProcessRow, value: string) => void
   onWorkerChange: (rowIndex: number, workerIndex: number, field: keyof WorkerLog, value: string) => void
   activeRowIndex?: number | null
@@ -80,7 +76,7 @@ const workerColors = [
   { header: '#fbcfe8', subHeader: '#fce7f3', cell: '#fdf2f8' },
 ]
 
-export function ProcessTable({ processList, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onDeleteRow }: ProcessTableProps) {
+export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onDeleteRow }: ProcessTableProps) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm font-sans overflow-hidden">
       {/* ── Header Bar ── */}

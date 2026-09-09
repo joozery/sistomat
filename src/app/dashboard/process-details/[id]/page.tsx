@@ -8,7 +8,9 @@ import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printe
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
 import { ProcessTable, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
-import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess, isRowCompleted } from '@/lib/workers'
+import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess, isRowCompleted, type WorkerData } from '@/lib/workers'
+import { useWorkersList } from '@/lib/useWorkersList'
+import { useProcessOptions } from '@/lib/useProcessOptions'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then((m) => m.QRCodeSVG), { ssr: false })
 const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
@@ -29,12 +31,12 @@ function CmdBarcode({ value, color, bg }: { value: string; color: string; bg: st
   )
 }
 
-function getLoggedInWorker() {
+function getLoggedInWorker(workers: WorkerData[]) {
   try {
     const token = localStorage.getItem('token')
     if (!token) return null
     const { username } = JSON.parse(atob(token.split('.')[1]))
-    return findWorkerByUsername(username) ?? null
+    return findWorkerByUsername(username, workers) ?? null
   } catch { return null }
 }
 
@@ -122,11 +124,11 @@ function getNowFormatted(): string {
 }
 
 function ActionModal({
-  mode, processName, initialWorkerId,
+  mode, processName, initialWorkerId, workers,
   onConfirm, onClose,
 }: {
   mode: 'start' | 'stop'
-  processName: string; initialWorkerId: string;
+  processName: string; initialWorkerId: string; workers: WorkerData[];
   onConfirm: (workerId: string, workerName: string, nowTime: string) => void;
   onClose: () => void;
 }) {
@@ -136,7 +138,7 @@ function ActionModal({
   useEffect(() => { onConfirmRef.current = onConfirm }, [onConfirm])
 
   const isStop = mode === 'stop'
-  const lockedWorker = useMemo(() => (initialWorkerId ? findWorker(initialWorkerId) : null), [initialWorkerId])
+  const lockedWorker = useMemo(() => (initialWorkerId ? findWorker(initialWorkerId, workers) : null), [initialWorkerId, workers])
 
   useEffect(() => {
     const tick = () => setClockDisplay(new Date().toLocaleTimeString('en-GB', { hour12: false }))
@@ -154,18 +156,18 @@ function ActionModal({
       const raw = (e.detail.barcode as string).trim()
       if (isStop) {
         // stop: confirm with pre-filled worker
-        const wInfo = findWorker(initialWorkerId)
+        const wInfo = findWorker(initialWorkerId, workers)
         onConfirmRef.current(initialWorkerId, wInfo?.name ?? initialWorkerId, getNowFormatted())
       } else {
         // start: use scanned barcode as worker identity
-        const worker = findWorker(raw)
+        const worker = findWorker(raw, workers)
         const code = worker ? String(worker.code) : raw
         onConfirmRef.current(code, worker?.name ?? code, getNowFormatted())
       }
     }
     document.addEventListener('onBarcodeScan', handler)
     return () => document.removeEventListener('onBarcodeScan', handler)
-  }, [isStop, initialWorkerId])
+  }, [isStop, initialWorkerId, workers])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -286,6 +288,12 @@ function getToken() {
 export default function ProcessDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+
+  const { workers } = useWorkersList()
+  const workersRef = useRef<WorkerData[]>([])
+  useEffect(() => { workersRef.current = workers }, [workers])
+
+  const { options: processOptions } = useProcessOptions()
 
   const [project, setProject] = useState<ProjectData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -414,8 +422,7 @@ export default function ProcessDetailsPage() {
           if (w.stop_time) {
             end = parseTimeMs(w.stop_time, now)
           } else {
-            // ถ้ายังไม่มี stop_time แต่วิ่งเกิน 16 ชม. → ghost entry จาก session ก่อนหน้า → ข้ามไป
-            if (now - start > 16 * 3600 * 1000) return
+            // ยังไม่สแกนหยุด — นับเวลาต่อไปเรื่อยๆ ไม่ว่าจะผ่านมานานแค่ไหน
             end = now
           }
 
@@ -470,7 +477,7 @@ export default function ProcessDetailsPage() {
       // ── CMD_CANCEL: ลบ entry ของ logged-in worker ที่กำลัง running ──
       if (rawUpper === 'CMD_CANCEL') {
         e.preventDefault()
-        const loggedWorker = getLoggedInWorker()
+        const loggedWorker = getLoggedInWorker(workersRef.current)
         if (!loggedWorker) {
           showToast('error', 'ไม่พบข้อมูลพนักงาน', 'กรุณา login ก่อน')
           return
@@ -581,7 +588,7 @@ export default function ProcessDetailsPage() {
       const slot = activeWorkerSlotRef.current
       if (slot !== null) {
         e.preventDefault()
-        const scannedWorker = findWorker(raw)
+        const scannedWorker = findWorker(raw, workersRef.current)
         if (!scannedWorker) {
           showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${raw}" ไม่มีในระบบ`)
           setActiveWorkerSlot(null)
@@ -638,7 +645,7 @@ export default function ProcessDetailsPage() {
       if (isCurrentJobQR) {
         // ใช้ logged-in user
         e.preventDefault()
-        worker = getLoggedInWorker()
+        worker = getLoggedInWorker(workersRef.current)
         if (!worker) {
           showToast('error', 'ไม่พบข้อมูลพนักงาน', 'username ไม่ตรงกับรหัสพนักงานในระบบ')
           return
@@ -661,7 +668,7 @@ export default function ProcessDetailsPage() {
       } else if (activeRowIndex !== null) {
         // สแกนรหัสพนักงานโดยตรง (เลือกแถวไว้แล้ว)
         e.preventDefault()
-        worker = findWorker(raw)
+        worker = findWorker(raw, workersRef.current)
         if (!worker) {
           showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${raw}" ไม่มีในระบบ`)
           return
@@ -790,7 +797,7 @@ export default function ProcessDetailsPage() {
     const current = processListRef.current
 
     if (mode === 'start') {
-      const worker = findWorker(workerId)
+      const worker = findWorker(workerId, workersRef.current)
       if (!worker) {
         showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${workerId}" ไม่มีในระบบ`)
         return
@@ -894,6 +901,7 @@ export default function ProcessDetailsPage() {
         mode={actionModal.mode}
         processName={actionModal.processName}
         initialWorkerId={actionModal.workerId}
+        workers={workers}
         onConfirm={handleActionFromModal}
         onClose={() => setActionModal(null)}
       />
@@ -946,6 +954,7 @@ export default function ProcessDetailsPage() {
           
           <ProcessTable
             processList={processList}
+            processOptions={processOptions}
             activeRowIndex={activeRowIndex}
             activeWorkerSlot={activeWorkerSlot}
             onRowClick={(idx) => { setActiveRowIndex(idx); setActiveWorkerSlot(null) }}

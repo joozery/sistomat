@@ -7,7 +7,8 @@ import {
   Activity, RefreshCw, Wifi, WifiOff, Clock, User, CheckCircle2,
   Play, Search, Filter, ChevronDown, Layers, Zap, ExternalLink,
 } from 'lucide-react'
-import { findWorker } from '@/lib/workers'
+import { findWorker, type WorkerData } from '@/lib/workers'
+import { useWorkersList } from '@/lib/useWorkersList'
 
 interface RealtimeEvent {
   project_id: string
@@ -95,7 +96,7 @@ function getProcessColor(process: string): string {
   return key ? PROCESS_COLORS[key] : 'bg-gray-100 text-gray-600 border-gray-200'
 }
 
-function TableRow({ ev, idx, now }: { ev: RealtimeEvent; idx: number; now: number }) {
+function TableRow({ ev, idx, now, workers }: { ev: RealtimeEvent; idx: number; now: number; workers: WorkerData[] }) {
   const router = useRouter()
   const isRunning = ev.status === 'running'
   const isIdle = ev.status === 'idle'
@@ -179,7 +180,7 @@ function TableRow({ ev, idx, now }: { ev: RealtimeEvent; idx: number; now: numbe
       {/* พนักงาน */}
       <td className="px-3 py-3 w-36">
         {ev.worker_id ? (() => {
-          const worker = findWorker(ev.worker_id)
+          const worker = findWorker(ev.worker_id, workers)
           return (
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1 flex-wrap">
@@ -264,7 +265,7 @@ function TableRow({ ev, idx, now }: { ev: RealtimeEvent; idx: number; now: numbe
   )
 }
 
-function CompletedRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
+function CompletedRow({ ev, idx, workers }: { ev: RealtimeEvent; idx: number; workers: WorkerData[] }) {
   const router = useRouter()
   return (
     <tr
@@ -286,7 +287,7 @@ function CompletedRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
       </td>
       <td className="px-3 py-3 w-36">
         {ev.worker_id ? (() => {
-          const worker = findWorker(ev.worker_id)
+          const worker = findWorker(ev.worker_id, workers)
           return (
             <div className="flex flex-col gap-0.5">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200 w-fit">
@@ -359,6 +360,7 @@ function IdleRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
 const PROCESS_OPTIONS = ['ทั้งหมด', 'CAM', 'CNC', 'ML', 'LATHE', 'QC', 'SPAR', 'TAP', 'MATERAIL']
 
 export default function RealtimePage() {
+  const { workers } = useWorkersList()
   const [data, setData] = useState<RealtimeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(true)
@@ -672,6 +674,7 @@ export default function RealtimePage() {
                         ev={ev}
                         idx={(page - 1) * PAGE_SIZE + i}
                         now={now}
+                        workers={workers}
                       />
                     ))}
                   </tbody>
@@ -850,6 +853,7 @@ export default function RealtimePage() {
                         key={`done-${ev.project_id}-${ev.process}-${ev.worker_id}-${i}`}
                         ev={ev}
                         idx={(completedPage - 1) * PAGE_SIZE + i}
+                        workers={workers}
                       />
                     ))}
                   </tbody>
