@@ -45,7 +45,7 @@ interface JobRowInput {
 }
 
 function deriveLevel1(code: string) {
-  const m = code.match(/^(J[A-Z]-\d{3,4})/)
+  const m = code.match(/^([A-Z]+-\d{3,4})/)
   return m ? m[1] : code
 }
 
