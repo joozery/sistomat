@@ -264,6 +264,76 @@ function ActionModal({
   )
 }
 
+function ReverseModal({
+  processList,
+  onSelect,
+  onClose,
+}: {
+  processList: ProcessRow[]
+  onSelect: (idx: number) => void
+  onClose: () => void
+}) {
+  const confirmed = processList
+    .map((row, idx) => ({ row, idx }))
+    .filter(({ row }) => !!row.next_confirmed_at)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm font-sans"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl shadow-2xl px-8 py-7 max-w-md w-full mx-4 animate-in zoom-in-95 fade-in duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-center mb-5">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 border border-amber-100 mb-3">
+            <RotateCcw className="h-6 w-6 text-amber-600" />
+          </div>
+          <h2 className="text-base font-bold text-gray-800">ย้อนกลับกระบวนการ</h2>
+          <p className="text-xs text-gray-400 mt-1">เลือกกระบวนการที่ต้องการกลับมาทำใหม่</p>
+        </div>
+
+        {confirmed.length === 0 ? (
+          <p className="text-center text-sm text-gray-400 py-6">ยังไม่มีกระบวนการที่ยืนยันแล้ว</p>
+        ) : (
+          <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+            {confirmed.map(({ row, idx }) => (
+              <button
+                key={idx}
+                onClick={() => onSelect(idx)}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition-all text-left group"
+              >
+                <span className="flex-shrink-0 h-7 w-7 rounded-full bg-gray-100 group-hover:bg-amber-100 text-gray-600 group-hover:text-amber-700 text-xs font-bold flex items-center justify-center">
+                  {idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{row.process}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">ยืนยันแล้วเมื่อ {row.next_confirmed_at?.slice(0, 16)}</p>
+                </div>
+                <RotateCcw className="h-3.5 w-3.5 text-gray-300 group-hover:text-amber-500 flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          className="mt-5 w-full py-2.5 rounded-full border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors font-medium"
+        >
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface ProjectData {
   project_id: string
   dwg_name?: string
@@ -314,6 +384,10 @@ export default function ProcessDetailsPage() {
 
   const [editVersion, setEditVersion] = useState(0)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [reverseModalOpen, setReverseModalOpen] = useState(false)
+  const reverseModalOpenRef = useRef(false)
+  useEffect(() => { reverseModalOpenRef.current = reverseModalOpen }, [reverseModalOpen])
 
   // Blocked workers
   const blockedCodesRef = useRef<Set<number>>(new Set())
@@ -473,8 +547,8 @@ export default function ProcessDetailsPage() {
       // ── ถ้า modal เปิดอยู่ → modal จัดการ scan เอง ──
       const isCmd = rawUpper === 'CMD_CANCEL' || rawUpper === 'CMD_RESET' || rawUpper === 'CMD_NEXT'
         || rawUpper === 'CANCEL_FN' || rawUpper === 'FN_GOOD' || rawUpper === 'ACPT_FN'
-        || rawUpper === 'CMD_HOLD'
-      if (!isCmd && actionModalRef.current) {
+        || rawUpper === 'CMD_HOLD' || rawUpper === 'CMD_REVERSE'
+      if (!isCmd && (actionModalRef.current || reverseModalOpenRef.current)) {
         e.preventDefault()
         return
       }
@@ -511,6 +585,18 @@ export default function ProcessDetailsPage() {
           body: JSON.stringify({ processes: cancelNext }),
         }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
         showToast('success', `ยกเลิกเรียบร้อย — ${loggedWorker.name}`, `ลบ entry ออกจาก "${canceledProcess}"`)
+        return
+      }
+
+      // ── CMD_REVERSE: เปิด modal เลือกกระบวนการที่ต้องการย้อนกลับ ──
+      if (rawUpper === 'CMD_REVERSE') {
+        e.preventDefault()
+        const hasConfirmed = list.some((row) => !!row.next_confirmed_at)
+        if (!hasConfirmed) {
+          showToast('warning', 'ยังไม่มีกระบวนการที่ยืนยันแล้ว', 'ต้องยืนยันด้วย CMD_NEXT ก่อน')
+          return
+        }
+        setReverseModalOpen(true)
         return
       }
 
@@ -890,6 +976,22 @@ export default function ProcessDetailsPage() {
     }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
   }, [actionModal, id, showToast])
 
+  const handleReverse = useCallback((idx: number) => {
+    setReverseModalOpen(false)
+    const current = processListRef.current
+    const targetProcessName = current[idx]?.process ?? `ลำดับที่ ${idx + 1}`
+    const next = current.map((row, ri) =>
+      ri >= idx ? { ...row, next_confirmed_at: undefined } : row
+    )
+    setProcessList(next)
+    fetch(`/api/projects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ processes: next }),
+    }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+    showToast('success', `ย้อนกลับไป "${targetProcessName}" แล้ว`, 'สแกน QR ใบงานหรือรหัสพนักงานเพื่อเริ่มงาน')
+  }, [id, showToast])
+
   const handleSave = async (processesToSave?: ProcessRow[]) => {
     setSaveState('saving')
     try {
@@ -972,6 +1074,13 @@ export default function ProcessDetailsPage() {
         workers={workers}
         onConfirm={handleActionFromModal}
         onClose={() => setActionModal(null)}
+      />
+    )}
+    {reverseModalOpen && (
+      <ReverseModal
+        processList={processList}
+        onSelect={handleReverse}
+        onClose={() => setReverseModalOpen(false)}
       />
     )}
     <div className="space-y-6 font-sans print:hidden">
@@ -1125,6 +1234,22 @@ export default function ProcessDetailsPage() {
                 <p className="text-xs text-gray-500 leading-relaxed">
                   สแกนเพื่อปิดกระบวนการที่กำลังทำอยู่และบันทึกเวลาจบ<br />
                   <span className="font-semibold text-emerald-700">ต้องสแกนทุกครั้ง</span> ก่อนกระบวนการถัดไปจะเริ่มได้
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-orange-100 bg-orange-50/40 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="CMD_REVERSE" color="#c2410c" bg="#fff7ed" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <RotateCcw className="h-4 w-4 text-orange-700" />
+                  <span className="text-sm font-bold text-gray-800">ย้อนกลับกระบวนการ</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  สแกนแล้วเลือกกระบวนการที่ต้องการย้อนกลับไปทำใหม่<br />
+                  ข้อมูลเวลาเดิมจะยังคงอยู่
                 </p>
               </div>
             </div>
