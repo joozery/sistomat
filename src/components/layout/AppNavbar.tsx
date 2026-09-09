@@ -1,6 +1,6 @@
 'use client'
 
-import { useSyncExternalStore, useState } from 'react'
+import { useSyncExternalStore, useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DropdownMenu,
@@ -28,6 +28,8 @@ import {
   Info,
   Check,
   ArrowRight,
+  Loader2,
+  FileSearch,
 } from 'lucide-react'
 
 interface UserInfo {
@@ -62,48 +64,25 @@ function subscribeToStorage(cb: () => void) {
 }
 
 interface PopupNotification {
-  id: number
+  id: string
   title: string
   desc: string
   time: string
   read: boolean
   type: 'success' | 'warning' | 'error' | 'info'
+  link?: string
 }
 
-const initialPopupNotifications: PopupNotification[] = [
-  {
-    id: 1,
-    title: 'เครื่อง CNC 2 แจ้งเตือนน้ำมันหล่อเย็น',
-    desc: 'ระดับน้ำมันต่ำกว่า 20% กรุณาเติมก่อนผลิตถัดไป',
-    time: '10 นาทีที่แล้ว',
-    read: false,
-    type: 'warning',
-  },
-  {
-    id: 2,
-    title: 'สแกน QR Code ใบงาน #JOB-8842 เสร็จสิ้น',
-    desc: 'ขั้นตอน LATHE 1 ผ่านการตรวจสอบ 100%',
-    time: '35 นาทีที่แล้ว',
-    read: false,
-    type: 'success',
-  },
-  {
-    id: 3,
-    title: 'พบชิ้นงานไม่ผ่านเกณฑ์ QC (#JOB-8845)',
-    desc: 'พบรอยขีดข่วนเกินค่าความคลาดเคลื่อน',
-    time: '1 ชั่วโมงที่แล้ว',
-    read: false,
-    type: 'error',
-  },
-  {
-    id: 4,
-    title: 'ฝ่าย MAT เบิกจ่ายเหล็กเพลาสำเร็จ',
-    desc: 'เตรียมพร้อมสำหรับแพลนงานสัปดาห์นี้',
-    time: '3 ชั่วโมงที่แล้ว',
-    read: true,
-    type: 'info',
-  },
-]
+function getAuthToken() {
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem('token') ?? ''
+}
+
+interface JobSearchResult {
+  job_code: string
+  drawing_name: string
+  status: string
+}
 
 export function AppNavbar() {
   const router = useRouter()
@@ -113,7 +92,89 @@ export function AppNavbar() {
     () => DEFAULT_USER
   )
 
-  const [notifications, setNotifications] = useState<PopupNotification[]>(initialPopupNotifications)
+  const [notifications, setNotifications] = useState<PopupNotification[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchNotifications() {
+      try {
+        const res = await fetch('/api/notifications', {
+          headers: { Authorization: `Bearer ${getAuthToken()}` },
+        })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        const items: PopupNotification[] = (data.notifications ?? [])
+          .slice(0, 8)
+          .map((n: { id: string; title: string; description: string; time: string; read: boolean; type: PopupNotification['type']; link?: string }) => ({
+            id: n.id,
+            title: n.title,
+            desc: n.description,
+            time: n.time,
+            read: n.read,
+            type: n.type,
+            link: n.link,
+          }))
+        setNotifications(items)
+      } catch {
+        // keep previous state on failure
+      }
+    }
+
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 60000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<JobSearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchBoxRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const query = searchQuery.trim()
+    if (!query) return
+
+    const timer = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/jobs?search=${encodeURIComponent(query)}&limit=8`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setSearchResults(data.jobs ?? [])
+        }
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setSearchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const goToJob = (jobCode: string) => {
+    setSearchOpen(false)
+    setSearchQuery('')
+    router.push(`/dashboard/process-details/${encodeURIComponent(jobCode)}`)
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -125,12 +186,27 @@ export function AppNavbar() {
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+      body: JSON.stringify({ markAllRead: true }),
+    }).catch(() => {})
   }
 
-  const markSingleRead = (id: number) => {
+  const markSingleRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     )
+    fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+      body: JSON.stringify({ id, read: true }),
+    }).catch(() => {})
+  }
+
+  const handleNotificationClick = (n: PopupNotification) => {
+    markSingleRead(n.id)
+    if (n.link) router.push(n.link)
   }
 
   const unreadCount = notifications.filter((n) => !n.read).length
@@ -166,13 +242,59 @@ export function AppNavbar() {
       </div>
 
       {/* Middle: Search Input */}
-      <div className="hidden lg:flex items-center relative w-64 xl:w-80">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+      <div ref={searchBoxRef} className="hidden lg:flex items-center relative w-64 xl:w-80">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
         <input
           type="text"
-          placeholder="ค้นหาเมนู ข้อมูล หรือรายงาน..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value)
+            setSearchOpen(true)
+          }}
+          onFocus={() => setSearchOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setSearchOpen(false)
+            if (e.key === 'Enter' && searchResults.length > 0) goToJob(searchResults[0].job_code)
+          }}
+          placeholder="ค้นหา Job Code หรือชื่องาน..."
           className="w-full pl-10 pr-4 py-1.5 bg-gray-50 border border-gray-200/80 rounded-full text-xs text-gray-700 placeholder-gray-400 focus:bg-white focus:border-[#7B1A1A] focus:ring-1 focus:ring-[#7B1A1A] transition-all outline-none"
         />
+
+        {searchOpen && searchQuery.trim() && (
+          <div className="absolute top-full mt-2 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-30">
+            {searchLoading ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                กำลังค้นหา...
+              </div>
+            ) : searchResults.length > 0 ? (
+              <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                {searchResults.map((job) => (
+                  <button
+                    key={job.job_code}
+                    onClick={() => goToJob(job.job_code)}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50 transition-colors"
+                  >
+                    <FileSearch className="h-4 w-4 text-gray-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-gray-800 truncate">{job.job_code}</p>
+                      <p className="text-[11px] text-gray-500 truncate">{job.drawing_name || '-'}</p>
+                    </div>
+                    {job.status && (
+                      <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md shrink-0">
+                        {job.status}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="py-4 text-center text-xs text-gray-400">
+                ไม่พบผลลัพธ์สำหรับ &ldquo;{searchQuery}&rdquo;
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right: Notifications & User Profile */}
@@ -213,6 +335,9 @@ export function AppNavbar() {
 
             {/* Notification Items List */}
             <div className="max-h-72 overflow-y-auto divide-y divide-gray-100">
+              {notifications.length === 0 && (
+                <div className="py-8 text-center text-xs text-gray-400">ไม่มีการแจ้งเตือน</div>
+              )}
               {notifications.map((n) => {
                 const Icon =
                   n.type === 'warning'
@@ -235,7 +360,7 @@ export function AppNavbar() {
                 return (
                   <div
                     key={n.id}
-                    onClick={() => markSingleRead(n.id)}
+                    onClick={() => handleNotificationClick(n)}
                     className={`flex items-start gap-2.5 p-2.5 hover:bg-gray-50 cursor-pointer transition-colors ${
                       !n.read ? 'bg-red-50/20' : ''
                     }`}

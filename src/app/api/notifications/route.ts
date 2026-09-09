@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import jwt from 'jsonwebtoken'
+import { timeAgo } from '@/lib/timeAgo'
 
 function getToken(req: NextRequest): string | null {
   const auth = req.headers.get('authorization')
@@ -15,57 +16,6 @@ function verifyToken(req: NextRequest) {
   jwt.verify(token, process.env.JWT_SECRET!)
 }
 
-const initialSeedData = [
-  {
-    type: 'warning',
-    category: 'machine',
-    title: 'เครื่องจักร CNC 2 แจ้งเตือนตรวจเช็กน้ำมันหล่อเย็น',
-    description: 'ระดับน้ำมันหล่อเย็นลดลงต่ำกว่า 20% กรุณาเติมก่อนเริ่มขั้นตอนการผลิตถัดไป',
-    time: '10 นาทีที่แล้ว',
-    read: false,
-    link: '/dashboard/process-details/JD-2025-001',
-    created_at: new Date(Date.now() - 10 * 60 * 1000),
-  },
-  {
-    type: 'success',
-    category: 'qc',
-    title: 'การสแกน QR Code ใบงาน #JOB-8842 เสร็จสิ้น',
-    description: 'ขั้นตอน LATHE 1 ดำเนินการเสร็จสมบูรณ์ ชิ้นงานผ่านการตรวจสอบคุณภาพเบื้องต้น 100%',
-    time: '35 นาทีที่แล้ว',
-    read: false,
-    link: '/dashboard/process-details/JD-2025-001',
-    created_at: new Date(Date.now() - 35 * 60 * 1000),
-  },
-  {
-    type: 'error',
-    category: 'qc',
-    title: 'พบชิ้นงานไม่ผ่านเกณฑ์ QC ในขั้นตอน #JOB-8845',
-    description: 'พบรอยขีดข่วนบนพื้นผิวชิ้นงานเกินค่าพิกัดความคลาดเคลื่อน 0.05 mm กรุณาตรวจสอบ',
-    time: '1 ชั่วโมงที่แล้ว',
-    read: false,
-    link: '/dashboard/process-details/JD-2025-001',
-    created_at: new Date(Date.now() - 60 * 60 * 1000),
-  },
-  {
-    type: 'info',
-    category: 'inventory',
-    title: 'การเบิกจ่ายวัตถุดิบสำเร็จ (เหล็กเพลา S45C)',
-    description: 'ฝ่าย MAT ดำเนินการเบิกจ่ายวัตถุดิบสำหรับแพลนงานประจำสัปดาห์เรียบร้อยแล้ว',
-    time: '3 ชั่วโมงที่แล้ว',
-    read: true,
-    created_at: new Date(Date.now() - 3 * 60 * 60 * 1000),
-  },
-  {
-    type: 'info',
-    category: 'system',
-    title: 'อัปเดตระบบ SISTOMAT ERP v2.4 สำเร็จ',
-    description: 'ปรับปรุงประสิทธิภาพการสแกน QR Code และเพิ่มความเร็วในการโหลดตารางกระบวนการ',
-    time: 'เมื่อวานนี้',
-    read: true,
-    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000),
-  },
-]
-
 export async function GET(req: NextRequest) {
   try { verifyToken(req) } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -76,12 +26,7 @@ export async function GET(req: NextRequest) {
     const db = client.db('sistomat')
     const collection = db.collection('notifications')
 
-    const count = await collection.countDocuments()
-    if (count === 0) {
-      await collection.insertMany(initialSeedData)
-    }
-
-    const items = await collection.find({}).sort({ created_at: -1 }).toArray()
+    const items = await collection.find({}).sort({ created_at: -1 }).limit(50).toArray()
 
     const notifications = items.map((doc) => ({
       id: doc._id.toString(),
@@ -89,7 +34,7 @@ export async function GET(req: NextRequest) {
       category: doc.category,
       title: doc.title,
       description: doc.description,
-      time: doc.time || 'เมื่อครู่นี้',
+      time: timeAgo(doc.created_at ?? new Date()),
       read: Boolean(doc.read),
       link: doc.link,
     }))
@@ -110,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { type, category, title, description, time, link } = body
+    const { type, category, title, description, link } = body
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -124,7 +69,6 @@ export async function POST(req: NextRequest) {
       category: category || 'system',
       title,
       description: description || '',
-      time: time || 'เมื่อครู่นี้',
       read: false,
       link: link || null,
       created_at: new Date(),

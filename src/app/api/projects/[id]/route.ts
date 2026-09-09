@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { emitRealtimeUpdate } from '@/lib/socket-server'
+import { createNotification } from '@/lib/notify'
 import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET!
@@ -52,6 +53,10 @@ export async function PUT(
     const client = await getClientPromise()
     const db = client.db('sistomat')
 
+    const before = await db
+      .collection('projects')
+      .findOne({ project_id: id }, { projection: { status: 1, 'qc.result': 1, dwg_name: 1 } })
+
     const update: Record<string, unknown> = { updated_at: new Date() }
     if (processes !== undefined) update.processes = processes
     if (status !== undefined) update.status = status
@@ -67,6 +72,37 @@ export async function PUT(
 
     // notify realtime page clients immediately
     if (processes !== undefined) emitRealtimeUpdate()
+
+    // real notification triggers (fire-and-forget)
+    const dwgName = before?.dwg_name ? ` (${before.dwg_name})` : ''
+
+    if (qc?.result === 'reject' && before?.qc?.result !== 'reject') {
+      createNotification(db, {
+        type: 'error',
+        category: 'qc',
+        title: `พบชิ้นงานไม่ผ่านเกณฑ์ QC — ${id}`,
+        description: `ใบงาน ${id}${dwgName} ถูกบันทึกผล QC เป็น "ไม่ผ่าน" กรุณาตรวจสอบ`,
+        link: `/dashboard/process-details/${id}/qc`,
+      }).catch(() => {})
+    } else if (qc?.result === 'accept' && before?.qc?.result !== 'accept') {
+      createNotification(db, {
+        type: 'success',
+        category: 'qc',
+        title: `ชิ้นงานผ่านเกณฑ์ QC — ${id}`,
+        description: `ใบงาน ${id}${dwgName} ผ่านการตรวจสอบคุณภาพเรียบร้อยแล้ว`,
+        link: `/dashboard/process-details/${id}/qc`,
+      }).catch(() => {})
+    }
+
+    if (status !== undefined && status !== before?.status && status === 'จบงาน') {
+      createNotification(db, {
+        type: 'success',
+        category: 'system',
+        title: `ใบงาน ${id}${dwgName} จบงานแล้ว`,
+        description: `บันทึกสถานะ "จบงาน" เรียบร้อยแล้ว`,
+        link: `/dashboard/process-details/${id}`,
+      }).catch(() => {})
+    }
 
     return NextResponse.json({ message: 'บันทึกสำเร็จ' })
   } catch (e) {
