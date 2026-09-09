@@ -21,16 +21,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Paperclip, Trash2, AlertTriangle } from 'lucide-react'
-import { FilePreviewDialog } from './FilePreviewDialog'
-import { FileThumbnail } from './FileThumbnail'
+import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react'
 
 interface Project {
   project_id: string
   received_date: string
   due_date: string
-  file_url?: string
-  file_name?: string
 }
 
 interface MatchedJob {
@@ -94,10 +90,37 @@ export function ProjectTable({
   matchedJobs,
 }: ProjectTableProps) {
   const router = useRouter()
-  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteError, setBulkDeleteError] = useState('')
+
+  const allOnPageSelected = projects.length > 0 && projects.every((p) => selected.has(p.project_id))
+
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allOnPageSelected) {
+        projects.forEach((p) => next.delete(p.project_id))
+      } else {
+        projects.forEach((p) => next.add(p.project_id))
+      }
+      return next
+    })
+  }
+
+  function toggleSelectOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   async function handleConfirmDelete() {
     if (!deleteTarget) return
@@ -120,6 +143,37 @@ export function ProjectTable({
     }
   }
 
+  async function handleConfirmBulkDelete() {
+    setBulkDeleting(true)
+    setBulkDeleteError('')
+    const token = localStorage.getItem('token')
+    const ids = Array.from(selected)
+    const failed: string[] = []
+    try {
+      for (const id of ids) {
+        try {
+          const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!res.ok) failed.push(id)
+        } catch {
+          failed.push(id)
+        }
+      }
+      if (failed.length > 0) {
+        setBulkDeleteError(`ลบไม่สำเร็จ ${failed.length} รายการ: ${failed.join(', ')}`)
+        setSelected(new Set(failed))
+      } else {
+        setBulkDeleteOpen(false)
+        setSelected(new Set())
+      }
+      onDeleted()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   return (
     <div className="rounded-xl border border-gray-200/70 bg-white overflow-hidden font-sans">
       {/* Toolbar */}
@@ -135,6 +189,16 @@ export function ProjectTable({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {selected.size > 0 && (
+            <Button
+              onClick={() => { setBulkDeleteError(''); setBulkDeleteOpen(true) }}
+              variant="outline"
+              className="gap-2 rounded-full h-10 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 px-4 text-sm"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>ลบที่เลือก ({selected.size})</span>
+            </Button>
+          )}
           <Button
             onClick={onOpenImportDialog}
             variant="outline"
@@ -163,6 +227,14 @@ export function ProjectTable({
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow className="hover:bg-transparent border-gray-100">
+                <TableHead className="w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allOnPageSelected}
+                    onChange={toggleSelectAll}
+                    className="h-3.5 w-3.5 rounded border-gray-300 accent-[#7B1A1A] cursor-pointer"
+                  />
+                </TableHead>
                 <TableHead className="w-12 text-center text-xs font-bold text-gray-400 uppercase">#</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">เลขที่โปรเจค</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">ขั้นตอนปัจจุบัน</TableHead>
@@ -170,7 +242,6 @@ export function ProjectTable({
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">ระยะเวลาใช้งาน</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">กำหนดส่งมอบ</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">สถานะ</TableHead>
-                <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-24">Preview</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-28">การจัดการ</TableHead>
               </TableRow>
             </TableHeader>
@@ -196,6 +267,14 @@ export function ProjectTable({
                   return (
                   <Fragment key={project.project_id}>
                     <TableRow className="hover:bg-red-50/20 transition-colors group">
+                      <TableCell className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(project.project_id)}
+                          onChange={() => toggleSelectOne(project.project_id)}
+                          className="h-3.5 w-3.5 rounded border-gray-300 accent-[#7B1A1A] cursor-pointer"
+                        />
+                      </TableCell>
                       <TableCell className="text-xs font-bold text-gray-400 text-center">
                         {String((currentPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}
                       </TableCell>
@@ -237,22 +316,6 @@ export function ProjectTable({
                           <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                           กำลังดำเนินการ
                         </Badge>
-                      </TableCell>
-
-                      <TableCell className="py-2">
-                        <div className="flex justify-center">
-                          {project.file_url && project.file_name ? (
-                            <FileThumbnail
-                              fileUrl={project.file_url}
-                              fileName={project.file_name}
-                              onClick={() => setPreview({ url: project.file_url!, name: project.file_name! })}
-                            />
-                          ) : (
-                            <div className="w-20 h-20 rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
-                              <Paperclip className="h-4 w-4 text-gray-200" />
-                            </div>
-                          )}
-                        </div>
                       </TableCell>
 
                       <TableCell className="text-center">
@@ -382,14 +445,6 @@ export function ProjectTable({
         </>
       )}
 
-      {preview && (
-        <FilePreviewDialog
-          open={!!preview}
-          onOpenChange={(v) => { if (!v) setPreview(null) }}
-          fileUrl={preview.url}
-          fileName={preview.name}
-        />
-      )}
 
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) { setDeleteTarget(null); setDeleteError('') } }}>
         <DialogContent className="sm:max-w-sm rounded-2xl p-6 bg-white border-0 font-sans">
@@ -426,6 +481,45 @@ export function ProjectTable({
             >
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               {deleting ? 'กำลังลบ...' : 'ลบโปรเจค'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={(v) => { if (!v && !bulkDeleting) { setBulkDeleteOpen(false); setBulkDeleteError('') } }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl p-6 bg-white border-0 font-sans">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              ยืนยันการลบ {selected.size} โปรเจค
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 text-xs mt-1">
+              ต้องการลบโปรเจคที่เลือกไว้ {selected.size} รายการใช่หรือไม่? การลบจะลบ Job ย่อยที่ผูกอยู่ทั้งหมดด้วย และไม่สามารถย้อนกลับได้
+            </DialogDescription>
+          </DialogHeader>
+
+          {bulkDeleteError && (
+            <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{bulkDeleteError}</p>
+          )}
+
+          <DialogFooter className="pt-2 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setBulkDeleteOpen(false); setBulkDeleteError('') }}
+              disabled={bulkDeleting}
+              className="rounded-full h-9 border-gray-200"
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmBulkDelete}
+              disabled={bulkDeleting}
+              className="rounded-full h-9 bg-red-600 hover:bg-red-700 text-white px-5 gap-1"
+            >
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              {bulkDeleting ? 'กำลังลบ...' : `ลบ ${selected.size} โปรเจค`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -11,6 +11,7 @@ import {
   Layers,
   CheckCircle2,
   Clock,
+  XCircle,
   Calendar,
   QrCode,
   Loader2,
@@ -62,14 +63,34 @@ function formatDate(d: string) {
   } catch { return d }
 }
 
+// สถานะจริงที่บันทึกจากการสแกน CMD บาร์โค้ดในหน้าใบงาน (process-details):
+//   ACPT_FN → "รับงาน", FN_GOOD → "จบงาน", CANCEL_FN → "ไม่รับงาน"
+// นอกนั้นคือยังไม่จบ ("กำลังดำเนินการ" หรือ legacy "in_progress" จากการ import Excel)
+function isJobDone(status: string) {
+  return status === 'จบงาน' || status === 'รับงาน'
+}
+
 function StatusChip({ status }: { status: string }) {
-  const done = status === 'ครบ' || status === 'รับแล้ว'
+  if (status === 'จบงาน' || status === 'รับงาน') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700">
+        <CheckCircle2 className="h-2.5 w-2.5" />
+        {status}
+      </span>
+    )
+  }
+  if (status === 'ไม่รับงาน') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-700">
+        <XCircle className="h-2.5 w-2.5" />
+        {status}
+      </span>
+    )
+  }
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${
-      done ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-    }`}>
-      {done ? <CheckCircle2 className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
-      {status || '-'}
+    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700">
+      <Clock className="h-2.5 w-2.5" />
+      {status === 'in_progress' || !status ? 'กำลังดำเนินการ' : status}
     </span>
   )
 }
@@ -153,7 +174,7 @@ export default function JobListPage() {
   }
 
   const totalQty = jobs.reduce((s, j) => s + j.quantity, 0)
-  const doneCount = jobs.filter((j) => j.status === 'ครบ' || j.status === 'รับแล้ว').length
+  const doneCount = jobs.filter((j) => isJobDone(j.status)).length
 
   return (
     <div className="space-y-6 font-sans">
@@ -168,14 +189,6 @@ export default function JobListPage() {
           ย้อนกลับ
         </Button>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(parentId)}`)}
-            className="gap-2 rounded-full border-gray-200 text-gray-600 hover:text-gray-800 h-9 px-4 text-xs font-semibold"
-          >
-            <Receipt className="h-4 w-4" />
-            ใบเสนอราคา
-          </Button>
           <Button
             onClick={() => setAddOpen(true)}
             className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
@@ -242,7 +255,7 @@ export default function JobListPage() {
               {Array.from(byLevel2.entries()).map(([level2Code, items]) => {
                 const hasLevel3 = items.some((j) => j.level3)
                 const isOpen = expanded.has(level2Code)
-                const doneInGroup = items.filter((j) => j.status === 'ครบ' || j.status === 'รับแล้ว').length
+                const doneInGroup = items.filter((j) => isJobDone(j.status)).length
                 const groupQty = items.reduce((s, j) => s + j.quantity, 0)
                 const processes = [...new Set(items.flatMap((j) => j.processes.map((p) => p.process)).filter(Boolean))]
                 const coatings = [...new Set(items.map((j) => j.coating).filter(Boolean))]
@@ -313,6 +326,14 @@ export default function JobListPage() {
 
                       {/* Action */}
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(level2Code)}`)}
+                          className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
+                        >
+                          <Receipt className="h-3.5 w-3.5" /> ใบเสนอราคา
+                        </Button>
                         {singleJob ? (
                           <>
                             {/* No BU → link directly to process-details */}
