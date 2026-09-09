@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Trash2, ScanBarcode, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, ScanBarcode, CheckCircle2, PauseCircle } from 'lucide-react'
 import { Fragment, useMemo } from 'react'
 import { isRowCompleted } from '@/lib/workers'
 
@@ -53,6 +53,7 @@ export interface ProcessRow {
   elapsed_time: string
   remark: string
   next_confirmed_at?: string
+  on_hold?: boolean
 }
 
 interface ProcessTableProps {
@@ -166,13 +167,16 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               const isActive = activeRowIndex === index
               const isRunning = row.workers?.some(w => w.start_time && !w.stop_time)
               const isDone = isRowCompleted(row)
+              const isOnHold = !isDone && !!row.on_hold
 
               // Visual styling for active row
               const rowClass = isActive
                 ? 'bg-blue-100 ring-2 ring-blue-500 ring-inset shadow-inner'
                 : isDone
                   ? 'bg-emerald-50/60 border-b border-emerald-100/80'
-                  : 'hover:bg-gray-50 transition-colors border-b border-gray-100'
+                  : isOnHold
+                    ? 'bg-amber-50/80 border-b border-amber-200'
+                    : 'hover:bg-gray-50 transition-colors border-b border-gray-100'
 
               return (
                 <tr
@@ -180,10 +184,12 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                   onClick={() => onRowClick?.(index)}
                   className={`cursor-pointer ${rowClass}`}
                 >
-                  <td className={`border border-slate-200 text-center font-medium px-2 py-1 ${isActive ? 'bg-blue-100 text-gray-500' : isDone ? 'bg-emerald-100/60 text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>
+                  <td className={`border border-slate-200 text-center font-medium px-2 py-1 ${isActive ? 'bg-blue-100 text-gray-500' : isDone ? 'bg-emerald-100/60 text-emerald-600' : isOnHold ? 'bg-amber-100/80 text-amber-600' : 'bg-gray-50 text-gray-500'}`}>
                     {isDone
                       ? <CheckCircle2 className="h-3.5 w-3.5 mx-auto text-emerald-500" />
-                      : index + 1
+                      : isOnHold
+                        ? <PauseCircle className="h-3.5 w-3.5 mx-auto text-amber-500" />
+                        : index + 1
                     }
                   </td>
 

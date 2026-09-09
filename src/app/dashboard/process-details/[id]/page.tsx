@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown, PauseCircle } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
 import { ProcessTable, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
@@ -473,6 +473,7 @@ export default function ProcessDetailsPage() {
       // ── ถ้า modal เปิดอยู่ → modal จัดการ scan เอง ──
       const isCmd = rawUpper === 'CMD_CANCEL' || rawUpper === 'CMD_RESET' || rawUpper === 'CMD_NEXT'
         || rawUpper === 'CANCEL_FN' || rawUpper === 'FN_GOOD' || rawUpper === 'ACPT_FN'
+        || rawUpper === 'CMD_HOLD'
       if (!isCmd && actionModalRef.current) {
         e.preventDefault()
         return
@@ -510,6 +511,45 @@ export default function ProcessDetailsPage() {
           body: JSON.stringify({ processes: cancelNext }),
         }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
         showToast('success', `ยกเลิกเรียบร้อย — ${loggedWorker.name}`, `ลบ entry ออกจาก "${canceledProcess}"`)
+        return
+      }
+
+      // ── CMD_HOLD: หยุดพักชั่วคราว / ดำเนินการต่อ (toggle) ──
+      if (rawUpper === 'CMD_HOLD') {
+        e.preventDefault()
+        const targetIdx = list.findIndex((row) => !row.next_confirmed_at)
+        if (targetIdx === -1) {
+          showToast('warning', 'ไม่มีกระบวนการที่จะ HOLD', 'ทุกกระบวนการยืนยันแล้ว')
+          return
+        }
+        const targetRow = list[targetIdx]
+        const nowTime = getNowFormatted()
+        if (targetRow.on_hold) {
+          // ปลดล็อก HOLD
+          const nextList = [...list]
+          nextList[targetIdx] = { ...targetRow, on_hold: false }
+          setProcessList(nextList)
+          fetch(`/api/projects/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ processes: nextList }),
+          }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+          showToast('success', `ปลดล็อก HOLD — "${targetRow.process}"`, 'พนักงานสแกนต่อได้เลย')
+        } else {
+          // เข้าสู่ HOLD — หยุดพนักงานที่ running ทุกคน
+          const stoppedWorkers = targetRow.workers.map((w) =>
+            w.worker_id && w.start_time && !w.stop_time ? { ...w, stop_time: nowTime } : w
+          )
+          const nextList = [...list]
+          nextList[targetIdx] = { ...targetRow, workers: stoppedWorkers, on_hold: true }
+          setProcessList(nextList)
+          fetch(`/api/projects/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ processes: nextList }),
+          }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+          showToast('warning', `HOLD — "${targetRow.process}"`, 'หยุดพักชั่วคราว สแกน CMD_HOLD อีกครั้งเพื่อดำเนินการต่อ')
+        }
         return
       }
 
@@ -606,6 +646,11 @@ export default function ProcessDetailsPage() {
         const slotProcess = list[slot.row]?.process ?? ''
         if (isRowCompleted(list[slot.row])) {
           showToast('warning', 'กระบวนการนี้ปิดแล้ว', `"${slotProcess}" ถูกยืนยัน CMD_NEXT ไปแล้ว`)
+          setActiveWorkerSlot(null)
+          return
+        }
+        if (list[slot.row]?.on_hold) {
+          showToast('warning', 'กระบวนการนี้ถูก HOLD ชั่วคราว', 'สแกน CMD_HOLD อีกครั้งเพื่อดำเนินการต่อ')
           setActiveWorkerSlot(null)
           return
         }
@@ -709,6 +754,10 @@ export default function ProcessDetailsPage() {
       const isRunningNow = targetRow.workers.some(
         (w) => String(w.worker_id) === workerIdStr && w.start_time && !w.stop_time
       )
+      if (!isRunningNow && targetRow.on_hold) {
+        showToast('warning', 'กระบวนการนี้ถูก HOLD ชั่วคราว', 'สแกน CMD_HOLD อีกครั้งเพื่อดำเนินการต่อ')
+        return
+      }
       if (!isRunningNow && !canWorkerDoProcess(worker.machines, targetRow.process)) {
         showToast('warning', 'ไม่มีสิทธิ์', `${worker.name} ไม่มีสิทธิ์ในกระบวนการ "${targetRow.process}"`)
         return
@@ -1048,6 +1097,22 @@ export default function ProcessDetailsPage() {
 
           {/* Special Command Barcodes */}
           <div className="flex gap-4">
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-amber-200 bg-amber-50/50 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="CMD_HOLD" color="#92400e" bg="#fffbeb" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <PauseCircle className="h-4 w-4 text-amber-700" />
+                  <span className="text-sm font-bold text-gray-800">HOLD — หยุดพักชั่วคราว</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  สแกนเพื่อพักงานชั่วคราว (หยุดนาฬิกา)<br />
+                  สแกน <span className="font-semibold text-amber-700">CMD_HOLD</span> อีกครั้งเพื่อดำเนินการต่อ
+                </p>
+              </div>
+            </div>
+
             <div className="flex items-center gap-4 flex-1 rounded-xl border border-emerald-100 bg-emerald-50/40 px-5 py-4 shadow-sm/50">
               <div className="flex flex-col items-center gap-0.5">
                 <CmdBarcode value="CMD_NEXT" color="#047857" bg="#ecfdf5" />
