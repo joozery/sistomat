@@ -42,9 +42,14 @@ function getToken() {
   return localStorage.getItem('token') ?? ''
 }
 
-// รองรับทั้ง "HH:MM" และ "HH:MM:SS" — ถ้าผลลัพธ์อยู่ในอนาคตให้ใช้เมื่อวาน (กรณีข้ามวัน)
+// รองรับ "YYYY-MM-DD HH:MM:SS" (format ใหม่) และ "HH:MM" / "HH:MM:SS" (format เก่า)
 function parseTime(timeStr: string, refNow = Date.now()): number {
   if (!timeStr) return NaN
+  // format ใหม่ — มีวันที่ชัดเจน แปลงตรงได้เลย
+  if (/^\d{4}-\d{2}-\d{2}/.test(timeStr)) {
+    return new Date(timeStr.replace(' ', 'T')).getTime()
+  }
+  // format เก่า — เดาวันที่จาก context
   const todayStr = new Date(refNow).toISOString().split('T')[0]
   const yesterdayStr = new Date(refNow - 86400000).toISOString().split('T')[0]
   const normalized = timeStr.split(':').length === 2 ? `${timeStr}:00` : timeStr
