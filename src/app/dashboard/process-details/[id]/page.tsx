@@ -1129,22 +1129,6 @@ export default function ProcessDetailsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-gray-100 bg-white px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="CMD_CANCEL" color="#1a1a1a" bg="#ffffff" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <XCircle className="h-4 w-4 text-amber-600" />
-                  <span className="text-sm font-bold text-gray-800">ยกเลิก entry ตัวเอง</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกน Barcode นี้เพื่อลบการเริ่มงานของตัวเองออก<br />
-                  (ใช้เมื่อสแกนเริ่มงานผิดพลาด)
-                </p>
-              </div>
-            </div>
-
             <div className="flex items-center gap-4 flex-1 rounded-xl border border-red-100 bg-red-50/40 px-5 py-4 shadow-sm/50">
               <div className="flex flex-col items-center gap-0.5">
                 <CmdBarcode value="CMD_RESET" color="#7B1A1A" bg="#fff8f8" />
