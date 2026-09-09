@@ -407,6 +407,8 @@ export default function ProcessDetailsPage() {
   // Special command barcodes
   const pendingResetRef = useRef(false)
   const pendingResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingRejectRef = useRef(false)
+  const pendingRejectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Toast
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -547,7 +549,7 @@ export default function ProcessDetailsPage() {
       // ── ถ้า modal เปิดอยู่ → modal จัดการ scan เอง ──
       const isCmd = rawUpper === 'CMD_CANCEL' || rawUpper === 'CMD_RESET' || rawUpper === 'CMD_NEXT'
         || rawUpper === 'CANCEL_FN' || rawUpper === 'FN_GOOD' || rawUpper === 'ACPT_FN'
-        || rawUpper === 'CMD_HOLD' || rawUpper === 'CMD_REVERSE'
+        || rawUpper === 'CMD_HOLD' || rawUpper === 'CMD_REVERSE' || rawUpper === 'CMD_REJECT'
       if (!isCmd && (actionModalRef.current || reverseModalOpenRef.current)) {
         e.preventDefault()
         return
@@ -585,6 +587,37 @@ export default function ProcessDetailsPage() {
           body: JSON.stringify({ processes: cancelNext }),
         }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
         showToast('success', `ยกเลิกเรียบร้อย — ${loggedWorker.name}`, `ลบ entry ออกจาก "${canceledProcess}"`)
+        return
+      }
+
+      // ── CMD_REJECT: ยุติงานทั้งหมดทันที (ต้อง scan 2 ครั้ง) ──
+      if (rawUpper === 'CMD_REJECT') {
+        e.preventDefault()
+        if (pendingRejectRef.current) {
+          if (pendingRejectTimerRef.current) clearTimeout(pendingRejectTimerRef.current)
+          pendingRejectRef.current = false
+          const nowTime = getNowFormatted()
+          const current = processListRef.current
+          const next = current.map((row) => ({
+            ...row,
+            workers: row.workers.map((w) =>
+              w.worker_id && w.start_time && !w.stop_time ? { ...w, stop_time: nowTime } : w
+            ),
+            next_confirmed_at: row.next_confirmed_at ?? nowTime,
+          }))
+          setProcessList(next)
+          setProject((prev) => prev ? { ...prev, status: 'ยกเลิก' } : prev)
+          fetch(`/api/projects/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ processes: next, status: 'ยกเลิก' }),
+          }).catch(console.error)
+          showToast('error', 'REJECT — ยุติงานทั้งหมดแล้ว', 'ทุกกระบวนการถูกปิด สถานะ: ยกเลิก')
+        } else {
+          pendingRejectRef.current = true
+          showToast('warning', 'สแกน CMD_REJECT อีกครั้งเพื่อยืนยัน', 'จะปิดทุกกระบวนการทันที เปลี่ยนสถานะเป็น "ยกเลิก" (5 วินาที)')
+          pendingRejectTimerRef.current = setTimeout(() => { pendingRejectRef.current = false }, 5000)
+        }
         return
       }
 
@@ -1198,6 +1231,22 @@ export default function ProcessDetailsPage() {
                 <p className="text-xs text-gray-500 leading-relaxed">
                   รับงาน — จบงาน<br />
                   บันทึกสถานะ: <span className="font-semibold text-violet-700">รับงาน</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-red-300 bg-red-50 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="CMD_REJECT" color="#991b1b" bg="#fef2f2" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <XCircle className="h-4 w-4 text-red-700" />
+                  <span className="text-sm font-bold text-gray-800">REJECT — ยุติงานทันที</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  สแกน 2 ครั้งเพื่อปิดทุกกระบวนการทันที<br />
+                  บันทึกสถานะ: <span className="font-semibold text-red-700">ยกเลิก</span>
                 </p>
               </div>
             </div>
