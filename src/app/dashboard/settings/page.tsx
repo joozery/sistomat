@@ -1,43 +1,71 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   Settings,
-  Bell,
-  Shield,
-  Monitor,
-  Building2,
   CheckCircle2,
   Save,
-  Clock,
-  Mail,
-  Smartphone,
-  AlertTriangle,
-  Info,
   ListChecks,
   Plus,
   X,
   Loader2,
+  Pencil,
+  Trash2,
+  Signature,
+  Upload,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { useProcessOptions } from '@/lib/useProcessOptions'
+import { useInspectors, type Inspector } from '@/lib/useInspectors'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
   return localStorage.getItem('token') ?? ''
 }
 
-/* ── Process Options Manager ── */
-function ProcessOptionsSection() {
-  const { options, loading, refresh } = useProcessOptions()
+/* ── Generic editable chip-list settings (process options, machine options, ...) ── */
+function OptionsListSection({
+  endpoint,
+  title,
+  description,
+  icon: Icon,
+  iconBg,
+  iconColor,
+  chipBg,
+  chipText,
+  chipBorder,
+  placeholder,
+  saveLabel,
+  useOptions,
+}: {
+  endpoint: string
+  title: string
+  description: string
+  icon: React.ComponentType<{ className?: string }>
+  iconBg: string
+  iconColor: string
+  chipBg: string
+  chipText: string
+  chipBorder: string
+  placeholder: string
+  saveLabel: string
+  useOptions: () => { options: string[]; loading: boolean; refresh: () => void }
+}) {
+  const { options, loading, refresh } = useOptions()
   const [draft, setDraft] = useState<string[]>([])
   const [newOption, setNewOption] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [syncedFrom, setSyncedFrom] = useState<string[] | null>(null)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editValue, setEditValue] = useState('')
 
   // sync draft with fetched options once loaded (or when they change externally)
   if (!loading && syncedFrom !== options && JSON.stringify(syncedFrom) !== JSON.stringify(options)) {
@@ -58,11 +86,33 @@ function ProcessOptionsSection() {
     setSaved(false)
   }
 
+  function startEdit(index: number) {
+    setEditingIndex(index)
+    setEditValue(draft[index])
+  }
+
+  function cancelEdit() {
+    setEditingIndex(null)
+    setEditValue('')
+  }
+
+  function commitEdit() {
+    if (editingIndex === null) return
+    const v = editValue.trim()
+    if (!v || draft.some((o, i) => o === v && i !== editingIndex)) {
+      cancelEdit()
+      return
+    }
+    setDraft((prev) => prev.map((o, i) => (i === editingIndex ? v : o)))
+    setSaved(false)
+    cancelEdit()
+  }
+
   async function handleSave() {
     setSaving(true)
     setError('')
     try {
-      const res = await fetch('/api/settings/process-options', {
+      const res = await fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ options: draft }),
@@ -86,12 +136,12 @@ function ProcessOptionsSection() {
     <div className="bg-white rounded-3xl border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-indigo-50 border-indigo-100">
-            <ListChecks className="h-5 w-5 text-indigo-600" />
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${iconBg}`}>
+            <Icon className={`h-5 w-5 ${iconColor}`} />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-800">ตัวเลือกกระบวนการผลิต</h3>
-            <p className="text-xs text-gray-400">รายการที่แสดงในดรอปดาวน์ &ldquo;กระบวนการ&rdquo; ของหน้าใบงาน</p>
+            <h3 className="text-sm font-bold text-gray-800">{title}</h3>
+            <p className="text-xs text-gray-400">{description}</p>
           </div>
         </div>
         {saved && (
@@ -110,20 +160,49 @@ function ProcessOptionsSection() {
       ) : (
         <>
           <div className="flex flex-wrap gap-2 mb-4">
-            {draft.map((opt) => (
-              <span
-                key={opt}
-                className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100"
-              >
-                {opt}
-                <button
-                  onClick={() => removeOption(opt)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-indigo-200/60 transition-colors"
+            {draft.map((opt, index) =>
+              editingIndex === index ? (
+                <input
+                  key={index}
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+                    if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                  }}
+                  className={`h-7 w-32 rounded-full border ${chipBorder} bg-white px-3 text-xs font-semibold ${chipText} outline-none focus:ring-2 focus:ring-indigo-200`}
+                />
+              ) : (
+                <span
+                  key={opt}
+                  className={`inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full text-xs font-semibold ${chipBg} ${chipText} border ${chipBorder}`}
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
+                  <button
+                    onClick={() => startEdit(index)}
+                    className="hover:underline decoration-dotted underline-offset-2"
+                    title="แก้ไข"
+                  >
+                    {opt}
+                  </button>
+                  <button
+                    onClick={() => startEdit(index)}
+                    className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 transition-colors"
+                    title="แก้ไข"
+                  >
+                    <Pencil className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    onClick={() => removeOption(opt)}
+                    className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 transition-colors"
+                    title="ลบ"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )
+            )}
             {draft.length === 0 && (
               <p className="text-xs text-gray-400">ยังไม่มีตัวเลือก — เพิ่มอย่างน้อย 1 รายการ</p>
             )}
@@ -134,7 +213,7 @@ function ProcessOptionsSection() {
               value={newOption}
               onChange={(e) => setNewOption(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
-              placeholder="เพิ่มกระบวนการใหม่ เช่น CNC 3"
+              placeholder={placeholder}
               className="rounded-xl h-10 text-sm border-gray-200"
             />
             <Button
@@ -157,7 +236,7 @@ function ProcessOptionsSection() {
               className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-xs font-semibold"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              บันทึกตัวเลือกกระบวนการ
+              {saveLabel}
             </Button>
           </div>
         </>
@@ -166,372 +245,302 @@ function ProcessOptionsSection() {
   )
 }
 
-/* ── Toggle Switch ── */
-function Toggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-        checked ? 'bg-[#7B1A1A]' : 'bg-gray-200'
-      }`}
-    >
-      <span
-        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
-          checked ? 'translate-x-5' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  )
-}
+/* ── Inspectors & Signatures Manager ── */
+const emptyInspectorForm = { name: '', signature_url: '' }
 
-/* ── Section Card ── */
-function Section({
-  icon: Icon,
-  iconBg,
-  iconColor,
-  title,
-  description,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  iconBg: string
-  iconColor: string
-  title: string
-  description: string
-  children: React.ReactNode
-}) {
+function InspectorsSection() {
+  const { inspectors, loading, refresh } = useInspectors()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editing, setEditing] = useState<Inspector | null>(null)
+  const [form, setForm] = useState(emptyInspectorForm)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  const [deleting, setDeleting] = useState<Inspector | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  function openAddForm() {
+    setEditing(null)
+    setForm(emptyInspectorForm)
+    setFormError('')
+    setIsFormOpen(true)
+  }
+
+  function openEditForm(insp: Inspector) {
+    setEditing(insp)
+    setForm({ name: insp.name, signature_url: insp.signature_url ?? '' })
+    setFormError('')
+    setIsFormOpen(true)
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setFormError('')
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/upload/signature', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFormError(data.message || 'อัปโหลดไม่สำเร็จ')
+        return
+      }
+      setForm((f) => ({ ...f, signature_url: data.publicUrl }))
+    } catch {
+      setFormError('เกิดข้อผิดพลาดในการอัปโหลด')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleSubmit() {
+    if (!form.name.trim()) {
+      setFormError('กรุณากรอกชื่อผู้ตรวจ')
+      return
+    }
+    setSaving(true)
+    setFormError('')
+    try {
+      const res = await fetch('/api/settings/inspectors', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(
+          editing
+            ? { id: editing.id, name: form.name.trim(), signature_url: form.signature_url || null }
+            : { name: form.name.trim(), signature_url: form.signature_url || null }
+        ),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFormError(data.error || 'บันทึกไม่สำเร็จ')
+        return
+      }
+      setIsFormOpen(false)
+      refresh()
+    } catch {
+      setFormError('เกิดข้อผิดพลาดในการเชื่อมต่อ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleting) return
+    setIsDeleting(true)
+    try {
+      await fetch(`/api/settings/inspectors?id=${deleting.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      })
+      setDeleting(null)
+      refresh()
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className="bg-white rounded-3xl border border-gray-100 p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${iconBg}`}>
-          <Icon className={`h-5 w-5 ${iconColor}`} />
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-rose-50 border-rose-100">
+            <Signature className="h-5 w-5 text-rose-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">ผู้ตรวจสอบ &amp; ลายเซ็น</h3>
+            <p className="text-xs text-gray-400">ใช้เลือกชื่อผู้ตรวจ/ผู้อนุมัติพร้อมลายเซ็นในใบ QC</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-bold text-gray-800">{title}</h3>
-          <p className="text-xs text-gray-400">{description}</p>
-        </div>
+        <Button
+          onClick={openAddForm}
+          size="sm"
+          className="gap-1.5 rounded-full h-8 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-3.5 text-xs font-semibold"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          เพิ่มผู้ตรวจ
+        </Button>
       </div>
-      <div className="space-y-4">{children}</div>
-    </div>
-  )
-}
 
-/* ── Toggle Row ── */
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string
-  description?: string
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-gray-50 last:border-0">
-      <div>
-        <p className="text-sm font-medium text-gray-700">{label}</p>
-        {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
-      </div>
-      <Toggle checked={checked} onChange={onChange} />
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">กำลังโหลด...</span>
+        </div>
+      ) : inspectors.length === 0 ? (
+        <div className="py-8 text-center text-sm text-gray-400">ยังไม่มีผู้ตรวจ — กด &ldquo;เพิ่มผู้ตรวจ&rdquo; เพื่อเริ่มต้น</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {inspectors.map((insp) => (
+            <div
+              key={insp.id}
+              className="relative flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-3 pt-3 pb-2.5"
+            >
+              <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5">
+                <button
+                  onClick={() => openEditForm(insp)}
+                  className="flex h-5 w-5 items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-white transition-colors"
+                  title="แก้ไข"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => setDeleting(insp)}
+                  className="flex h-5 w-5 items-center justify-center rounded-md text-gray-400 hover:text-red-600 hover:bg-white transition-colors"
+                  title="ลบ"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+
+              <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white border border-gray-100 overflow-hidden">
+                {insp.signature_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={insp.signature_url} alt={insp.name} className="max-h-14 max-w-full object-contain" />
+                ) : (
+                  <Signature className="h-5 w-5 text-gray-300" />
+                )}
+              </div>
+              <p className="text-xs font-semibold text-gray-700 text-center line-clamp-1">{insp.name}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add / Edit Dialog */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'แก้ไขผู้ตรวจ' : 'เพิ่มผู้ตรวจ'}</DialogTitle>
+            <DialogDescription>ชื่อและลายเซ็นจะใช้เลือกในหน้าใบ QC ของทุกใบงาน</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="insp-name" className="text-xs font-semibold text-gray-700">ชื่อผู้ตรวจ</Label>
+              <Input
+                id="insp-name"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className="rounded-xl h-10 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700">ลายเซ็น (รูปภาพ)</Label>
+              <div className="flex items-center gap-3">
+                <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg bg-gray-50 border border-gray-200 overflow-hidden">
+                  {form.signature_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.signature_url} alt="ลายเซ็น" className="max-h-16 max-w-full object-contain" />
+                  ) : (
+                    <Signature className="h-5 w-5 text-gray-300" />
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="insp-signature-file"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-1.5 rounded-xl h-9 text-xs font-semibold"
+                >
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  {form.signature_url ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
+                </Button>
+              </div>
+            </div>
+
+            {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsFormOpen(false)} className="rounded-xl">
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={saving || uploading}
+              className="rounded-xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? 'บันทึก' : 'เพิ่มผู้ตรวจ'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm Dialog */}
+      <Dialog open={!!deleting} onOpenChange={(o) => { if (!o) setDeleting(null) }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>ยืนยันการลบผู้ตรวจ</DialogTitle>
+            <DialogDescription>
+              ต้องการลบ <span className="font-semibold text-gray-700">{deleting?.name}</span> ออกจากระบบ? การดำเนินการนี้ไม่สามารถย้อนกลับได้
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)} className="rounded-xl">
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="rounded-xl bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'ลบ'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
 export default function SettingsPage() {
-  const [saved, setSaved] = useState(false)
-
-  /* General */
-  const [companyName, setCompanyName] = useState('Sistomat Ltd.')
-  const [systemName, setSystemName] = useState('Sistomat ERP')
-  const [timezone, setTimezone] = useState('Asia/Bangkok')
-
-  /* Notifications */
-  const [notifyEmail, setNotifyEmail] = useState(true)
-  const [notifyPush, setNotifyPush] = useState(true)
-  const [notifyOverdue, setNotifyOverdue] = useState(true)
-  const [notifyNewJob, setNotifyNewJob] = useState(false)
-  const [notifyDailyReport, setNotifyDailyReport] = useState(true)
-
-  /* Display */
-  const [dateFormat, setDateFormat] = useState('th-TH')
-  const [compactMode, setCompactMode] = useState(false)
-  const [showSidebar, setShowSidebar] = useState(true)
-
-  /* Security */
-  const [sessionTimeout, setSessionTimeout] = useState('480')
-  const [require2fa, setRequire2fa] = useState(false)
-  const [logActivity, setLogActivity] = useState(true)
-
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
-  }
-
   return (
     <div className="space-y-6 font-sans">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">System</p>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            ตั้งค่าระบบ
-            <Settings className="h-5 w-5 text-[#7B1A1A]" />
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {saved && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold animate-in fade-in-0">
-              <CheckCircle2 className="h-4 w-4" />
-              บันทึกการตั้งค่าแล้ว
-            </div>
-          )}
-          <Button
-            onClick={handleSave}
-            className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-sm font-semibold shadow-sm"
-          >
-            <Save className="h-4 w-4" />
-            บันทึกการตั้งค่า
-          </Button>
-        </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">System</p>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          ตั้งค่าระบบ
+          <Settings className="h-5 w-5 text-[#7B1A1A]" />
+        </h1>
       </div>
 
-      {/* Grid layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <OptionsListSection
+        endpoint="/api/settings/process-options"
+        title="ตัวเลือกกระบวนการ / เครื่องจักร"
+        description="ใช้ทั้งใน dropdown “กระบวนการ” ของหน้าใบงาน และสิทธิ์เครื่องจักรตอนเพิ่ม/แก้ไขพนักงาน (รายการเดียวกัน)"
+        icon={ListChecks}
+        iconBg="bg-indigo-50 border-indigo-100"
+        iconColor="text-indigo-600"
+        chipBg="bg-indigo-50"
+        chipText="text-indigo-700"
+        chipBorder="border-indigo-100"
+        placeholder="เพิ่มกระบวนการ/เครื่องจักรใหม่ เช่น CNC 6"
+        saveLabel="บันทึกตัวเลือก"
+        useOptions={useProcessOptions}
+      />
 
-        {/* ── General ── */}
-        <Section
-          icon={Building2}
-          iconBg="bg-blue-50 border-blue-100"
-          iconColor="text-blue-600"
-          title="ข้อมูลองค์กร"
-          description="ชื่อบริษัท ชื่อระบบ และเขตเวลา"
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="company" className="text-xs font-semibold text-gray-700">ชื่อบริษัท</Label>
-            <Input
-              id="company"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="rounded-xl h-10 text-sm border-gray-200"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="sysname" className="text-xs font-semibold text-gray-700">ชื่อระบบ</Label>
-            <Input
-              id="sysname"
-              value={systemName}
-              onChange={(e) => setSystemName(e.target.value)}
-              className="rounded-xl h-10 text-sm border-gray-200"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="tz" className="text-xs font-semibold text-gray-700">เขตเวลา (Timezone)</Label>
-            <select
-              id="tz"
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-[#7B1A1A] focus:outline-none transition-colors"
-            >
-              <option value="Asia/Bangkok">Asia/Bangkok (UTC+7)</option>
-              <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
-              <option value="UTC">UTC (UTC+0)</option>
-            </select>
-          </div>
-        </Section>
-
-        {/* ── Notifications ── */}
-        <Section
-          icon={Bell}
-          iconBg="bg-amber-50 border-amber-100"
-          iconColor="text-amber-600"
-          title="การแจ้งเตือน"
-          description="กำหนดช่องทางและเงื่อนไขการแจ้งเตือน"
-        >
-          <ToggleRow
-            label="แจ้งเตือนทางอีเมล"
-            description="ส่งสรุปรายงานและการแจ้งเตือนสำคัญทางอีเมล"
-            checked={notifyEmail}
-            onChange={setNotifyEmail}
-          />
-          <ToggleRow
-            label="แจ้งเตือน Push Notification"
-            description="แจ้งเตือนในแอปแบบ real-time"
-            checked={notifyPush}
-            onChange={setNotifyPush}
-          />
-          <ToggleRow
-            label="แจ้งเตือนงานเกินกำหนด"
-            description="แจ้งเตือนเมื่อใบงานเกินวันกำหนดส่ง"
-            checked={notifyOverdue}
-            onChange={setNotifyOverdue}
-          />
-          <ToggleRow
-            label="แจ้งเตือนเมื่อมีใบงานใหม่"
-            checked={notifyNewJob}
-            onChange={setNotifyNewJob}
-          />
-          <ToggleRow
-            label="รายงานประจำวัน"
-            description="สรุปสถิติการผลิตส่งให้ทุกเช้า 08:00"
-            checked={notifyDailyReport}
-            onChange={setNotifyDailyReport}
-          />
-        </Section>
-
-        {/* ── Display ── */}
-        <Section
-          icon={Monitor}
-          iconBg="bg-purple-50 border-purple-100"
-          iconColor="text-purple-600"
-          title="การแสดงผล"
-          description="รูปแบบวันที่ เลย์เอาต์ และ UI"
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="datefmt" className="text-xs font-semibold text-gray-700">รูปแบบวันที่</Label>
-            <select
-              id="datefmt"
-              value={dateFormat}
-              onChange={(e) => setDateFormat(e.target.value)}
-              className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-[#7B1A1A] focus:outline-none transition-colors"
-            >
-              <option value="th-TH">ไทย — วันที่ เดือน ปี พ.ศ.</option>
-              <option value="en-GB">อังกฤษ — DD/MM/YYYY</option>
-              <option value="en-US">อเมริกัน — MM/DD/YYYY</option>
-            </select>
-          </div>
-          <ToggleRow
-            label="Compact Mode"
-            description="ลดขนาด padding และ font เพื่อแสดงข้อมูลได้มากขึ้น"
-            checked={compactMode}
-            onChange={setCompactMode}
-          />
-          <ToggleRow
-            label="แสดง Sidebar อัตโนมัติ"
-            description="เปิด sidebar ทุกครั้งที่เข้าสู่ระบบ"
-            checked={showSidebar}
-            onChange={setShowSidebar}
-          />
-
-          {/* Info note */}
-          <div className="flex items-start gap-2.5 rounded-2xl bg-blue-50/60 border border-blue-100 px-4 py-3 mt-2">
-            <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-700">บางการตั้งค่าจะมีผลหลังจาก refresh หน้าเว็บ</p>
-          </div>
-        </Section>
-
-        {/* ── Security ── */}
-        <Section
-          icon={Shield}
-          iconBg="bg-red-50 border-red-100"
-          iconColor="text-[#7B1A1A]"
-          title="ความปลอดภัย"
-          description="Session, 2FA และ activity log"
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="timeout" className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-gray-400" />
-              หมดเวลา Session (นาที)
-            </Label>
-            <Input
-              id="timeout"
-              type="number"
-              min="15"
-              max="1440"
-              value={sessionTimeout}
-              onChange={(e) => setSessionTimeout(e.target.value)}
-              className="rounded-xl h-10 text-sm border-gray-200"
-            />
-            <p className="text-[11px] text-gray-400">ปัจจุบัน: {Math.floor(Number(sessionTimeout) / 60)} ชั่วโมง {Number(sessionTimeout) % 60} นาที</p>
-          </div>
-
-          <ToggleRow
-            label="เปิดใช้ Two-Factor Authentication"
-            description="ผู้ใช้ต้องยืนยัน OTP เมื่อเข้าสู่ระบบ"
-            checked={require2fa}
-            onChange={setRequire2fa}
-          />
-          <ToggleRow
-            label="บันทึก Activity Log"
-            description="เก็บประวัติการเข้าใช้งานและการแก้ไขข้อมูล"
-            checked={logActivity}
-            onChange={setLogActivity}
-          />
-
-          {require2fa && (
-            <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50/80 border border-amber-100 px-4 py-3">
-              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700">การเปิด 2FA จะต้องตั้งค่า authenticator app ด้วย — ติดต่อผู้ดูแลระบบ</p>
-            </div>
-          )}
-        </Section>
-
-      </div>
-
-      {/* Process options — real, DB-backed */}
-      <ProcessOptionsSection />
-
-      {/* Contact channels info */}
-      <div className="bg-white rounded-3xl border border-gray-100 p-6">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100">
-            <Mail className="h-5 w-5 text-emerald-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-gray-800">ช่องทางการแจ้งเตือน</h3>
-            <p className="text-xs text-gray-400">อีเมลและเบอร์โทรสำหรับรับการแจ้งเตือนระบบ</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="notify-email" className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <Mail className="h-3.5 w-3.5 text-gray-400" />
-              อีเมลสำหรับรับแจ้งเตือน
-            </Label>
-            <Input
-              id="notify-email"
-              type="email"
-              defaultValue="admin@sistomat.com"
-              className="rounded-xl h-10 text-sm border-gray-200"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="notify-phone" className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <Smartphone className="h-3.5 w-3.5 text-gray-400" />
-              เบอร์โทร (SMS Alert)
-            </Label>
-            <Input
-              id="notify-phone"
-              type="tel"
-              defaultValue="081-234-5678"
-              className="rounded-xl h-10 text-sm border-gray-200"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Save */}
-      <div className="flex justify-end pb-4">
-        <Button
-          onClick={handleSave}
-          className="gap-2 rounded-full h-11 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20"
-        >
-          <Save className="h-4 w-4" />
-          บันทึกการตั้งค่าทั้งหมด
-        </Button>
-      </div>
+      <InspectorsSection />
 
     </div>
   )

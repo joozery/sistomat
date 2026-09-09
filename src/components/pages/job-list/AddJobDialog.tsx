@@ -56,6 +56,18 @@ function suggestLevel2(parentId: string, existingCodes: string[]): string {
   return `${parentId}-${String(next).padStart(3, '0')}`
 }
 
+// หาเลข BU (level3) ถัดไปที่ยังไม่ถูกใช้ภายใต้ level2 เดียวกัน — ต่อจากของเดิมแทนที่จะเริ่ม 01 ใหม่ทุกครั้ง
+function nextLevel3Suffix(level2: string, existingCodes: string[]): number {
+  const prefix = level2.trim()
+  if (!prefix) return 1
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`^${escaped}-(\\d{2})$`)
+  const nums = existingCodes
+    .map((c) => c.match(re)?.[1])
+    .filter(Boolean).map(Number)
+  return nums.length > 0 ? Math.max(...nums) + 1 : 1
+}
+
 function uploadOne(
   file: File,
   projectId: string,
@@ -105,6 +117,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
   // Step 3 BU rows
   const [rows, setRows] = useState<BuRow[]>([])
   const [syncCode, setSyncCode] = useState(false)
+  const [existingCodes, setExistingCodes] = useState<string[]>([])
 
   // Upload progress
   const [uploadingFileName, setUploadingFileName] = useState('')
@@ -120,7 +133,9 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
       .then((r) => r.json())
       .then((data) => {
         const jobs = Array.isArray(data) ? data : (data.jobs ?? [])
-        setJobCode(suggestLevel2(parentId, jobs.map((j: { job_code: string }) => j.job_code)))
+        const codes = jobs.map((j: { job_code: string }) => j.job_code)
+        setExistingCodes(codes)
+        setJobCode(suggestLevel2(parentId, codes))
       })
       .catch(() => setJobCode(`${parentId}-001`))
   }, [open, parentId])
@@ -128,7 +143,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
   function reset() {
     setStep(1); setSaving(false); setSaveError('')
     setJobCode(''); setDueDate(''); setQuantity('1'); setCoating(''); setOutsource('')
-    setFiles([]); setFileError(''); setRows([]); setSyncCode(false)
+    setFiles([]); setFileError(''); setRows([]); setSyncCode(false); setExistingCodes([])
     setUploadingFileName(''); setUploadIndex(0); setUploadProgress(0)
   }
 
@@ -166,12 +181,13 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
       if (!groups.has(base)) groups.set(base, [])
       groups.get(base)!.push(f)
     }
+    const startSuffix = nextLevel3Suffix(jobCode, existingCodes)
     const buRows: BuRow[] = Array.from(groups.entries()).map(([base, grpFiles], i) => ({
       id: `${base}-${i}`,
       files: grpFiles,
       drawingName: base,
       jobCode: jobCode.trim(),
-      level3: `${jobCode.trim()}-${String(i + 1).padStart(2, '0')}`,
+      level3: `${jobCode.trim()}-${String(startSuffix + i).padStart(2, '0')}`,
       level3Touched: false,
     }))
     setRows(buRows)
@@ -440,9 +456,10 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                         const next = !syncCode; setSyncCode(next)
                         if (next && rows[0]?.jobCode.trim()) {
                           const base = rows[0].jobCode.trim()
+                          const start = nextLevel3Suffix(base, existingCodes)
                           setRows((prev) => prev.map((r, i) => ({
                             ...r, jobCode: base,
-                            level3: r.level3Touched ? r.level3 : `${base}-${String(i + 1).padStart(2, '0')}`,
+                            level3: r.level3Touched ? r.level3 : `${base}-${String(start + i).padStart(2, '0')}`,
                           })))
                         }
                       }}
@@ -491,13 +508,17 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                             onChange={(e) => {
                               const code = e.target.value
                               if (syncCode) {
+                                const start = nextLevel3Suffix(code, existingCodes)
                                 setRows((prev) => prev.map((row, i) => ({
                                   ...row, jobCode: code,
-                                  level3: row.level3Touched ? row.level3 : code.trim() ? `${code.trim()}-${String(i + 1).padStart(2, '0')}` : '',
+                                  level3: row.level3Touched ? row.level3 : code.trim() ? `${code.trim()}-${String(start + i).padStart(2, '0')}` : '',
                                 })))
                               } else {
                                 const patch: Partial<BuRow> = { jobCode: code }
-                                if (!r.level3Touched) patch.level3 = code.trim() ? `${code.trim()}-${String(rowIdx + 1).padStart(2, '0')}` : ''
+                                if (!r.level3Touched) {
+                                  const start = nextLevel3Suffix(code, existingCodes)
+                                  patch.level3 = code.trim() ? `${code.trim()}-${String(start).padStart(2, '0')}` : ''
+                                }
                                 updateRow(r.id, patch)
                               }
                             }}

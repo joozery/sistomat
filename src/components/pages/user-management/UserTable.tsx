@@ -28,7 +28,6 @@ interface UserItem {
   code?: number
   email?: string
   phone?: string
-  machines?: string[]
   created_at?: string
 }
 
@@ -54,16 +53,6 @@ function getRoleBadge(role: string) {
   if (role === 'QC')    return 'text-rose-700 bg-rose-50 border-rose-100'
   if (role === 'MAT')   return 'text-emerald-700 bg-emerald-50 border-emerald-100'
   return 'text-gray-700 bg-gray-50 border-gray-200'
-}
-
-function getMachineBadge(machine: string) {
-  if (machine.includes('LATHE')) return 'bg-amber-50 text-amber-800 border-amber-200/80'
-  if (machine.includes('CNC'))   return 'bg-purple-50 text-purple-800 border-purple-200/80'
-  if (machine.includes('ADMIN')) return 'bg-red-50 text-[#7B1A1A] border-red-200/80'
-  if (machine.includes('MAT'))   return 'bg-emerald-50 text-emerald-800 border-emerald-200/80'
-  if (machine.includes('QC'))    return 'bg-rose-50 text-rose-800 border-rose-200/80'
-  if (machine.includes('CAM'))   return 'bg-blue-50 text-blue-800 border-blue-200/80'
-  return 'bg-gray-50 text-gray-700 border-gray-200'
 }
 
 function getToken() {
@@ -106,11 +95,11 @@ export function UserTable() {
 
   // Add dialog
   const [isAddOpen, setIsAddOpen] = useState(false)
-  const [addForm, setAddForm] = useState({ username: '', password: '', role: 'User', name: '', code: '', email: '', phone: '', machines: '' })
+  const [addForm, setAddForm] = useState({ username: '', password: '', role: 'User', name: '', code: '', email: '', phone: '' })
 
   // Edit dialog
   const [editingUser, setEditingUser] = useState<UserItem | null>(null)
-  const [editForm, setEditForm] = useState({ username: '', password: '', role: 'User', name: '', code: '', email: '', phone: '', machines: '' })
+  const [editForm, setEditForm] = useState({ username: '', password: '', role: 'User', name: '', code: '', email: '', phone: '' })
 
   // Delete confirm
   const [deletingUser, setDeletingUser] = useState<UserItem | null>(null)
@@ -144,13 +133,12 @@ export function UserTable() {
         body: JSON.stringify({
           ...addForm,
           code: addForm.code ? Number(addForm.code) : null,
-          machines: addForm.machines ? addForm.machines.split(',').map((m) => m.trim()).filter(Boolean) : [],
         }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'เกิดข้อผิดพลาด'); return }
       setIsAddOpen(false)
-      setAddForm({ username: '', password: '', role: 'User', name: '', code: '', email: '', phone: '', machines: '' })
+      setAddForm({ username: '', password: '', role: 'User', name: '', code: '', email: '', phone: '' })
       await fetchUsers()
     } finally { setSaving(false) }
   }
@@ -168,7 +156,6 @@ export function UserTable() {
           id: editingUser._id,
           ...editForm,
           code: editForm.code ? Number(editForm.code) : null,
-          machines: editForm.machines ? editForm.machines.split(',').map((m) => m.trim()).filter(Boolean) : [],
           password: editForm.password || undefined,
         }),
       })
@@ -202,7 +189,6 @@ export function UserTable() {
       code: u.code ? String(u.code) : '',
       email: u.email || '',
       phone: u.phone || '',
-      machines: (u.machines || []).join(', '),
     })
     setError('')
   }
@@ -231,7 +217,6 @@ export function UserTable() {
             <TableHead className="w-12 text-center text-xs font-bold text-gray-400 uppercase">#</TableHead>
             <TableHead className="text-xs font-bold text-gray-500 uppercase">ข้อมูลผู้ใช้งาน</TableHead>
             <TableHead className="text-xs font-bold text-gray-500 uppercase">บทบาท</TableHead>
-            <TableHead className="text-xs font-bold text-gray-500 uppercase">สิทธิ์เครื่องจักร</TableHead>
             <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-24">จัดการ</TableHead>
           </TableRow>
         </TableHeader>
@@ -239,13 +224,13 @@ export function UserTable() {
         <TableBody className="divide-y divide-gray-100">
           {loading ? (
             <TableRow>
-              <TableCell colSpan={5} className="h-32 text-center">
+              <TableCell colSpan={4} className="h-32 text-center">
                 <Loader2 className="h-6 w-6 animate-spin text-[#7B1A1A] mx-auto" />
               </TableCell>
             </TableRow>
           ) : filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="h-32 text-center text-gray-400">
+              <TableCell colSpan={4} className="h-32 text-center text-gray-400">
                 <div className="flex flex-col items-center justify-center gap-2">
                   <Search className="h-6 w-6 opacity-30" />
                   <p className="text-sm">ไม่พบข้อมูลผู้ใช้งาน</p>
@@ -299,18 +284,6 @@ export function UserTable() {
                     </span>
                   </TableCell>
 
-                  <TableCell>
-                    {(u.machines || []).length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {(u.machines || []).map((m, mi) => (
-                          <span key={`${m}-${mi}`} className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${getMachineBadge(m)}`}>
-                            {m}
-                          </span>
-                        ))}
-                      </div>
-                    ) : <span className="text-xs text-gray-300">—</span>}
-                  </TableCell>
-
                   <TableCell className="text-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 transition-colors outline-none">
@@ -356,7 +329,7 @@ export function UserTable() {
               <Sparkles className="h-5 w-5 text-[#7B1A1A]" /> เพิ่มผู้ใช้งานใหม่
             </DialogTitle>
             <DialogDescription className="text-gray-500 text-xs mt-1">
-              กรอกข้อมูลผู้ใช้งาน บทบาท และสิทธิ์เครื่องจักร
+              กรอกข้อมูลผู้ใช้งานและบทบาท
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
@@ -400,14 +373,6 @@ export function UserTable() {
                 <Label className="text-xs font-semibold text-gray-700">เบอร์โทร</Label>
                 <Input type="tel" placeholder="08x-xxx-xxxx" value={addForm.phone}
                   onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
-                  className="rounded-xl h-10 text-sm border-gray-200" />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-700">
-                  สิทธิ์เครื่องจักร <span className="font-normal text-gray-400">(คั่นด้วยจุลภาค)</span>
-                </Label>
-                <Input placeholder="เช่น CNC 1, LATHE 2, QC" value={addForm.machines}
-                  onChange={(e) => setAddForm({ ...addForm, machines: e.target.value })}
                   className="rounded-xl h-10 text-sm border-gray-200" />
               </div>
             </div>
@@ -477,14 +442,6 @@ export function UserTable() {
                 <Label className="text-xs font-semibold text-gray-700">เบอร์โทร</Label>
                 <Input type="tel" value={editForm.phone}
                   onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                  className="rounded-xl h-10 text-sm border-gray-200" />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-700">
-                  สิทธิ์เครื่องจักร <span className="font-normal text-gray-400">(คั่นด้วยจุลภาค)</span>
-                </Label>
-                <Input value={editForm.machines}
-                  onChange={(e) => setEditForm({ ...editForm, machines: e.target.value })}
                   className="rounded-xl h-10 text-sm border-gray-200" />
               </div>
             </div>

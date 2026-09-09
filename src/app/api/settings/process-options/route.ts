@@ -21,10 +21,12 @@ function verifyAdmin(req: NextRequest) {
   if (payload.role !== 'Admin') throw new Error('Forbidden')
 }
 
-// ตัวเลือกกระบวนการเริ่มต้น — ใช้ครั้งแรกเท่านั้นตอนยังไม่มี doc ใน DB
+// ตัวเลือกกระบวนการ/เครื่องจักรเริ่มต้น — ใช้ครั้งแรกเท่านั้นตอนยังไม่มี doc ใน DB
+// รายการเดียวกันนี้ใช้ทั้งใน dropdown "กระบวนการ" ของใบงาน และสิทธิ์เครื่องจักรของพนักงาน
 const DEFAULT_PROCESS_OPTIONS = [
   'MATERAIL', 'QC', 'CAM1', 'CNC1', 'ML', 'QC FN', 'เสร็จงาน',
-  'CNC SPAR', 'CAM 1', 'CAM 2', 'CNC 1', 'CNC 2',
+  'CNC SPAR', 'CAM 1', 'CAM 2', 'CNC 1', 'CNC 2', 'CNC 3', 'CNC 4', 'CNC 5',
+  'LATHE 1', 'LATHE 2', 'MAT', 'ADMIN', 'ADMIN 1', 'ADMIN 2', 'ADMIN 3',
 ]
 
 // GET /api/settings/process-options — any authenticated user (ใช้แสดงใน dropdown ของทุกคน)

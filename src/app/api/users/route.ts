@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { username, password, role, name, code, email, phone, machines } = body
+    const { username, password, role, name, code, email, phone } = body
 
     if (!username || !password) {
       return NextResponse.json({ error: 'กรุณากรอก username และ password' }, { status: 400 })
@@ -69,7 +69,6 @@ export async function POST(req: NextRequest) {
       code: code ? Number(code) : null,
       email: email || '',
       phone: phone || '',
-      machines: Array.isArray(machines) ? machines : [],
       created_at: new Date(),
     })
 
@@ -88,7 +87,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { id, username, password, role, name, code, email, phone, machines } = body
+    const { id, username, password, role, name, code, email, phone } = body
 
     if (!id) return NextResponse.json({ error: 'กรุณาระบุ id' }, { status: 400 })
 
@@ -103,7 +102,6 @@ export async function PUT(req: NextRequest) {
     if (code !== undefined) $set.code = code ? Number(code) : null
     if (email !== undefined) $set.email = email
     if (phone !== undefined) $set.phone = phone
-    if (machines !== undefined) $set.machines = Array.isArray(machines) ? machines : []
     if (password) $set.password = await bcrypt.hash(password, 10)
 
     const result = await db.collection('users').updateOne(

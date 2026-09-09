@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Printer, ArrowLeft, Save, Loader2, CheckCircle2 } from 'lucide-react'
+import { useInspectors } from '@/lib/useInspectors'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -26,7 +27,9 @@ interface QcData {
   result: 'accept' | 'reject' | ''
   remark: string
   inspector: string
+  inspector_signature: string
   approver: string
+  approver_signature: string
 }
 
 function emptyPointRow(): PointRow {
@@ -36,13 +39,89 @@ function emptyPointRow(): PointRow {
 function emptyQcData(): QcData {
   const points: Record<string, PointRow> = {}
   for (const pt of QC_POINTS) points[pt] = emptyPointRow()
-  return { date: '', points, activePoints: [...QC_POINTS], equipment: [], result: '', remark: '', inspector: '', approver: '' }
+  return {
+    date: '', points, activePoints: [...QC_POINTS], equipment: [], result: '', remark: '',
+    inspector: '', inspector_signature: '', approver: '', approver_signature: '',
+  }
+}
+
+function SignaturePickerPopover({
+  inspectors,
+  onPick,
+  onClear,
+  onClose,
+}: {
+  inspectors: { id: string; name: string; signature_url: string | null }[]
+  onPick: (name: string) => void
+  onClear: () => void
+  onClose: () => void
+}) {
+  return (
+    <>
+      <div className="no-print" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
+      <div
+        className="no-print"
+        style={{
+          position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 201, marginTop: '4px', width: '180px',
+          backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '8px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: '6px',
+        }}
+      >
+        {inspectors.length === 0 ? (
+          <p style={{ fontSize: '10px', color: '#999', padding: '8px', textAlign: 'center' }}>
+            ยังไม่มีลายเซ็น — ไปเพิ่มที่หน้าตั้งค่าระบบ
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '220px', overflowY: 'auto' }}>
+            {inspectors.map((i) => (
+              <button
+                key={i.id}
+                onClick={() => onPick(i.name)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 6px',
+                  border: 'none', borderRadius: '6px', background: 'transparent',
+                  cursor: 'pointer', textAlign: 'left', fontFamily: 'Arial, sans-serif',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ width: '48px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', border: '1px solid #eee', borderRadius: '4px', flexShrink: 0 }}>
+                  {i.signature_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={i.signature_url} alt={i.name} style={{ maxHeight: '20px', maxWidth: '44px', objectFit: 'contain' }} />
+                  ) : (
+                    <span style={{ fontSize: '8px', color: '#ccc' }}>ไม่มีรูป</span>
+                  )}
+                </div>
+                <span style={{ fontSize: '10px', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ borderTop: '1px solid #eee', marginTop: '4px', paddingTop: '4px' }}>
+          <button
+            onClick={onClear}
+            style={{
+              width: '100%', border: 'none', background: 'transparent', cursor: 'pointer',
+              fontSize: '10px', color: '#c00', padding: '5px 6px', textAlign: 'center', fontFamily: 'Arial, sans-serif',
+            }}
+          >
+            ล้างลายเซ็น
+          </button>
+        </div>
+      </div>
+    </>
+  )
 }
 
 export default function QcSheetPage() {
   const params = useParams()
   const router = useRouter()
   const id = params?.id as string
+
+  const { inspectors } = useInspectors()
+  const [signaturePicker, setSignaturePicker] = useState<'inspector' | 'approver' | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [found, setFound] = useState(false)
@@ -79,6 +158,21 @@ export default function QcSheetPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // ถ้ามีผู้ตรวจตั้งค่าไว้แค่คนเดียว ไม่ต้องให้กดเลือกเอง — ใส่ลายเซ็นให้อัตโนมัติ
+  const autoFilledRef = useRef(false)
+  useEffect(() => {
+    if (loading || autoFilledRef.current || inspectors.length !== 1) return
+    autoFilledRef.current = true
+    const only = inspectors[0]
+    setQc((prev) => ({
+      ...prev,
+      inspector: prev.inspector || only.name,
+      inspector_signature: prev.inspector_signature || (only.signature_url ?? ''),
+      approver: prev.approver || only.name,
+      approver_signature: prev.approver_signature || (only.signature_url ?? ''),
+    }))
+  }, [loading, inspectors])
+
   function updatePoint(pt: string, patch: Partial<PointRow>) {
     setQc((prev) => ({ ...prev, points: { ...prev.points, [pt]: { ...prev.points[pt], ...patch } } }))
     setSaved(false)
@@ -106,6 +200,25 @@ export default function QcSheetPage() {
   function patchQc(patch: Partial<QcData>) {
     setQc((prev) => ({ ...prev, ...patch }))
     setSaved(false)
+  }
+
+  function pickInspector(field: 'inspector' | 'approver', name: string) {
+    const found = inspectors.find((i) => i.name === name)
+    patchQc(
+      field === 'inspector'
+        ? { inspector: name, inspector_signature: found?.signature_url ?? '' }
+        : { approver: name, approver_signature: found?.signature_url ?? '' }
+    )
+    setSignaturePicker(null)
+  }
+
+  function clearSignature(field: 'inspector' | 'approver') {
+    patchQc(
+      field === 'inspector'
+        ? { inspector: '', inspector_signature: '' }
+        : { approver: '', approver_signature: '' }
+    )
+    setSignaturePicker(null)
   }
 
   function addPoint() {
@@ -434,23 +547,57 @@ export default function QcSheetPage() {
                     </label>
                   ))}
                 </td>
-                <td style={td({ textAlign: 'center', height: '80px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px' })}>
-                  <strong>INSPECTER / QC</strong>
-                  <input
-                    value={qc.inspector}
-                    onChange={(e) => patchQc({ inspector: e.target.value })}
-                    placeholder="ชื่อผู้ตรวจ"
-                    style={{ ...cellInput, textAlign: 'center', borderBottom: '1px solid #999', marginTop: '6px' }}
-                  />
+                <td style={td({ textAlign: 'center', height: '150px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px', position: 'relative' })}>
+                  <div
+                    onClick={() => setSignaturePicker((p) => (p === 'inspector' ? null : 'inspector'))}
+                    style={{ height: '95px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', cursor: 'pointer' }}
+                    title="คลิกเพื่อเปลี่ยนลายเซ็น"
+                  >
+                    {qc.inspector_signature ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={qc.inspector_signature} alt="ลายเซ็นผู้ตรวจ" style={{ maxHeight: '90px', maxWidth: '100%', objectFit: 'contain' }} />
+                    ) : (
+                      <span className="no-print" style={{ fontSize: '9px', color: '#aaa', border: '1px dashed #ccc', borderRadius: '4px', padding: '4px 8px' }}>
+                        คลิกเลือกลายเซ็น
+                      </span>
+                    )}
+                  </div>
+                  <strong style={{ display: 'block', marginTop: '4px' }}>INSPECTER / QC</strong>
+
+                  {signaturePicker === 'inspector' && (
+                    <SignaturePickerPopover
+                      inspectors={inspectors}
+                      onPick={(name) => pickInspector('inspector', name)}
+                      onClear={() => clearSignature('inspector')}
+                      onClose={() => setSignaturePicker(null)}
+                    />
+                  )}
                 </td>
-                <td style={td({ textAlign: 'center', height: '80px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px' })}>
-                  <strong>APPROVE</strong>
-                  <input
-                    value={qc.approver}
-                    onChange={(e) => patchQc({ approver: e.target.value })}
-                    placeholder="ชื่อผู้อนุมัติ"
-                    style={{ ...cellInput, textAlign: 'center', borderBottom: '1px solid #999', marginTop: '6px' }}
-                  />
+                <td style={td({ textAlign: 'center', height: '150px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px', position: 'relative' })}>
+                  <div
+                    onClick={() => setSignaturePicker((p) => (p === 'approver' ? null : 'approver'))}
+                    style={{ height: '95px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', cursor: 'pointer' }}
+                    title="คลิกเพื่อเปลี่ยนลายเซ็น"
+                  >
+                    {qc.approver_signature ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={qc.approver_signature} alt="ลายเซ็นผู้อนุมัติ" style={{ maxHeight: '90px', maxWidth: '100%', objectFit: 'contain' }} />
+                    ) : (
+                      <span className="no-print" style={{ fontSize: '9px', color: '#aaa', border: '1px dashed #ccc', borderRadius: '4px', padding: '4px 8px' }}>
+                        คลิกเลือกลายเซ็น
+                      </span>
+                    )}
+                  </div>
+                  <strong style={{ display: 'block', marginTop: '4px' }}>APPROVE</strong>
+
+                  {signaturePicker === 'approver' && (
+                    <SignaturePickerPopover
+                      inspectors={inspectors}
+                      onPick={(name) => pickInspector('approver', name)}
+                      onClear={() => clearSignature('approver')}
+                      onClose={() => setSignaturePicker(null)}
+                    />
+                  )}
                 </td>
               </tr>
             </tbody>

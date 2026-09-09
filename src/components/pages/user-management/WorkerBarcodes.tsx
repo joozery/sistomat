@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useState, useCallback, useEffect } from 'react'
-import { Printer, ShieldOff, ShieldCheck, Loader2, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Printer, ShieldOff, ShieldCheck, Loader2, Plus, Pencil, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +11,7 @@ import {
   DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { useWorkersList } from '@/lib/useWorkersList'
+import { useProcessOptions } from '@/lib/useProcessOptions'
 import type { WorkerData } from '@/lib/workers'
 
 const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
@@ -24,10 +25,11 @@ interface WorkerRow extends WorkerData {
   id: string
 }
 
-const emptyForm = { code: '', name: '', machines: '', username: '' }
+const emptyForm = { code: '', name: '', machines: [] as string[], username: '' }
 
 export function WorkerBarcodes() {
   const { workers, loading, refresh } = useWorkersList()
+  const { options: machineOptions } = useProcessOptions()
   const [blockedCodes, setBlockedCodes] = useState<Set<number>>(new Set())
   const [toggling, setToggling] = useState<number | null>(null)
 
@@ -83,11 +85,20 @@ export function WorkerBarcodes() {
     setForm({
       code: String(w.code),
       name: w.name,
-      machines: w.machines.join(', '),
+      machines: w.machines,
       username: w.username ?? '',
     })
     setFormError('')
     setIsFormOpen(true)
+  }
+
+  function addMachine(machine: string) {
+    if (!machine || form.machines.includes(machine)) return
+    setForm((f) => ({ ...f, machines: [...f.machines, machine] }))
+  }
+
+  function removeMachine(machine: string) {
+    setForm((f) => ({ ...f, machines: f.machines.filter((m) => m !== machine) }))
   }
 
   async function handleSubmit() {
@@ -101,7 +112,7 @@ export function WorkerBarcodes() {
       const payload = {
         code: Number(form.code),
         name: form.name.trim(),
-        machines: form.machines.split(',').map((m) => m.trim()).filter(Boolean),
+        machines: form.machines,
         username: form.username.trim() || undefined,
       }
       const res = await fetch('/api/workers', {
@@ -300,14 +311,48 @@ export function WorkerBarcodes() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="w-machines" className="text-xs font-semibold text-gray-700">เครื่องจักร / สิทธิ์ (คั่นด้วยจุลภาค)</Label>
-              <Input
-                id="w-machines"
-                value={form.machines}
-                onChange={(e) => setForm((f) => ({ ...f, machines: e.target.value }))}
-                placeholder="เช่น CNC 1, CNC 2, LATHE 1"
-                className="rounded-xl h-10 text-sm"
-              />
+              <Label className="text-xs font-semibold text-gray-700">เครื่องจักร / สิทธิ์</Label>
+              {machineOptions.length === 0 ? (
+                <p className="text-xs text-gray-400">
+                  ยังไม่มีรายการเครื่องจักร — ไปเพิ่มที่หน้า{' '}
+                  <a href="/dashboard/settings" className="underline font-semibold text-[#7B1A1A]">ตั้งค่าระบบ</a>
+                </p>
+              ) : (
+                <>
+                  <select
+                    value=""
+                    onChange={(e) => addMachine(e.target.value)}
+                    className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-[#7B1A1A] focus:outline-none transition-colors"
+                  >
+                    <option value="">— เลือกเครื่องจักร —</option>
+                    {machineOptions
+                      .filter((m) => !form.machines.includes(m))
+                      .map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                  </select>
+
+                  {form.machines.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {form.machines.map((m) => (
+                        <span
+                          key={m}
+                          className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-[#7B1A1A] border border-red-100"
+                        >
+                          {m}
+                          <button
+                            type="button"
+                            onClick={() => removeMachine(m)}
+                            className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-red-200/60 transition-colors"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="w-username" className="text-xs font-semibold text-gray-700">Username สำหรับเข้าระบบ (ถ้ามี)</Label>
