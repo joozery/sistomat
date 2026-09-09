@@ -1,16 +1,33 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
 import { ProcessTable, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
-import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess } from '@/lib/workers'
+import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess, isRowCompleted } from '@/lib/workers'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then((m) => m.QRCodeSVG), { ssr: false })
+const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
+
+function CmdBarcode({ value, color, bg }: { value: string; color: string; bg: string }) {
+  return (
+    <Barcoder
+      value={value}
+      format="CODE128"
+      width={2}
+      height={56}
+      fontSize={11}
+      margin={4}
+      background={bg}
+      lineColor={color}
+      displayValue={true}
+    />
+  )
+}
 
 function getLoggedInWorker() {
   try {
@@ -99,6 +116,152 @@ function ScanToast({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: num
   )
 }
 
+function getNowFormatted(): string {
+  const _d = new Date()
+  return `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')} ${_d.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+}
+
+function ActionModal({
+  mode, processName, initialWorkerId,
+  onConfirm, onClose,
+}: {
+  mode: 'start' | 'stop'
+  processName: string; initialWorkerId: string;
+  onConfirm: (workerId: string, workerName: string, nowTime: string) => void;
+  onClose: () => void;
+}) {
+  const [clockDisplay, setClockDisplay] = useState('')
+  const [flash, setFlash] = useState(false)
+  const onConfirmRef = useRef(onConfirm)
+  useEffect(() => { onConfirmRef.current = onConfirm }, [onConfirm])
+
+  const isStop = mode === 'stop'
+  const lockedWorker = useMemo(() => (initialWorkerId ? findWorker(initialWorkerId) : null), [initialWorkerId])
+
+  useEffect(() => {
+    const tick = () => setClockDisplay(new Date().toLocaleTimeString('en-GB', { hour12: false }))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Scan → auto-confirm immediately (no button press needed)
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault()
+      setFlash(true)
+      setTimeout(() => setFlash(false), 300)
+      const raw = (e.detail.barcode as string).trim()
+      if (isStop) {
+        // stop: confirm with pre-filled worker
+        const wInfo = findWorker(initialWorkerId)
+        onConfirmRef.current(initialWorkerId, wInfo?.name ?? initialWorkerId, getNowFormatted())
+      } else {
+        // start: use scanned barcode as worker identity
+        const worker = findWorker(raw)
+        const code = worker ? String(worker.code) : raw
+        onConfirmRef.current(code, worker?.name ?? code, getNowFormatted())
+      }
+    }
+    document.addEventListener('onBarcodeScan', handler)
+    return () => document.removeEventListener('onBarcodeScan', handler)
+  }, [isStop, initialWorkerId])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const isStopCls = {
+    scanRing: 'border-red-300 bg-red-50',
+    scanIcon: 'text-red-400',
+    scanPulse: 'bg-red-400/20',
+    idText: 'text-red-700', sub: 'text-red-600', detail: 'text-red-400',
+    btn: 'bg-red-700 hover:bg-red-800 shadow-red-500/20',
+  }
+  const isStartCls = {
+    scanRing: 'border-emerald-300 bg-emerald-50',
+    scanIcon: 'text-emerald-400',
+    scanPulse: 'bg-emerald-400/20',
+    idText: 'text-emerald-700', sub: 'text-emerald-600', detail: 'text-emerald-500',
+    btn: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20',
+  }
+  const cls = isStop ? isStopCls : isStartCls
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm font-sans"
+      onClick={onClose}
+    >
+      <div
+        className={`bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 fade-in duration-200 transition-colors ${flash ? (isStop ? 'bg-red-50' : 'bg-emerald-50') : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="text-center mb-5">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{processName}</span>
+          <h2 className="text-lg font-bold text-gray-800 mt-1">
+            {isStop ? 'บันทึกเวลาหยุดงาน' : 'บันทึกเวลาเริ่มงาน'}
+          </h2>
+        </div>
+
+        {/* Clock */}
+        <div className="text-center mb-5 py-4 rounded-2xl bg-gray-50 border border-gray-100">
+          <p className="text-5xl font-bold tabular-nums text-gray-900 tracking-tight leading-none">{clockDisplay}</p>
+          <p className="text-xs text-gray-400 mt-2">
+            {new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+
+        {/* Scan zone */}
+        <div className={`rounded-2xl border-2 p-5 mb-5 text-center ${isStop ? (lockedWorker ? isStopCls.scanRing : 'border-dashed border-gray-200 bg-gray-50') : 'border-dashed border-gray-200 bg-gray-50'}`}>
+          {isStop && lockedWorker ? (
+            /* Stop: show who we're stopping */
+            <>
+              <p className={`text-2xl font-bold tabular-nums ${cls.idText}`}>{initialWorkerId}</p>
+              <p className={`text-sm mt-0.5 font-medium ${cls.sub}`}>{lockedWorker.name}</p>
+              <p className={`text-[10px] mt-0.5 ${cls.detail}`}>{lockedWorker.machines.join(', ')}</p>
+              <p className="text-xs text-gray-400 mt-3 font-medium">สแกนบาร์โค้ดใดก็ได้เพื่อยืนยัน</p>
+            </>
+          ) : (
+            /* Start: waiting for scan */
+            <>
+              <div className="relative inline-flex items-center justify-center mb-3">
+                <span className={`absolute inset-0 rounded-full animate-ping opacity-40 ${cls.scanPulse}`} />
+                <ScanBarcode className={`h-10 w-10 relative ${cls.scanIcon}`} />
+              </div>
+              <p className={`text-sm font-bold ${cls.scanIcon}`}>
+                {isStop ? 'สแกนเพื่อหยุดงาน' : 'สแกนบาร์โค้ดพนักงาน'}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1">สแกนปุ๊บ → บันทึกทันที ไม่ต้องกดปุ่ม</p>
+            </>
+          )}
+        </div>
+
+        {/* Fallback button */}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 h-11 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+          >
+            ยกเลิก
+          </button>
+          {isStop && (
+            <button
+              onClick={() => onConfirmRef.current(initialWorkerId, lockedWorker?.name ?? initialWorkerId, getNowFormatted())}
+              className={`flex-1 h-11 rounded-full text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 ${cls.btn}`}
+            >
+              <Square className="h-4 w-4 fill-white" />
+              หยุดงาน
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface ProjectData {
   project_id: string
   dwg_name?: string
@@ -132,8 +295,29 @@ export default function ProcessDetailsPage() {
   
   // Scanner states
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null)
+  const [activeWorkerSlot, setActiveWorkerSlot] = useState<{ row: number; col: number } | null>(null)
+  const [actionModal, setActionModal] = useState<{ mode: 'start' | 'stop'; row: number; col: number; workerId: string; processName: string } | null>(null)
+  const actionModalRef = useRef<typeof actionModal>(null)
+  useEffect(() => { actionModalRef.current = actionModal }, [actionModal])
+  const activeWorkerSlotRef = useRef<{ row: number; col: number } | null>(null)
   const processListRef = useRef<ProcessRow[]>([])
   useEffect(() => { processListRef.current = processList }, [processList])
+  useEffect(() => { activeWorkerSlotRef.current = activeWorkerSlot }, [activeWorkerSlot])
+
+  // Blocked workers
+  const blockedCodesRef = useRef<Set<number>>(new Set())
+
+  useEffect(() => {
+    function syncBlocked() {
+      fetch('/api/workers/block', { headers: { Authorization: `Bearer ${getToken()}` } })
+        .then((r) => r.json())
+        .then((codes: number[]) => { blockedCodesRef.current = new Set(codes) })
+        .catch(() => {})
+    }
+    syncBlocked()
+    const iv = setInterval(syncBlocked, 5_000)
+    return () => clearInterval(iv)
+  }, [])
 
   // Special command barcodes
   const pendingResetRef = useRef(false)
@@ -204,8 +388,13 @@ export default function ProcessDetailsPage() {
     const d = new Date(); d.setDate(d.getDate() - 1)
     const yesterdayStr = d.toISOString().split('T')[0]
 
-    // แปลง "HH:MM" หรือ "HH:MM:SS" → ms โดยถ้าผลลัพธ์อยู่ในอนาคต ให้ใช้วันเมื่อวาน
+    // รองรับ format ใหม่ "YYYY-MM-DD HH:MM:SS" และ format เก่า "HH:MM:SS"
     function parseTimeMs(t: string, refNow: number): number {
+      if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+        // format ใหม่ — มีวันที่ชัดเจน ไม่ต้องเดา
+        return new Date(t.replace(' ', 'T')).getTime()
+      }
+      // format เก่า — เดาวันที่จาก context
       let ms = new Date(`${todayStr}T${t}`).getTime()
       if (isNaN(ms)) return NaN
       if (ms > refNow + 60_000) ms = new Date(`${yesterdayStr}T${t}`).getTime()
@@ -220,7 +409,16 @@ export default function ProcessDetailsPage() {
           if (!w.start_time) return
           const start = parseTimeMs(w.start_time, now)
           if (isNaN(start)) return
-          const end = w.stop_time ? parseTimeMs(w.stop_time, now) : now
+
+          let end: number
+          if (w.stop_time) {
+            end = parseTimeMs(w.stop_time, now)
+          } else {
+            // ถ้ายังไม่มี stop_time แต่วิ่งเกิน 16 ชม. → ghost entry จาก session ก่อนหน้า → ข้ามไป
+            if (now - start > 16 * 3600 * 1000) return
+            end = now
+          }
+
           if (!isNaN(end) && end > start) {
             totalSecs += Math.floor((end - start) / 1000)
           }
@@ -260,6 +458,15 @@ export default function ProcessDetailsPage() {
       const list = processListRef.current
       const rawUpper = raw.toUpperCase()
 
+      // ── CMD_CANCEL/RESET/NEXT ทำงานได้แม้ modal เปิด ──
+      // ── ถ้า modal เปิดอยู่ → modal จัดการ scan เอง ──
+      const isCmd = rawUpper === 'CMD_CANCEL' || rawUpper === 'CMD_RESET' || rawUpper === 'CMD_NEXT'
+        || rawUpper === 'CANCEL_FN' || rawUpper === 'FN_GOOD' || rawUpper === 'ACPT_FN'
+      if (!isCmd && actionModalRef.current) {
+        e.preventDefault()
+        return
+      }
+
       // ── CMD_CANCEL: ลบ entry ของ logged-in worker ที่กำลัง running ──
       if (rawUpper === 'CMD_CANCEL') {
         e.preventDefault()
@@ -277,58 +484,146 @@ export default function ProcessDetailsPage() {
           return
         }
         const canceledProcess = list[runningRowIdx].process
-        setProcessList((prev) => {
-          const next = [...prev]
-          const row = { ...next[runningRowIdx] }
-          row.workers = row.workers.map((w) =>
-            w.worker_id === codeStr && w.start_time && !w.stop_time
-              ? { worker_id: '', start_time: '', stop_time: '' }
-              : w
-          )
-          next[runningRowIdx] = row
-          fetch(`/api/projects/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-            body: JSON.stringify({ processes: next }),
-          }).catch(console.error)
-          return next
-        })
+        const cancelNext = [...list]
+        const cancelRow = { ...cancelNext[runningRowIdx] }
+        cancelRow.workers = cancelRow.workers.map((w) =>
+          String(w.worker_id) === codeStr && w.start_time && !w.stop_time
+            ? { worker_id: '', start_time: '', stop_time: '' }
+            : w
+        )
+        cancelNext[runningRowIdx] = cancelRow
+        setProcessList(cancelNext)
+        fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ processes: cancelNext }),
+        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
         showToast('success', `ยกเลิกเรียบร้อย — ${loggedWorker.name}`, `ลบ entry ออกจาก "${canceledProcess}"`)
         return
       }
 
-      // ── CMD_RESET: ล้างพนักงานทั้งใบงาน (ต้อง scan 2 ครั้งเพื่อยืนยัน) ──
+      // ── CMD_RESET: QC ไม่ผ่าน — รีเซ็ตกระบวนการล่าสุดที่ยืนยันแล้ว + ถัดไปทั้งหมด (ต้อง scan 2 ครั้ง) ──
       if (rawUpper === 'CMD_RESET') {
         e.preventDefault()
         if (pendingResetRef.current) {
           if (pendingResetTimerRef.current) clearTimeout(pendingResetTimerRef.current)
           pendingResetRef.current = false
-          setProcessList((prev) => {
-            const next = prev.map((row) => ({
-              ...row,
-              workers: [
-                { worker_id: '', start_time: '', stop_time: '' },
-                { worker_id: '', start_time: '', stop_time: '' },
-                { worker_id: '', start_time: '', stop_time: '' },
-                { worker_id: '', start_time: '', stop_time: '' },
-              ],
-              elapsed_time: '00:00:00',
-            }))
-            fetch(`/api/projects/${id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-              body: JSON.stringify({ processes: next }),
-            }).catch(console.error)
-            return next
-          })
-          showToast('success', 'รีเซ็ตใบงานเรียบร้อย', 'ล้างข้อมูลพนักงานทุกกระบวนการแล้ว')
+          const current = processListRef.current
+          // ถอด next_confirmed_at ทุก process — เริ่มใหม่ตั้งแต่ process แรก ข้อมูลพนักงาน/เวลาเดิมยังอยู่ครบ
+          const failedProcess = current[0]?.process ?? ''
+          const next = current.map((row) => ({ ...row, next_confirmed_at: undefined }))
+          setProcessList(next)
+          fetch(`/api/projects/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ processes: next }),
+          }).catch(console.error)
+          showToast('success', `QC ไม่ผ่าน — ปลดล็อก "${failedProcess}"`, 'เก็บเวลาเดิมไว้ — พนักงานสแกนต่อได้เลย')
         } else {
           pendingResetRef.current = true
-          showToast('warning', 'สแกนอีกครั้งเพื่อยืนยัน', 'การรีเซ็ตจะล้างข้อมูลพนักงานทั้งใบงาน (5 วินาที)')
+          showToast('warning', 'สแกนอีกครั้งเพื่อยืนยัน QC ไม่ผ่าน', 'จะล้างข้อมูลกระบวนการล่าสุดและกระบวนการถัดไปทั้งหมด (5 วินาที)')
           pendingResetTimerRef.current = setTimeout(() => {
             pendingResetRef.current = false
           }, 5000)
         }
+        return
+      }
+
+      // ── สถานะจบงาน: CANCEL_FN / FN_GOOD / ACPT_FN ──
+      const statusMap: Record<string, { status: string; title: string; subtitle: string }> = {
+        'CANCEL_FN': { status: 'ไม่รับงาน',     title: 'จบงานแต่ไม่รับงาน',  subtitle: 'บันทึกสถานะ: ไม่รับงาน' },
+        'FN_GOOD':   { status: 'จบงาน',          title: 'จบงาน',              subtitle: 'บันทึกสถานะ: จบงาน' },
+        'ACPT_FN':   { status: 'รับงาน',         title: 'รับงาน — จบงาน',    subtitle: 'บันทึกสถานะ: รับงาน' },
+      }
+      if (statusMap[rawUpper]) {
+        e.preventDefault()
+        const { status, title, subtitle } = statusMap[rawUpper]
+        setProject((prev) => prev ? { ...prev, status } : prev)
+        fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ status }),
+        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+        showToast('success', title, subtitle)
+        return
+      }
+
+      // ── CMD_NEXT: ยืนยันปิดกระบวนการ — หยุดพนักงานที่ยังวิ่งทุกคน + ประทับ next_confirmed_at ──
+      if (rawUpper === 'CMD_NEXT') {
+        e.preventDefault()
+        const nowTime = getNowFormatted()
+        // หา process แรกที่มีพนักงานเริ่มงานแล้ว แต่ยังไม่ confirmed
+        const targetIdx = list.findIndex(
+          (row) => row.workers.some((w) => w.worker_id && w.start_time) && !row.next_confirmed_at
+        )
+        if (targetIdx === -1) {
+          showToast('warning', 'ไม่มีกระบวนการที่รอยืนยัน', 'ทุกกระบวนการยืนยันแล้ว หรือยังไม่มีพนักงานเริ่มงาน')
+          return
+        }
+        const targetRow = list[targetIdx]
+        // หยุดพนักงานที่ยังวิ่งอยู่ทุกคน + set next_confirmed_at
+        const closedWorkers = targetRow.workers.map((w) =>
+          w.worker_id && w.start_time && !w.stop_time ? { ...w, stop_time: nowTime } : w
+        )
+        const nextList = [...list]
+        nextList[targetIdx] = { ...targetRow, workers: closedWorkers, next_confirmed_at: nowTime }
+        setProcessList(nextList)
+        fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ processes: nextList }),
+        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+        showToast('success', `ยืนยันกระบวนการ "${targetRow.process}" แล้ว`, `เวลา ${nowTime.split(' ')[1]} — กระบวนการถัดไปเริ่มได้`)
+        return
+      }
+
+      // ── WORKER SLOT: ถ้ามีช่องรหัสพนักงานที่กำลัง "รอสแกน" → fill แค่ worker_id ──
+      const slot = activeWorkerSlotRef.current
+      if (slot !== null) {
+        e.preventDefault()
+        const scannedWorker = findWorker(raw)
+        if (!scannedWorker) {
+          showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${raw}" ไม่มีในระบบ`)
+          setActiveWorkerSlot(null)
+          return
+        }
+        if (blockedCodesRef.current.has(scannedWorker.code)) {
+          showToast('error', `${scannedWorker.name} ถูกบล็อก`, 'ไม่สามารถสแกนงานได้ — ติดต่อผู้ดูแลระบบ')
+          setActiveWorkerSlot(null)
+          return
+        }
+        const slotProcess = list[slot.row]?.process ?? ''
+        if (isRowCompleted(list[slot.row])) {
+          showToast('warning', 'กระบวนการนี้ปิดแล้ว', `"${slotProcess}" ถูกยืนยัน CMD_NEXT ไปแล้ว`)
+          setActiveWorkerSlot(null)
+          return
+        }
+        if (!canWorkerDoProcess(scannedWorker.machines, slotProcess)) {
+          showToast('warning', 'ไม่มีสิทธิ์', `${scannedWorker.name} ไม่มีสิทธิ์ในกระบวนการ "${slotProcess}"`)
+          setActiveWorkerSlot(null)
+          return
+        }
+        const slotBlockingRow = list.slice(0, slot.row).findIndex((r) => !isRowCompleted(r))
+        if (slotBlockingRow !== -1) {
+          showToast('warning', 'รอกระบวนการก่อนหน้าให้เสร็จก่อน', `"${list[slotBlockingRow].process}" ยังไม่เสร็จ`)
+          setActiveWorkerSlot(null)
+          return
+        }
+        const code = String(scannedWorker.code)
+        const slotNext = processListRef.current.map((row, ri) => {
+          if (ri !== slot.row) return row
+          const workers = [...row.workers]
+          workers[slot.col] = { ...workers[slot.col], worker_id: code }
+          return { ...row, workers }
+        })
+        setProcessList(slotNext)
+        setActiveWorkerSlot(null)
+        fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ processes: slotNext }),
+        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
+        showToast('success', `รหัสพนักงาน: ${code}`, scannedWorker.name)
         return
       }
 
@@ -346,6 +641,10 @@ export default function ProcessDetailsPage() {
         worker = getLoggedInWorker()
         if (!worker) {
           showToast('error', 'ไม่พบข้อมูลพนักงาน', 'username ไม่ตรงกับรหัสพนักงานในระบบ')
+          return
+        }
+        if (blockedCodesRef.current.has(worker.code)) {
+          showToast('error', `${worker.name} ถูกบล็อก`, 'ไม่สามารถสแกนงานได้ — ติดต่อผู้ดูแลระบบ')
           return
         }
         const eligible = findEligibleRowIndex(list, String(worker.code), worker.machines)
@@ -367,53 +666,83 @@ export default function ProcessDetailsPage() {
           showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${raw}" ไม่มีในระบบ`)
           return
         }
+        if (blockedCodesRef.current.has(worker.code)) {
+          showToast('error', `${worker.name} ถูกบล็อก`, 'ไม่สามารถสแกนงานได้ — ติดต่อผู้ดูแลระบบ')
+          return
+        }
         rowIndex = activeRowIndex
+        if (isRowCompleted(list[rowIndex])) {
+          showToast('warning', 'กระบวนการนี้ปิดแล้ว', `"${list[rowIndex].process}" ถูกยืนยัน CMD_NEXT ไปแล้ว`)
+          return
+        }
+        // sequential check: ถ้าเป็นการ START (ยังไม่มี entry ของ worker นี้ที่ running) ตรวจ row ก่อนหน้า
+        const workerIdStr2 = String(worker.code)
+        const isStarting = !list[rowIndex].workers.some(
+          (w) => String(w.worker_id) === workerIdStr2 && w.start_time && !w.stop_time
+        )
+        if (isStarting) {
+          const blockingRow = list.slice(0, rowIndex).findIndex((r) => !isRowCompleted(r))
+          if (blockingRow !== -1) {
+            showToast('warning', 'รอกระบวนการก่อนหน้าให้เสร็จก่อน', `"${list[blockingRow].process}" ยังไม่เสร็จ`)
+            return
+          }
+        }
       } else {
         // ไม่ใช่ job QR และไม่ได้เลือกแถว → ปล่อยให้ GlobalBarcodeScanner navigate
         return
       }
 
       const targetRow = list[rowIndex]
-      if (!canWorkerDoProcess(worker.machines, targetRow.process)) {
+      const workerIdStr = String(worker.code)
+      // permission check เฉพาะ START — STOP ให้ผ่านเสมอ (worker running อยู่แล้ว ไม่ต้องเช็คใหม่)
+      const isRunningNow = targetRow.workers.some(
+        (w) => String(w.worker_id) === workerIdStr && w.start_time && !w.stop_time
+      )
+      if (!isRunningNow && !canWorkerDoProcess(worker.machines, targetRow.process)) {
         showToast('warning', 'ไม่มีสิทธิ์', `${worker.name} ไม่มีสิทธิ์ในกระบวนการ "${targetRow.process}"`)
         return
       }
 
-      const nowTime = new Date().toLocaleTimeString('th-TH', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      const workerIdStr = String(worker.code)
+      const _d = new Date()
+      const nowTime = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')} ${_d.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
 
-      setProcessList((prev) => {
-        const next = [...prev]
-        const row = { ...next[rowIndex] }
-        const workers = [...row.workers]
+      // คำนวณ state ใหม่นอก setProcessList เพื่อหลีกเลี่ยง side-effect ใน updater
+      const currentList = processListRef.current
+      const next = [...currentList]
+      const row = { ...next[rowIndex] }
+      const workers = [...row.workers]
 
-        const runningIdx = workers.findIndex(
-          (w) => w.worker_id === workerIdStr && w.start_time && !w.stop_time
-        )
+      const runningIdx = workers.findIndex(
+        (w) => String(w.worker_id) === workerIdStr && w.start_time && !w.stop_time
+      )
 
-        if (runningIdx !== -1) {
-          workers[runningIdx] = { ...workers[runningIdx], stop_time: nowTime }
-          showToast('success', `จบงาน — ${worker!.name}`, `${targetRow.process} • ${nowTime}`)
-        } else {
-          const emptyIdx = workers.findIndex((w) => !w.worker_id)
-          if (emptyIdx === -1) {
-            showToast('error', 'ช่องพนักงานเต็ม', 'รองรับสูงสุด 4 คนต่อกระบวนการ')
-            return prev
-          }
-          workers[emptyIdx] = { worker_id: workerIdStr, start_time: nowTime, stop_time: '' }
-          showToast('success', `เริ่มงาน — ${worker!.name}`, `${targetRow.process} • ${nowTime}`)
+      let toastMsg: { type: ToastType; title: string; subtitle: string }
+
+      if (runningIdx !== -1) {
+        workers[runningIdx] = { ...workers[runningIdx], stop_time: nowTime }
+        toastMsg = { type: 'success', title: `จบงาน — ${worker!.name}`, subtitle: `${targetRow.process} • ${nowTime}` }
+      } else {
+        const emptyIdx = workers.findIndex((w) => !w.worker_id)
+        if (emptyIdx === -1) {
+          showToast('error', 'ช่องพนักงานเต็ม', 'รองรับสูงสุด 4 คนต่อกระบวนการ')
+          return
         }
+        workers[emptyIdx] = { worker_id: workerIdStr, start_time: nowTime, stop_time: '' }
+        toastMsg = { type: 'success', title: `เริ่มงาน — ${worker!.name}`, subtitle: `${targetRow.process} • ${nowTime}` }
+      }
 
-        row.workers = workers
-        next[rowIndex] = row
+      row.workers = workers
+      next[rowIndex] = row
 
-        fetch(`/api/projects/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-          body: JSON.stringify({ processes: next }),
-        }).catch(console.error)
+      setProcessList(next)
+      showToast(toastMsg.type, toastMsg.title, toastMsg.subtitle)
 
-        return next
+      fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ processes: next }),
+      }).catch(() => {
+        showToast('error', 'บันทึกไม่สำเร็จ', 'ข้อมูลอัปเดตในหน้าแต่ไม่ได้ save — กรุณากด "บันทึกข้อมูลใบงาน"')
       })
     }
 
@@ -454,6 +783,50 @@ export default function ProcessDetailsPage() {
   const handleDeleteRow = (index: number) => {
     setProcessList((prev) => prev.filter((_, i) => i !== index))
   }
+
+  const handleActionFromModal = useCallback((workerId: string, workerName: string, nowTime: string) => {
+    if (!actionModal) return
+    const { mode, row, col, processName } = actionModal
+    const current = processListRef.current
+
+    if (mode === 'start') {
+      const worker = findWorker(workerId)
+      if (!worker) {
+        showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${workerId}" ไม่มีในระบบ`)
+        return
+      }
+      const targetProcess = current[row]?.process ?? processName
+      if (!canWorkerDoProcess(worker.machines, targetProcess)) {
+        showToast('warning', 'ไม่มีสิทธิ์', `${workerName} ไม่มีสิทธิ์ในกระบวนการ "${targetProcess}"`)
+        return
+      }
+      const blockingRow = current.slice(0, row).findIndex((r) => !isRowCompleted(r))
+      if (blockingRow !== -1) {
+        showToast('warning', 'รอกระบวนการก่อนหน้าให้เสร็จก่อน', `"${current[blockingRow].process}" ยังไม่เสร็จ`)
+        return
+      }
+    }
+
+    const next = current.map((r, ri) => {
+      if (ri !== row) return r
+      const workers = [...r.workers]
+      if (mode === 'start') {
+        workers[col] = { ...workers[col], worker_id: workerId, start_time: nowTime, stop_time: '' }
+      } else {
+        workers[col] = { ...workers[col], stop_time: nowTime }
+      }
+      return { ...r, workers }
+    })
+    setProcessList(next)
+    setActionModal(null)
+    const label = mode === 'start' ? 'เริ่มงาน' : 'หยุดงาน'
+    showToast('success', `${label} — ${workerName}`, `${processName} • ${nowTime.split(' ')[1]}`)
+    fetch(`/api/projects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ processes: next }),
+    }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
+  }, [actionModal, id, showToast])
 
   const handleSave = async (processesToSave?: ProcessRow[]) => {
     setSaveState('saving')
@@ -516,6 +889,15 @@ export default function ProcessDetailsPage() {
   return (
     <>
     <ScanToast toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
+    {actionModal && (
+      <ActionModal
+        mode={actionModal.mode}
+        processName={actionModal.processName}
+        initialWorkerId={actionModal.workerId}
+        onConfirm={handleActionFromModal}
+        onClose={() => setActionModal(null)}
+      />
+    )}
     <div className="space-y-6 font-sans print:hidden">
       {/* Top Action Bar */}
       <div className="flex items-center justify-between">
@@ -565,19 +947,97 @@ export default function ProcessDetailsPage() {
           <ProcessTable
             processList={processList}
             activeRowIndex={activeRowIndex}
-            onRowClick={(idx) => setActiveRowIndex(idx)}
+            activeWorkerSlot={activeWorkerSlot}
+            onRowClick={(idx) => { setActiveRowIndex(idx); setActiveWorkerSlot(null) }}
+            onWorkerSlotActivate={(row, col) => setActiveWorkerSlot({ row, col })}
+            onStartClick={(row, col) => setActionModal({
+              mode: 'start', row, col,
+              workerId: processList[row]?.workers[col]?.worker_id ?? '',
+              processName: processList[row]?.process ?? '',
+            })}
+            onStopClick={(row, col) => setActionModal({
+              mode: 'stop', row, col,
+              workerId: processList[row]?.workers[col]?.worker_id ?? '',
+              processName: processList[row]?.process ?? '',
+            })}
             onChange={handleChange}
             onWorkerChange={handleWorkerChange}
             onAddRow={handleAddRow}
             onDeleteRow={handleDeleteRow}
           />
 
-          {/* Special Command QR Codes */}
+          {/* Status Barcodes */}
           <div className="flex gap-4">
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-orange-100 bg-orange-50/40 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="CANCEL_FN" color="#9a3412" bg="#fff7ed" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Ban className="h-4 w-4 text-orange-700" />
+                  <span className="text-sm font-bold text-gray-800">Cancel - FN</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  จบงานแต่ไม่รับงาน<br />
+                  บันทึกสถานะ: <span className="font-semibold text-orange-700">ไม่รับงาน</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-blue-100 bg-blue-50/40 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="FN_GOOD" color="#1d4ed8" bg="#eff6ff" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <CheckCircle2 className="h-4 w-4 text-blue-700" />
+                  <span className="text-sm font-bold text-gray-800">FN Good - FN</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  จบงาน<br />
+                  บันทึกสถานะ: <span className="font-semibold text-blue-700">จบงาน</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-violet-100 bg-violet-50/40 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="ACPT_FN" color="#5b21b6" bg="#f5f3ff" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <PackageCheck className="h-4 w-4 text-violet-700" />
+                  <span className="text-sm font-bold text-gray-800">Acpt - FN</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  รับงาน — จบงาน<br />
+                  บันทึกสถานะ: <span className="font-semibold text-violet-700">รับงาน</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Special Command Barcodes */}
+          <div className="flex gap-4">
+            <div className="flex items-center gap-4 flex-1 rounded-xl border border-emerald-100 bg-emerald-50/40 px-5 py-4 shadow-sm/50">
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="CMD_NEXT" color="#047857" bg="#ecfdf5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <ArrowRight className="h-4 w-4 text-emerald-700" />
+                  <span className="text-sm font-bold text-gray-800">ยืนยันจบกระบวนการ</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  สแกนเพื่อปิดกระบวนการที่กำลังทำอยู่และบันทึกเวลาจบ<br />
+                  <span className="font-semibold text-emerald-700">ต้องสแกนทุกครั้ง</span> ก่อนกระบวนการถัดไปจะเริ่มได้
+                </p>
+              </div>
+            </div>
+
             <div className="flex items-center gap-4 flex-1 rounded-xl border border-gray-100 bg-white px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-1.5">
-                <QRCodeSVG value="CMD_CANCEL" size={72} bgColor="#ffffff" fgColor="#1a1a1a" />
-                <span className="text-[10px] font-mono text-gray-400">CMD_CANCEL</span>
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="CMD_CANCEL" color="#1a1a1a" bg="#ffffff" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5 mb-1">
@@ -585,25 +1045,24 @@ export default function ProcessDetailsPage() {
                   <span className="text-sm font-bold text-gray-800">ยกเลิก entry ตัวเอง</span>
                 </div>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกน QR นี้เพื่อลบการเริ่มงานของตัวเองออก<br />
+                  สแกน Barcode นี้เพื่อลบการเริ่มงานของตัวเองออก<br />
                   (ใช้เมื่อสแกนเริ่มงานผิดพลาด)
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-4 flex-1 rounded-xl border border-red-100 bg-red-50/40 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-1.5">
-                <QRCodeSVG value="CMD_RESET" size={72} bgColor="#fff8f8" fgColor="#7B1A1A" />
-                <span className="text-[10px] font-mono text-red-400">CMD_RESET</span>
+              <div className="flex flex-col items-center gap-0.5">
+                <CmdBarcode value="CMD_RESET" color="#7B1A1A" bg="#fff8f8" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5 mb-1">
                   <RotateCcw className="h-4 w-4 text-[#7B1A1A]" />
-                  <span className="text-sm font-bold text-gray-800">เริ่มใหม่ทั้งใบงาน</span>
+                  <span className="text-sm font-bold text-gray-800">QC ไม่ผ่าน — รีเซ็ต</span>
                 </div>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกน QR นี้ 2 ครั้งเพื่อล้างข้อมูลพนักงาน<br />
-                  ทุกกระบวนการในใบงานนี้ทั้งหมด
+                  สแกน 2 ครั้งเพื่อล้างข้อมูลกระบวนการล่าสุดที่ยืนยันแล้ว<br />
+                  และกระบวนการถัดไปทั้งหมด ให้เริ่มใหม่ตั้งแต่จุดนั้น
                 </p>
               </div>
             </div>

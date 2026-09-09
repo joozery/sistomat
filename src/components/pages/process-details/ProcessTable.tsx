@@ -1,7 +1,41 @@
 'use client'
 
-import { Plus, Trash2 } from 'lucide-react'
-import { Fragment } from 'react'
+import { Plus, Trash2, ScanBarcode } from 'lucide-react'
+import { Fragment, useMemo } from 'react'
+
+function parseTimeParts(t: string): { date: string; time: string } | null {
+  if (!t) return null
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+    const [datePart, timePart] = t.split(' ')
+    const [, mm, dd] = datePart.split('-')
+    return { date: `${dd}/${mm}`, time: (timePart ?? '').slice(0, 5) }
+  }
+  return { date: '', time: t.slice(0, 5) }
+}
+
+function TimeCell({ value, bgColor, onClick, hint }: { value: string; bgColor: string; onClick?: () => void; hint?: { label: string; color: string } }) {
+  const parts = useMemo(() => parseTimeParts(value), [value])
+  return (
+    <td
+      className={`border border-slate-300 p-0 ${onClick ? 'cursor-pointer hover:brightness-95 active:brightness-90' : ''}`}
+      style={{ backgroundColor: bgColor }}
+      onClick={onClick}
+    >
+      <div className="flex flex-col items-center justify-center h-9 leading-none">
+        {parts ? (
+          <>
+            {parts.date && <span className="text-[9px] text-gray-400 font-medium">{parts.date}</span>}
+            <span className="text-[11px] font-semibold text-slate-700">{parts.time}</span>
+          </>
+        ) : hint ? (
+          <span className={`text-[11px] font-semibold ${hint.color}`}>{hint.label}</span>
+        ) : (
+          <span className="text-[11px] text-gray-300">--:--</span>
+        )}
+      </div>
+    </td>
+  )
+}
 
 export const processOptions = [
   'MATERAIL', 'QC', 'CAM1', 'CNC1', 'ML', 'QC FN', 'เสร็จงาน',
@@ -22,6 +56,7 @@ export interface ProcessRow {
   workers: WorkerLog[]
   elapsed_time: string
   remark: string
+  next_confirmed_at?: string
 }
 
 interface ProcessTableProps {
@@ -29,7 +64,11 @@ interface ProcessTableProps {
   onChange: (index: number, field: keyof ProcessRow, value: string) => void
   onWorkerChange: (rowIndex: number, workerIndex: number, field: keyof WorkerLog, value: string) => void
   activeRowIndex?: number | null
+  activeWorkerSlot?: { row: number; col: number } | null
   onRowClick?: (index: number) => void
+  onWorkerSlotActivate?: (row: number, col: number) => void
+  onStartClick?: (row: number, col: number) => void
+  onStopClick?: (row: number, col: number) => void
   onAddRow: () => void
   onDeleteRow?: (index: number) => void
 }
@@ -41,7 +80,7 @@ const workerColors = [
   { header: '#fbcfe8', subHeader: '#fce7f3', cell: '#fdf2f8' },
 ]
 
-export function ProcessTable({ processList, activeRowIndex, onRowClick, onChange, onWorkerChange, onAddRow, onDeleteRow }: ProcessTableProps) {
+export function ProcessTable({ processList, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onDeleteRow }: ProcessTableProps) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm font-sans overflow-hidden">
       {/* ── Header Bar ── */}
@@ -189,39 +228,53 @@ export function ProcessTable({ processList, activeRowIndex, onRowClick, onChange
                   </td>
 
                   {/* Workers x4 */}
-                  {row.workers?.map((worker, wIndex) => (
+                  {row.workers?.map((worker, wIndex) => {
+                    const isSlotActive = activeWorkerSlot?.row === index && activeWorkerSlot?.col === wIndex
+                    return (
                     <Fragment key={wIndex}>
-                      <td className="border border-slate-300 p-0" style={{ backgroundColor: isActive ? '#dbeafe' : workerColors[wIndex].cell }}>
-                        <input
-                          type="text"
-                          value={worker.worker_id}
-                          onChange={(e) => onWorkerChange(index, wIndex, 'worker_id', e.target.value)}
-                          className="w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700"
-                          style={{ backgroundColor: 'transparent', fontSize: '12px' }}
-                        />
+                      <td
+                        className={`border p-0 relative ${isSlotActive ? 'border-amber-400 ring-2 ring-inset ring-amber-400' : 'border-slate-300'}`}
+                        style={{ backgroundColor: isSlotActive ? '#fffbeb' : isActive ? '#dbeafe' : workerColors[wIndex].cell }}
+                      >
+                        {isSlotActive ? (
+                          <button
+                            className="w-full h-9 flex items-center justify-center gap-1 text-amber-600 font-semibold animate-pulse"
+                            style={{ fontSize: '11px', backgroundColor: 'transparent', border: 'none', cursor: 'default' }}
+                            onClick={(e) => { e.stopPropagation(); onWorkerSlotActivate?.(index, wIndex) }}
+                          >
+                            <ScanBarcode className="h-3.5 w-3.5" />
+                            สแกน...
+                          </button>
+                        ) : (
+                          <input
+                            type="text"
+                            value={worker.worker_id}
+                            onChange={(e) => onWorkerChange(index, wIndex, 'worker_id', e.target.value)}
+                            onFocus={(e) => {
+                              e.target.blur()
+                              onWorkerSlotActivate?.(index, wIndex)
+                            }}
+                            className="w-full h-9 text-center border-0 outline-none text-slate-700 cursor-pointer"
+                            style={{ backgroundColor: 'transparent', fontSize: '12px' }}
+                            readOnly
+                          />
+                        )}
                       </td>
-                      <td className="border border-slate-300 p-0" style={{ backgroundColor: isActive ? '#dbeafe' : workerColors[wIndex].cell }}>
-                        <input
-                          type="text"
-                          value={worker.start_time}
-                          onChange={(e) => onWorkerChange(index, wIndex, 'start_time', e.target.value)}
-                          placeholder="--:--"
-                          className="w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700"
-                          style={{ backgroundColor: 'transparent', fontSize: '12px' }}
-                        />
-                      </td>
-                      <td className="border border-slate-300 p-0" style={{ backgroundColor: isActive ? '#dbeafe' : workerColors[wIndex].cell }}>
-                        <input
-                          type="text"
-                          value={worker.stop_time}
-                          onChange={(e) => onWorkerChange(index, wIndex, 'stop_time', e.target.value)}
-                          placeholder="--:--"
-                          className="w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700"
-                          style={{ backgroundColor: 'transparent', fontSize: '12px' }}
-                        />
-                      </td>
+                      <TimeCell
+                        value={worker.start_time}
+                        bgColor={isActive ? '#dbeafe' : workerColors[wIndex].cell}
+                        onClick={!worker.start_time ? () => onStartClick?.(index, wIndex) : undefined}
+                        hint={!worker.start_time ? { label: '+ เริ่ม', color: 'text-emerald-400' } : undefined}
+                      />
+                      <TimeCell
+                        value={worker.stop_time}
+                        bgColor={isActive ? '#dbeafe' : workerColors[wIndex].cell}
+                        onClick={worker.start_time && !worker.stop_time ? () => onStopClick?.(index, wIndex) : undefined}
+                        hint={worker.start_time && !worker.stop_time ? { label: '+ หยุด', color: 'text-red-400' } : undefined}
+                      />
                     </Fragment>
-                  ))}
+                  )
+                  })}
 
                   {/* รวมเวลา */}
                   <td 

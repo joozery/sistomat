@@ -35,9 +35,12 @@ export function findWorkerByUsername(username: string): WorkerData | undefined {
   )
 }
 
-// ตรวจว่า row นั้นมีคนทำเสร็จแล้ว (stop_time) อย่างน้อย 1 คน
-function isRowCompleted(row: { workers: { worker_id: string; start_time: string; stop_time: string }[] }): boolean {
-  return row.workers.some((w) => w.worker_id && w.start_time && w.stop_time)
+// row จบแล้ว = ต้องสแกน CMD_NEXT ยืนยัน + มีคนเสร็จอย่างน้อย 1 คน + ไม่มีใครยังวิ่งอยู่
+export function isRowCompleted(row: { workers: { worker_id: string; start_time: string; stop_time: string }[]; next_confirmed_at?: string }): boolean {
+  if (!row.next_confirmed_at) return false
+  const hasCompleted = row.workers.some((w) => w.worker_id && w.start_time && w.stop_time)
+  const hasRunning   = row.workers.some((w) => w.worker_id && w.start_time && !w.stop_time)
+  return hasCompleted && !hasRunning
 }
 
 // หา row ที่ควรสแกน:
@@ -46,7 +49,7 @@ function isRowCompleted(row: { workers: { worker_id: string; start_time: string;
 //
 // คืน { index, blockedByRow } — ถ้า index === -1 + blockedByRow != null = ถูก block โดย sequential
 export function findEligibleRowIndex(
-  processList: { process: string; workers: { worker_id: string; start_time: string; stop_time: string }[] }[],
+  processList: { process: string; workers: { worker_id: string; start_time: string; stop_time: string }[]; next_confirmed_at?: string }[],
   workerCode: string,
   machines: string[],
 ): { index: number; blockedByRow: number | null } {
@@ -59,6 +62,7 @@ export function findEligibleRowIndex(
   // START: หา row แรกที่มีสิทธิ์และมีช่องว่าง โดยบังคับลำดับ
   for (let i = 0; i < processList.length; i++) {
     const row = processList[i]
+    if (isRowCompleted(row)) continue  // ข้าม row ที่ CMD_NEXT ปิดไปแล้ว
     if (!canWorkerDoProcess(machines, row.process)) continue
     if (!row.workers.some((w) => !w.worker_id)) continue
 

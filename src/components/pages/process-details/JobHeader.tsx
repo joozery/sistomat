@@ -1,12 +1,13 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardContent } from '@/components/ui/card'
-import { Calendar, Tag, Download } from 'lucide-react'
+import { Calendar, Tag, Download, QrCode, Barcode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ssr: false })
+const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
 
 interface JobHeaderProps {
   id: string
@@ -16,11 +17,12 @@ interface JobHeaderProps {
 }
 
 export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps) {
-  const barcodeRef = useRef<HTMLDivElement>(null)
+  const codeRef = useRef<HTMLDivElement>(null)
+  const [mode, setMode] = useState<'qr' | 'barcode'>('qr')
   const qrValue = dwgName?.trim() ? `${id}|${dwgName.trim()}` : id
 
   const handleDownload = () => {
-    const container = barcodeRef.current
+    const container = codeRef.current
     if (!container) return
     const svg = container.querySelector('svg')
     if (!svg) return
@@ -38,7 +40,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
     img.onload = () => {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       const link = document.createElement('a')
-      link.download = `barcode-${id}.png`
+      link.download = `${mode === 'qr' ? 'qrcode' : 'barcode'}-${id}.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
     }
@@ -69,27 +71,73 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
             </p>
           </div>
 
-          {/* Barcode + Download */}
+          {/* Code display + toggle + Download */}
           <div className="flex flex-col items-center gap-2">
+            {/* Toggle */}
+            <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-full">
+              <button
+                onClick={() => setMode('qr')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  mode === 'qr'
+                    ? 'bg-white text-[#7B1A1A] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                QR Code
+              </button>
+              <button
+                onClick={() => setMode('barcode')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  mode === 'barcode'
+                    ? 'bg-white text-[#7B1A1A] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Barcode className="h-3.5 w-3.5" />
+                Barcode
+              </button>
+            </div>
+
+            {/* Code */}
             <div
-              ref={barcodeRef}
+              ref={codeRef}
               className="flex items-center justify-center px-4 pt-3 pb-2 bg-white rounded-2xl border border-gray-200"
             >
-              <div className="flex flex-col items-center gap-1">
-                <QRCodeSVG
-                  value={qrValue}
-                  size={160}
-                  bgColor="#ffffff"
-                  fgColor="#000000"
-                  level="M"
-                  marginSize={1}
-                />
-                <p className="text-[11px] font-bold text-gray-800">{id}</p>
-                {dwgName && (
-                  <p className="text-[10px] text-gray-500 text-center max-w-[160px] leading-tight">{dwgName}</p>
-                )}
-              </div>
+              {mode === 'qr' ? (
+                <div className="flex flex-col items-center gap-1">
+                  <QRCodeSVG
+                    value={qrValue}
+                    size={160}
+                    bgColor="#ffffff"
+                    fgColor="#000000"
+                    level="M"
+                    marginSize={1}
+                  />
+                  <p className="text-[11px] font-bold text-gray-800">{id}</p>
+                  {dwgName && (
+                    <p className="text-[10px] text-gray-500 text-center max-w-[160px] leading-tight">{dwgName}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1">
+                  <Barcoder
+                    value={id}
+                    format="CODE128"
+                    width={1.5}
+                    height={80}
+                    fontSize={12}
+                    margin={4}
+                    background="#ffffff"
+                    lineColor="#000000"
+                  />
+                  <p className="text-[10px] text-gray-400 text-center max-w-[200px] leading-tight">
+                    สำหรับปริ้นกระดาษ — สแกนจากจอไม่ได้
+                  </p>
+                </div>
+              )}
             </div>
+
             <Button
               type="button"
               onClick={handleDownload}
@@ -97,7 +145,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
               className="gap-2 rounded-full h-8 text-xs font-semibold border-gray-200 text-gray-600 hover:bg-gray-50 px-4"
             >
               <Download className="h-3.5 w-3.5" />
-              โหลด QR Code PNG
+              โหลด {mode === 'qr' ? 'QR Code' : 'Barcode'} PNG
             </Button>
           </div>
 

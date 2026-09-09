@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { QrCode, Activity, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight } from 'lucide-react'
 import { ProjectTable } from '@/components/pages/process-qrcode/ProjectTable'
 import { AddProjectDialog } from '@/components/pages/process-qrcode/AddProjectDialog'
 import { ImportExcelDialog } from '@/components/pages/process-qrcode/ImportExcelDialog'
@@ -32,6 +33,10 @@ const demoProjects: Project[] = [
 ]
 
 export default function ProcessQRCodePage() {
+  const router = useRouter()
+  const scanInputRef = useRef<HTMLInputElement>(null)
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scanValueRef = useRef('')
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -39,6 +44,28 @@ export default function ProcessQRCodePage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [scanValue, setScanValue] = useState('')
+  const [scanFlash, setScanFlash] = useState(false)
+
+  const navigate = useCallback((raw: string) => {
+    const jobId = raw.split('|')[0].trim().toUpperCase()
+    if (!jobId) return
+    setScanFlash(true)
+    setTimeout(() => setScanFlash(false), 600)
+    router.push(`/dashboard/process-details/${encodeURIComponent(jobId)}`)
+  }, [router])
+
+  // รับ event จาก GlobalBarcodeScanner (กรณีสแกนขณะไม่ได้ focus ที่ input)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const raw = (e as CustomEvent).detail?.barcode?.trim()
+      if (!raw) return
+      e.preventDefault()
+      navigate(raw)
+    }
+    document.addEventListener('onBarcodeScan', handler)
+    return () => document.removeEventListener('onBarcodeScan', handler)
+  }, [navigate])
 
   const fetchProjects = useCallback(async () => {
     setLoading(true)
@@ -132,6 +159,62 @@ export default function ProcessQRCodePage() {
               <p className="text-[10px] text-emerald-600/80 font-medium">กำลังดำเนินการ</p>
               <p className="text-xs font-bold text-emerald-700">{projects.length} รายการ</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Scan Zone */}
+      <div
+        className={`rounded-xl border-2 transition-all duration-300 cursor-pointer ${
+          scanFlash
+            ? 'border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100'
+            : 'border-dashed border-gray-200 bg-white hover:border-[#7B1A1A]/40 hover:bg-red-50/30'
+        }`}
+        onClick={() => scanInputRef.current?.focus()}
+      >
+        <div className="flex items-center gap-5 px-6 py-5">
+          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${
+            scanFlash ? 'bg-emerald-100' : 'bg-red-50'
+          }`}>
+            <ScanBarcode className={`h-7 w-7 transition-colors ${scanFlash ? 'text-emerald-600' : 'text-[#7B1A1A]'}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-gray-800 mb-1">สแกนบาร์โค้ด / QR Code เพื่อเปิดใบงาน</p>
+            <input
+              ref={scanInputRef}
+              type="text"
+              value={scanValue}
+              onChange={(e) => {
+                const val = e.target.value
+                setScanValue(val)
+                scanValueRef.current = val
+                if (!val.trim()) return
+                if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+                scanTimerRef.current = setTimeout(() => {
+                  const v = scanValueRef.current
+                  if (v.trim()) {
+                    navigate(v.trim())
+                    setScanValue('')
+                    scanValueRef.current = ''
+                  }
+                }, 300)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && scanValue.trim()) {
+                  if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+                  navigate(scanValue.trim())
+                  setScanValue('')
+                }
+              }}
+              placeholder="คลิกที่นี่แล้วสแกน หรือพิมพ์รหัสใบงาน แล้วกด Enter..."
+              className="w-full text-sm text-gray-700 placeholder-gray-400 bg-transparent border-0 outline-none focus:ring-0 p-0"
+            />
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-gray-200 bg-gray-50 text-[10px] font-mono text-gray-500">
+              Enter
+            </kbd>
+            <ArrowRight className="h-4 w-4 text-gray-300" />
           </div>
         </div>
       </div>

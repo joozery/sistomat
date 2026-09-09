@@ -302,8 +302,8 @@ export function UserTable() {
                   <TableCell>
                     {(u.machines || []).length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {(u.machines || []).map((m) => (
-                          <span key={m} className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${getMachineBadge(m)}`}>
+                        {(u.machines || []).map((m, mi) => (
+                          <span key={`${m}-${mi}`} className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${getMachineBadge(m)}`}>
                             {m}
                           </span>
                         ))}

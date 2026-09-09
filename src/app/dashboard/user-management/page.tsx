@@ -1,5 +1,6 @@
 import { Users, Cpu, ShieldCheck, Wrench, UserCheck } from 'lucide-react'
 import { UserTable } from '@/components/pages/user-management/UserTable'
+import { WorkerBarcodes } from '@/components/pages/user-management/WorkerBarcodes'
 
 const stats = [
   { label: 'พนักงานทั้งหมด', value: '12 คน', icon: Users, color: 'text-gray-700 bg-gray-100', border: 'border-gray-200' },
@@ -50,6 +51,9 @@ export default function UserManagementPage() {
 
       {/* Main Table */}
       <UserTable />
+
+      {/* Worker Barcodes */}
+      <WorkerBarcodes />
     </div>
   )
 }

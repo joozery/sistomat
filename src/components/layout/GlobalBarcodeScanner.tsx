@@ -114,21 +114,6 @@ export function GlobalBarcodeScanner() {
 
   return (
     <>
-      {/* Scan indicator bar */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-center gap-2 py-1.5 select-none transition-colors"
-        style={{ background: isActive ? '#052e16' : '#1c1917' }}
-      >
-        <div className={`h-2 w-2 rounded-full transition-colors ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
-        <span className={`text-[11px] font-semibold transition-colors ${isActive ? 'text-emerald-300' : 'text-zinc-400'}`}>
-          {isActive
-            ? lastScan
-              ? `📷 สแกนล่าสุด: ${lastScan.length > 30 ? lastScan.slice(0, 30) + '…' : lastScan}`
-              : '📷 พร้อมสแกน — สแกนบาร์โค้ดได้เลย'
-            : '📷 คลิกที่หน้าต่างนี้เพื่อเปิดใช้สแกนเนอร์'}
-        </span>
-      </div>
-
       {/* Navigation toast */}
       {navToast.visible && (
         <div
