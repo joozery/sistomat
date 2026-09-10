@@ -187,7 +187,7 @@ export default function JobListPage() {
       const data = Array.isArray(json) ? json : (json.jobs ?? [])
       setJobs(data)
       // auto-expand all level2 groups
-      const allKeys = new Set(data.map((j: Job) => j.level2 ?? j.job_code))
+      const allKeys = new Set<string>(data.map((j: Job) => j.level2 ?? j.job_code))
       setExpanded(allKeys)
     } catch { /* ignore */ }
     finally { setLoading(false) }
