@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { findWorker, type WorkerData } from '@/lib/workers'
 import { useWorkersList } from '@/lib/useWorkersList'
+import { useOvertimeThreshold } from '@/lib/useOvertimeThreshold'
 
 interface RealtimeEvent {
   project_id: string
@@ -22,6 +23,7 @@ interface RealtimeEvent {
   stop_time: string | null
   target_time: string
   skill: string
+  overtime_grace?: string
   remark: string
   job_status: string
   due_date: string
@@ -71,15 +73,23 @@ function calcElapsed(start: string, stop?: string | null, now?: number): string 
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function calcProgress(start: string, target: string, stop?: string | null, now?: number): number {
+function getTargetSeconds(target: string): number {
+  const parts = (target ?? '00:00').split(':').map(Number)
+  return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60
+}
+
+function getElapsedSeconds(start: string, stop?: string | null, now?: number): number {
   const refNow = now ?? Date.now()
   const startMs = parseTime(start, refNow)
   const endMs = stop ? parseTime(stop, refNow) : refNow
   if (isNaN(startMs) || isNaN(endMs)) return 0
-  const elapsed = Math.max(0, Math.floor((endMs - startMs) / 1000))
-  const targetParts = (target ?? '00:00').split(':').map(Number)
-  const targetSecs = (targetParts[0] || 0) * 3600 + (targetParts[1] || 0) * 60
+  return Math.max(0, Math.floor((endMs - startMs) / 1000))
+}
+
+function calcProgress(start: string, target: string, stop?: string | null, now?: number): number {
+  const targetSecs = getTargetSeconds(target)
   if (!targetSecs) return 0
+  const elapsed = getElapsedSeconds(start, stop, now)
   return Math.min(100, Math.round((elapsed / targetSecs) * 100))
 }
 
@@ -101,7 +111,7 @@ function getProcessColor(process: string): string {
   return key ? PROCESS_COLORS[key] : 'bg-gray-100 text-gray-600 border-gray-200'
 }
 
-function TableRow({ ev, idx, now, workers }: { ev: RealtimeEvent; idx: number; now: number; workers: WorkerData[] }) {
+function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: RealtimeEvent; idx: number; now: number; workers: WorkerData[]; overtimeGraceMinutes: number }) {
   const router = useRouter()
   const isRunning = ev.status === 'running'
   const isIdle = ev.status === 'idle'
@@ -115,7 +125,12 @@ function TableRow({ ev, idx, now, workers }: { ev: RealtimeEvent; idx: number; n
     ? calcProgress(ev.start_time, ev.target_time, null, now)
     : ev.status === 'completed' ? 100 : null
 
-  const isOvertime = isRunning && (progress ?? 0) >= 100
+  // OVERTIME = เลยเวลาเป้าหมายมาแล้วเกินกว่าเกณฑ์ที่ตั้งไว้
+  // ใช้ค่าเฉพาะกระบวนการนี้ก่อน (ตั้งที่หน้า process-details) ถ้าไม่ได้ตั้งไว้ค่อย fallback เป็นค่าเริ่มต้นของระบบ (หน้าตั้งค่าระบบ)
+  const targetSecs = getTargetSeconds(ev.target_time)
+  const graceMinutes = ev.overtime_grace?.trim() ? Number(ev.overtime_grace) || 0 : overtimeGraceMinutes
+  const isOvertime =
+    isRunning && targetSecs > 0 && getElapsedSeconds(ev.start_time, null, now) >= targetSecs + graceMinutes * 60
 
   return (
     <tr
@@ -366,6 +381,7 @@ const PROCESS_OPTIONS = ['ทั้งหมด', 'CAM', 'CNC', 'ML', 'LATHE', '
 
 export default function RealtimePage() {
   const { workers } = useWorkersList()
+  const { graceMinutes: overtimeGraceMinutes } = useOvertimeThreshold()
   const [data, setData] = useState<RealtimeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(true)
@@ -680,6 +696,7 @@ export default function RealtimePage() {
                         idx={(page - 1) * PAGE_SIZE + i}
                         now={now}
                         workers={workers}
+                        overtimeGraceMinutes={overtimeGraceMinutes}
                       />
                     ))}
                   </tbody>

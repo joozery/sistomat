@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
             stop_time: w.stop_time ?? null,
             target_time: proc.target_time ?? '',
             skill: proc.skill ?? '0',
+            overtime_grace: proc.overtime_grace ?? '',
             remark: proc.remark ?? '',
             job_status: proj.job_status ?? proj.status ?? '',
             due_date: proj.due_date ?? '',

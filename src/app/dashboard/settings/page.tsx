@@ -13,6 +13,7 @@ import {
   Trash2,
   Signature,
   Upload,
+  Timer,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { useProcessOptions } from '@/lib/useProcessOptions'
 import { useInspectors, type Inspector } from '@/lib/useInspectors'
+import { useOvertimeThreshold } from '@/lib/useOvertimeThreshold'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -237,6 +239,102 @@ function OptionsListSection({
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saveLabel}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ── Overtime threshold (grace period before a running process is marked OVERTIME) ── */
+function OvertimeThresholdSection() {
+  const { graceMinutes, loading, refresh } = useOvertimeThreshold()
+  const [draft, setDraft] = useState(0)
+  const [syncedFrom, setSyncedFrom] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!loading && syncedFrom !== graceMinutes) {
+    setDraft(graceMinutes)
+    setSyncedFrom(graceMinutes)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/settings/overtime', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ graceMinutes: draft }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'บันทึกไม่สำเร็จ')
+        return
+      }
+      setSaved(true)
+      refresh()
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-amber-50 border-amber-100">
+            <Timer className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">เกณฑ์ OVERTIME (ค่าเริ่มต้น)</h3>
+            <p className="text-xs text-gray-400">
+              ค่าเริ่มต้นของทั้งระบบ — ใช้เมื่อกระบวนการนั้นไม่ได้ตั้งค่า OVERTIME ของตัวเองไว้ (ตั้งเฉพาะกระบวนการได้ที่หน้ารายละเอียดใบงาน ช่อง &quot;OVERTIME (นาที)&quot; ถัดจากเป้าหมาย)
+            </p>
+          </div>
+        </div>
+        {saved && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+            <CheckCircle2 className="h-4 w-4" />
+            บันทึกแล้ว
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">กำลังโหลด...</span>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={0}
+              value={draft}
+              onChange={(e) => { setDraft(Math.max(0, Number(e.target.value) || 0)); setSaved(false) }}
+              className="rounded-xl h-10 text-sm border-gray-200 w-32"
+            />
+            <span className="text-xs text-gray-500">นาที หลังเลยเป้าหมาย (0 = ขึ้น OVERTIME ทันทีที่ถึงเป้าหมาย)</span>
+          </div>
+
+          {error && <p className="text-xs text-red-600 font-medium mt-3">{error}</p>}
+
+          <div className="flex justify-end mt-5">
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-xs font-semibold"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              บันทึกเกณฑ์ OVERTIME
             </Button>
           </div>
         </>
@@ -539,6 +637,8 @@ export default function SettingsPage() {
         saveLabel="บันทึกตัวเลือก"
         useOptions={useProcessOptions}
       />
+
+      <OvertimeThresholdSection />
 
       <InspectorsSection />
 
