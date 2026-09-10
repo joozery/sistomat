@@ -138,7 +138,7 @@ export default function AllPlansPage() {
       .finally(() => setSummaryLoading(false))
   }, [])
 
-  // Load jobs (when in detail view)
+  // Load jobs (when in detail view) — queries projects collection for accuracy
   const loadJobs = useCallback(async (proc: string, q: string, from: string, to: string, pg: number) => {
     setJobsLoading(true)
     try {
@@ -146,7 +146,7 @@ export default function AllPlansPage() {
       if (q)    params.set('search', q)
       if (from) params.set('dateFrom', from)
       if (to)   params.set('dateTo', to)
-      const res = await fetch(`/api/jobs?${params}`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      const res = await fetch(`/api/projects?${params}`, { headers: { Authorization: `Bearer ${getToken()}` } })
       const json = await res.json()
       setJobs(json.jobs ?? [])
       setTotal(json.total ?? 0)
