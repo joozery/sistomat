@@ -192,11 +192,27 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
   }
 
+  const is3DFile = (name: string) =>
+    ['stl', 'step', 'stp', 'obj', '3mf', 'glb', 'gltf'].includes(
+      name.split('.').pop()?.toLowerCase() ?? ''
+    )
+
   async function createProjectOnly() {
     setSaving(true)
     setSaveError('')
     try {
       const token = localStorage.getItem('token')
+
+      // อัปโหลดไฟล์ที่แนบไว้ (ถ้ามี) แล้วผูกเข้ากับตัวโปรเจคแม่โดยตรง
+      const uploaded: { file_url: string; file_name: string }[] = []
+      for (const file of files) {
+        setUploadingFileName(file.name)
+        setUploadProgress(0)
+        const url = await uploadOne(file, form.projectId, token, setUploadProgress)
+        uploaded.push({ file_url: url, file_name: file.name })
+      }
+      const primary = uploaded.find((f) => is3DFile(f.file_name)) ?? uploaded[0]
+
       const res = await fetch('/api/projects/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -205,8 +221,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
           dwgName: '',
           receivedDate: form.receivedDate,
           dueDate: form.dueDate,
-          fileUrl: null,
-          fileName: null,
+          fileUrl: primary?.file_url ?? null,
+          fileName: primary?.file_name ?? null,
+          attachments: uploaded.length ? uploaded : null,
         }),
       })
       if (!res.ok && res.status !== 409) {
@@ -221,13 +238,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       setSaveError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
       setSaving(false)
+      setUploadingFileName('')
     }
   }
-
-  const is3DFile = (name: string) =>
-    ['stl', 'step', 'stp', 'obj', '3mf', 'glb', 'gltf'].includes(
-      name.split('.').pop()?.toLowerCase() ?? ''
-    )
 
   async function handleSaveAll() {
     for (const r of rows) {
@@ -242,25 +255,8 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     const token = localStorage.getItem('token')
 
     try {
-      const projRes = await fetch('/api/projects/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          projectId: form.projectId,
-          dwgName: '',
-          receivedDate: form.receivedDate,
-          dueDate: form.dueDate,
-          fileUrl: null,
-          fileName: null,
-        }),
-      })
-      if (!projRes.ok && projRes.status !== 409) {
-        const projData = await projRes.json()
-        throw new Error(projData.message || 'สร้างโปรเจคไม่สำเร็จ')
-      }
-
-      const skippedJobCodes: string[] = []
-
+      // อัปโหลดไฟล์ของทุก Job ย่อยก่อน แล้วค่อยสร้างโปรเจคแม่ด้วยไฟล์จริง (ไม่ใช่ null)
+      const rowUploads: { row: JobRowInput; uploaded: { file_url: string; file_name: string }[] }[] = []
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         setUploadIndex(i + 1)
@@ -273,7 +269,33 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
           const url = await uploadOne(file, form.projectId, token, setUploadProgress)
           uploaded.push({ file_url: url, file_name: file.name })
         }
+        rowUploads.push({ row: r, uploaded })
+      }
 
+      const allUploaded = rowUploads.flatMap((ru) => ru.uploaded)
+      const primaryProject = allUploaded.find((f) => is3DFile(f.file_name)) ?? allUploaded[0]
+
+      const projRes = await fetch('/api/projects/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          projectId: form.projectId,
+          dwgName: '',
+          receivedDate: form.receivedDate,
+          dueDate: form.dueDate,
+          fileUrl: primaryProject?.file_url ?? null,
+          fileName: primaryProject?.file_name ?? null,
+          attachments: allUploaded.length ? allUploaded : null,
+        }),
+      })
+      if (!projRes.ok && projRes.status !== 409) {
+        const projData = await projRes.json()
+        throw new Error(projData.message || 'สร้างโปรเจคไม่สำเร็จ')
+      }
+
+      const skippedJobCodes: string[] = []
+
+      for (const { row: r, uploaded } of rowUploads) {
         // prefer 3D file as primary (for 3D viewer), fallback to first
         const primary = uploaded.find((f) => is3DFile(f.file_name)) ?? uploaded[0]
         const fullJobCode = r.level3.trim() || r.jobCode.trim()
@@ -471,7 +493,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                   className="rounded-full h-10 border-gray-200 text-gray-600"
                 >
                   {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                  ข้ามไฟล์ / บันทึกโปรเจคอย่างเดียว
+                  {files.length > 0 ? 'บันทึกโปรเจคพร้อมไฟล์ที่แนบ' : 'ข้ามไฟล์ / บันทึกโปรเจคอย่างเดียว'}
                 </Button>
                 <Button
                   type="button"
