@@ -8,6 +8,25 @@ function getToken(req: NextRequest): string | null {
   return req.cookies.get('auth_token')?.value ?? null
 }
 
+const PROCESS_NAME_MAP: Record<string, string> = {
+  'MATERAIL': 'MATERAIL - PO',
+  'MATERIAL': 'MATERAIL - PO',
+  'MATERIAL - PO': 'MATERAIL - PO',
+  'MATERIAL - CUT': 'MATERAIL - CUT',
+  'MATERAIL-CUT': 'MATERAIL - CUT',
+  'MATERIAL-CUT': 'MATERAIL - CUT',
+  'CAM1': 'CAM',
+  'CNC1': 'CNC',
+  'CNC 1': 'CNC',
+  'LATHE 1': 'LATHE',
+  'LATHE1': 'LATHE',
+}
+
+function normalizeProcessName(name: string): string {
+  const trimmed = name.trim()
+  return PROCESS_NAME_MAP[trimmed] ?? trimmed
+}
+
 function hoursToHHMM(hours: number): string {
   if (!hours || isNaN(hours) || hours <= 0) return '00:00'
   const h = Math.floor(hours)
@@ -27,7 +46,7 @@ function buildProcesses(job: {
     if (!p.process) continue
     rows.push({
       id: id++,
-      process: p.process,
+      process: normalizeProcessName(p.process),
       target_time: hoursToHHMM(p.time_hours),
       skill: '0',
       workers: [
@@ -45,7 +64,7 @@ function buildProcesses(job: {
     for (const op of job.outsource_process.split(' / ').filter(Boolean)) {
       rows.push({
         id: id++,
-        process: op,
+        process: normalizeProcessName(op),
         target_time: '00:00',
         skill: '0',
         workers: [
@@ -63,7 +82,7 @@ function buildProcesses(job: {
   if (job.coating) {
     rows.push({
       id: id++,
-      process: job.coating,
+      process: normalizeProcessName(job.coating),
       target_time: '00:00',
       skill: '0',
       workers: [

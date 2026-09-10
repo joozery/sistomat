@@ -37,11 +37,15 @@ function getExt(name: string) {
 
 const IS_3D = ['stl', 'obj', 'glb', 'gltf', 'step', 'stp']
 
+function proxyDownloadUrl(fileUrl: string, fileName: string) {
+  return `/api/file-proxy?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(fileName)}`
+}
+
 function FileActions({ url, name }: { url: string; name: string }) {
   return (
     <div className="flex items-center gap-1.5 shrink-0">
       <Button asChild variant="outline" size="sm" className="rounded-full h-7 gap-1 text-xs px-2.5">
-        <a href={url} download={name}>
+        <a href={proxyDownloadUrl(url, name)} download={name}>
           <Download className="h-3 w-3" /> ดาวน์โหลด
         </a>
       </Button>
@@ -155,7 +159,7 @@ export function FilePreviewDialog({ open, onOpenChange, fileUrl, fileName, attac
           </DialogTitle>
           <div className="flex items-center gap-2 shrink-0">
             <Button asChild variant="outline" size="sm" className="rounded-full h-8 gap-1 text-xs">
-              <a href={fileUrl} download={fileName}>
+              <a href={proxyDownloadUrl(fileUrl, fileName)} download={fileName}>
                 <Download className="h-3.5 w-3.5" /> ดาวน์โหลด
               </a>
             </Button>

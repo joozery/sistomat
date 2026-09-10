@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   }
 
   const url = req.nextUrl.searchParams.get('url')
+  const filename = req.nextUrl.searchParams.get('filename')
   const r2PublicUrl = process.env.R2_PUBLIC_URL!
   if (!url || !url.startsWith(r2PublicUrl)) {
     return NextResponse.json({ message: 'Invalid url' }, { status: 400 })
@@ -35,6 +36,11 @@ export async function GET(req: NextRequest) {
   for (const h of PASSTHROUGH_HEADERS) {
     const v = upstream.headers.get(h)
     if (v) headers.set(h, v)
+  }
+
+  if (filename) {
+    const safe = filename.replace(/[^\w.\-() ]/g, '_')
+    headers.set('Content-Disposition', `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(filename)}`)
   }
 
   return new NextResponse(upstream.body, { status: upstream.status, headers })
