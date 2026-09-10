@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, type ComponentType } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown, PauseCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown, PauseCircle, Info, X } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
 import { ProcessTable, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
@@ -15,19 +15,159 @@ import { useProcessOptions } from '@/lib/useProcessOptions'
 const QRCodeSVG = dynamic(() => import('qrcode.react').then((m) => m.QRCodeSVG), { ssr: false })
 const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
 
-function CmdBarcode({ value, color, bg }: { value: string; color: string; bg: string }) {
+function CmdBarcode({ value, color, bg, barWidth = 2, barHeight = 46 }: { value: string; color: string; bg: string; barWidth?: number; barHeight?: number }) {
   return (
     <Barcoder
       value={value}
       format="CODE128"
-      width={2}
-      height={56}
-      fontSize={11}
-      margin={4}
+      width={barWidth}
+      height={barHeight}
+      fontSize={10}
+      margin={3}
       background={bg}
       lineColor={color}
       displayValue={true}
     />
+  )
+}
+
+type CommandBarcodeAccent = {
+  border: string
+  bg: string
+  text: string
+  icon: string
+  barLine: string
+  barBg: string
+}
+
+const COMMAND_BARCODE_ACCENTS: Record<string, CommandBarcodeAccent> = {
+  violet: { border: 'border-violet-100', bg: 'bg-violet-50/40', text: 'text-violet-700', icon: 'text-violet-700', barLine: '#5b21b6', barBg: '#f5f3ff' },
+  emerald: { border: 'border-emerald-100', bg: 'bg-emerald-50/40', text: 'text-emerald-700', icon: 'text-emerald-700', barLine: '#047857', barBg: '#ecfdf5' },
+  amber: { border: 'border-amber-200', bg: 'bg-amber-50/50', text: 'text-amber-700', icon: 'text-amber-700', barLine: '#92400e', barBg: '#fffbeb' },
+  orange: { border: 'border-orange-100', bg: 'bg-orange-50/40', text: 'text-orange-700', icon: 'text-orange-700', barLine: '#c2410c', barBg: '#fff7ed' },
+  blue: { border: 'border-blue-100', bg: 'bg-blue-50/40', text: 'text-blue-700', icon: 'text-blue-700', barLine: '#1d4ed8', barBg: '#eff6ff' },
+  red: { border: 'border-red-300', bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-700', barLine: '#991b1b', barBg: '#fef2f2' },
+}
+
+type CommandBarcodeSpec = {
+  value: string
+  label: string
+  desc: string
+  status: string
+  accent: keyof typeof COMMAND_BARCODE_ACCENTS
+  icon: ComponentType<{ className?: string }>
+  detail: string[]
+}
+
+const COMMAND_BARCODES: CommandBarcodeSpec[] = [
+  {
+    value: 'ACPT_FN', label: 'Acpt - FN', desc: 'รับงาน — จบงาน', status: 'รับงาน', accent: 'violet', icon: PackageCheck,
+    detail: [
+      'ใช้เมื่อพนักงานรับงานและทำเสร็จในขั้นตอนเดียว โดยไม่ต้องยืนยันทีละกระบวนการด้วย CMD_NEXT',
+      'สแกนครั้งเดียว ระบบบันทึกสถานะโปรเจกต์เป็น "รับงาน" ทันที',
+    ],
+  },
+  {
+    value: 'CMD_NEXT', label: 'ยืนยันจบกระบวนการ', desc: 'ปิดกระบวนการที่กำลังทำ (ต้องสแกนทุกครั้ง)', status: '', accent: 'emerald', icon: ArrowRight,
+    detail: [
+      'ปิดกระบวนการแรกที่มีพนักงานเริ่มงานแล้วแต่ยังไม่ถูกยืนยัน',
+      'หยุดเวลาพนักงานที่ยังทำงานอยู่ทุกคนในแถวนั้น แล้วประทับเวลายืนยันกระบวนการ',
+      'ต้องสแกนทุกครั้งก่อนพนักงานจะเริ่มสแกนกระบวนการถัดไปได้',
+    ],
+  },
+  {
+    value: 'CMD_HOLD', label: 'HOLD — พักชั่วคราว', desc: 'พักงาน สแกนซ้ำเพื่อทำต่อ', status: '', accent: 'amber', icon: PauseCircle,
+    detail: [
+      'พักกระบวนการที่ยังไม่ยืนยัน (ยังไม่ผ่าน CMD_NEXT) ชั่วคราว — หยุดเวลาพนักงานที่กำลังทำงานอยู่ทุกคน',
+      'ทำงานแบบสลับสถานะ (toggle): สแกน CMD_HOLD ซ้ำอีกครั้งเพื่อปลดล็อกและทำงานต่อ',
+    ],
+  },
+  {
+    value: 'CMD_REVERSE', label: 'ย้อนกลับกระบวนการ', desc: 'เลือกกระบวนการที่ต้องการย้อนกลับ', status: '', accent: 'orange', icon: RotateCcw,
+    detail: [
+      'ใช้เมื่อต้องการย้อนกลับไปทำกระบวนการที่ยืนยันไปแล้วใหม่ (เช่น ทำผิดขั้นตอน)',
+      'ต้องมีอย่างน้อย 1 กระบวนการที่ยืนยันด้วย CMD_NEXT แล้ว ระบบจะเปิดหน้าต่างให้เลือกกระบวนการที่จะย้อนกลับ',
+      'ข้อมูลเวลาที่บันทึกไว้เดิมจะยังคงอยู่ ไม่ถูกลบทิ้ง',
+    ],
+  },
+  {
+    value: 'FN_GOOD', label: 'FN Good - FN', desc: 'จบงาน', status: '', accent: 'blue', icon: CheckCircle2,
+    detail: [
+      'สแกนเมื่องานผลิตเสร็จสมบูรณ์แล้ว',
+      'ระบบจะเด้ง popup ให้เลือกต่อว่าลูกค้า "รับงาน" (Acpt - FN) หรือ "ไม่รับงาน" (Cancel - FN) — ไม่บันทึกสถานะทันที',
+    ],
+  },
+  {
+    value: 'CMD_REJECT', label: 'REJECT — ยุติทันที', desc: 'สแกน 2 ครั้งเพื่อปิดทุกกระบวนการทันที', status: 'ยกเลิก', accent: 'red', icon: XCircle,
+    detail: [
+      'ใช้ยุติงานทั้งหมดทันทีในกรณีฉุกเฉิน',
+      'ต้องสแกน 2 ครั้งติดกันภายใน 5 วินาทีเพื่อยืนยัน (ครั้งแรกเป็นการเตือน)',
+      'เมื่อยืนยันแล้ว ระบบหยุดเวลาพนักงานที่กำลังทำงานอยู่ทุกคนในทุกกระบวนการ และเปลี่ยนสถานะโปรเจกต์เป็น "ยกเลิก"',
+    ],
+  },
+  {
+    value: 'CANCEL_FN', label: 'Cancel - FN', desc: 'จบงานแต่ไม่รับงาน', status: 'ไม่รับงาน', accent: 'orange', icon: Ban,
+    detail: [
+      'สแกนเมื่อจบงานแต่ไม่ได้รับงานจริง เช่น ยกเลิกงานก่อนเริ่มทำ',
+      'บันทึกสถานะโปรเจกต์เป็น "ไม่รับงาน" ทันที',
+    ],
+  },
+]
+
+// ปกติโชว์การ์ดเหล่านี้ — พอสแกน FN_GOOD แล้วจะสลับไปโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว (ดู awaitingFinishDecision)
+const PAGE_COMMAND_BARCODES = COMMAND_BARCODES.filter(
+  (c) => c.value !== 'ACPT_FN' && c.value !== 'CANCEL_FN'
+)
+const FINISH_DECISION_BARCODES = COMMAND_BARCODES.filter(
+  (c) => c.value === 'ACPT_FN' || c.value === 'CANCEL_FN'
+)
+
+// สถานะที่ปิดงานจริง (ตัดสินใจแล้ว) — ต่างจาก FN_GOOD ที่แค่ "งานเสร็จ" แต่ยังไม่รู้ผลว่าลูกค้ารับหรือไม่
+const FINISH_STATUS_MAP: Record<string, { status: string; title: string; subtitle: string }> = {
+  'CANCEL_FN': { status: 'ไม่รับงาน', title: 'จบงานแต่ไม่รับงาน', subtitle: 'บันทึกสถานะ: ไม่รับงาน' },
+  'ACPT_FN': { status: 'รับงาน', title: 'รับงาน — จบงาน', subtitle: 'บันทึกสถานะ: รับงาน' },
+}
+
+function CommandBarcodeInfoModal({ spec, onClose }: { spec: CommandBarcodeSpec; onClose: () => void }) {
+  const a = COMMAND_BARCODE_ACCENTS[spec.accent]
+  const Icon = spec.icon
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm font-sans"
+      onClick={onClose}
+    >
+      <div
+        className={`w-full max-w-sm rounded-2xl border ${a.border} bg-white p-5 shadow-2xl`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Icon className={`h-5 w-5 ${a.icon}`} />
+            <h3 className="text-sm font-bold text-gray-800">{spec.label}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <ul className="space-y-2">
+          {spec.detail.map((line, i) => (
+            <li key={i} className="flex gap-2 text-xs leading-relaxed text-gray-600">
+              <span className={`mt-1 h-1 w-1 flex-none rounded-full ${a.icon} bg-current`} />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+        {spec.status && (
+          <p className="mt-3 text-xs text-gray-500">
+            บันทึกสถานะ: <span className={`font-semibold ${a.text}`}>{spec.status}</span>
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -389,6 +529,9 @@ export default function ProcessDetailsPage() {
   const reverseModalOpenRef = useRef(false)
   useEffect(() => { reverseModalOpenRef.current = reverseModalOpen }, [reverseModalOpen])
 
+  const [infoBarcodeValue, setInfoBarcodeValue] = useState<string | null>(null)
+  const [awaitingFinishDecision, setAwaitingFinishDecision] = useState(false)
+
   // Blocked workers
   const blockedCodesRef = useRef<Set<number>>(new Set())
 
@@ -538,6 +681,20 @@ export default function ProcessDetailsPage() {
     })
     setEditVersion((v) => v + 1)
   }
+
+  const applyFinishStatus = useCallback((rawKey: string) => {
+    const entry = FINISH_STATUS_MAP[rawKey]
+    if (!entry) return
+    const { status, title, subtitle } = entry
+    setAwaitingFinishDecision(false)
+    setProject((prev) => prev ? { ...prev, status } : prev)
+    fetch(`/api/projects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ status }),
+    }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+    showToast('success', title, subtitle)
+  }, [id, showToast])
 
   useEffect(() => {
     const handleLocalScan = (e: any) => {
@@ -700,21 +857,15 @@ export default function ProcessDetailsPage() {
       }
 
       // ── สถานะจบงาน: CANCEL_FN / FN_GOOD / ACPT_FN ──
-      const statusMap: Record<string, { status: string; title: string; subtitle: string }> = {
-        'CANCEL_FN': { status: 'ไม่รับงาน',     title: 'จบงานแต่ไม่รับงาน',  subtitle: 'บันทึกสถานะ: ไม่รับงาน' },
-        'FN_GOOD':   { status: 'จบงาน',          title: 'จบงาน',              subtitle: 'บันทึกสถานะ: จบงาน' },
-        'ACPT_FN':   { status: 'รับงาน',         title: 'รับงาน — จบงาน',    subtitle: 'บันทึกสถานะ: รับงาน' },
-      }
-      if (statusMap[rawUpper]) {
+      // FN_GOOD = งานผลิตเสร็จแล้ว แต่ยังไม่รู้ว่าลูกค้าจะรับงานหรือไม่ → สลับการ์ดบาร์โค้ดด้านล่างเป็น ACPT_FN / CANCEL_FN แทนการปิดสถานะทันที (ไม่มี popup)
+      if (rawUpper === 'FN_GOOD') {
         e.preventDefault()
-        const { status, title, subtitle } = statusMap[rawUpper]
-        setProject((prev) => prev ? { ...prev, status } : prev)
-        fetch(`/api/projects/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-          body: JSON.stringify({ status }),
-        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
-        showToast('success', title, subtitle)
+        setAwaitingFinishDecision(true)
+        return
+      }
+      if (FINISH_STATUS_MAP[rawUpper]) {
+        e.preventDefault()
+        applyFinishStatus(rawUpper)
         return
       }
 
@@ -927,7 +1078,7 @@ export default function ProcessDetailsPage() {
 
     document.addEventListener('onBarcodeScan', handleLocalScan)
     return () => document.removeEventListener('onBarcodeScan', handleLocalScan)
-  }, [activeRowIndex, id])
+  }, [activeRowIndex, id, applyFinishStatus])
 
   const handleWorkerChange = (index: number, workerIndex: number, field: keyof WorkerLog, value: string) => {
     setProcessList((prev) => {
@@ -947,6 +1098,7 @@ export default function ProcessDetailsPage() {
         process: 'MATERAIL',
         target_time: '00:00',
         skill: '0',
+        overtime_grace: '',
         workers: [
           { worker_id: '', start_time: '', stop_time: '' },
           { worker_id: '', start_time: '', stop_time: '' },
@@ -1116,6 +1268,10 @@ export default function ProcessDetailsPage() {
         onClose={() => setReverseModalOpen(false)}
       />
     )}
+    {infoBarcodeValue && (() => {
+      const spec = COMMAND_BARCODES.find((c) => c.value === infoBarcodeValue)
+      return spec ? <CommandBarcodeInfoModal spec={spec} onClose={() => setInfoBarcodeValue(null)} /> : null
+    })()}
     <div className="space-y-6 font-sans print:hidden">
       {/* Top Action Bar */}
       <div className="flex items-center justify-between">
@@ -1185,124 +1341,54 @@ export default function ProcessDetailsPage() {
             onDeleteRow={handleDeleteRow}
           />
 
-          {/* Status Barcodes */}
-          <div className="flex gap-4">
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-orange-100 bg-orange-50/40 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="CANCEL_FN" color="#9a3412" bg="#fff7ed" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Ban className="h-4 w-4 text-orange-700" />
-                  <span className="text-sm font-bold text-gray-800">Cancel - FN</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  จบงานแต่ไม่รับงาน<br />
-                  บันทึกสถานะ: <span className="font-semibold text-orange-700">ไม่รับงาน</span>
-                </p>
-              </div>
+          {/* Command Barcodes: ปกติโชว์ workflow ทั่วไป — พอสแกน FN_GOOD แล้วสลับมาโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว */}
+          {awaitingFinishDecision && (
+            <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-2.5">
+              <p className="text-xs font-medium text-blue-800">
+                งานผลิตเสร็จแล้ว — สแกน <span className="font-bold">Acpt-FN</span> ถ้าลูกค้ารับงาน หรือ <span className="font-bold">Cancel-FN</span> ถ้าไม่รับงาน
+              </p>
+              <button
+                type="button"
+                onClick={() => setAwaitingFinishDecision(false)}
+                className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+              >
+                ยกเลิก
+              </button>
             </div>
-
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-blue-100 bg-blue-50/40 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="FN_GOOD" color="#1d4ed8" bg="#eff6ff" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <CheckCircle2 className="h-4 w-4 text-blue-700" />
-                  <span className="text-sm font-bold text-gray-800">FN Good - FN</span>
+          )}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {(awaitingFinishDecision ? FINISH_DECISION_BARCODES : PAGE_COMMAND_BARCODES).map(({ value, label, desc, status, accent, icon: Icon }) => {
+              const a = COMMAND_BARCODE_ACCENTS[accent]
+              return (
+                <div
+                  key={value}
+                  className={`relative flex flex-col items-center gap-2 rounded-lg border ${a.border} ${a.bg} px-3 py-3 text-center`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setInfoBarcodeValue(value)}
+                    aria-label={`วิธีใช้งาน ${label}`}
+                    className="absolute right-1.5 top-1.5 rounded-full p-0.5 text-gray-400 hover:bg-white/70 hover:text-gray-600"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <Icon className={`h-3.5 w-3.5 ${a.icon}`} />
+                    <span className="text-xs font-semibold text-gray-800">{label}</span>
+                  </div>
+                  <CmdBarcode value={value} color={a.barLine} bg={a.barBg} />
+                  <p className="text-[11px] leading-snug text-gray-500">
+                    {desc}
+                    {status && (
+                      <>
+                        {' · '}
+                        <span className={`font-medium ${a.text}`}>{status}</span>
+                      </>
+                    )}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  จบงาน<br />
-                  บันทึกสถานะ: <span className="font-semibold text-blue-700">จบงาน</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-violet-100 bg-violet-50/40 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="ACPT_FN" color="#5b21b6" bg="#f5f3ff" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <PackageCheck className="h-4 w-4 text-violet-700" />
-                  <span className="text-sm font-bold text-gray-800">Acpt - FN</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  รับงาน — จบงาน<br />
-                  บันทึกสถานะ: <span className="font-semibold text-violet-700">รับงาน</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-red-300 bg-red-50 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="CMD_REJECT" color="#991b1b" bg="#fef2f2" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <XCircle className="h-4 w-4 text-red-700" />
-                  <span className="text-sm font-bold text-gray-800">REJECT — ยุติงานทันที</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกน 2 ครั้งเพื่อปิดทุกกระบวนการทันที<br />
-                  บันทึกสถานะ: <span className="font-semibold text-red-700">ยกเลิก</span>
-                </p>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Special Command Barcodes */}
-          <div className="flex gap-4">
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-amber-200 bg-amber-50/50 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="CMD_HOLD" color="#92400e" bg="#fffbeb" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <PauseCircle className="h-4 w-4 text-amber-700" />
-                  <span className="text-sm font-bold text-gray-800">HOLD — หยุดพักชั่วคราว</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกนเพื่อพักงานชั่วคราว (หยุดนาฬิกา)<br />
-                  สแกน <span className="font-semibold text-amber-700">CMD_HOLD</span> อีกครั้งเพื่อดำเนินการต่อ
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-emerald-100 bg-emerald-50/40 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="CMD_NEXT" color="#047857" bg="#ecfdf5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <ArrowRight className="h-4 w-4 text-emerald-700" />
-                  <span className="text-sm font-bold text-gray-800">ยืนยันจบกระบวนการ</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกนเพื่อปิดกระบวนการที่กำลังทำอยู่และบันทึกเวลาจบ<br />
-                  <span className="font-semibold text-emerald-700">ต้องสแกนทุกครั้ง</span> ก่อนกระบวนการถัดไปจะเริ่มได้
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 flex-1 rounded-xl border border-orange-100 bg-orange-50/40 px-5 py-4 shadow-sm/50">
-              <div className="flex flex-col items-center gap-0.5">
-                <CmdBarcode value="CMD_REVERSE" color="#c2410c" bg="#fff7ed" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <RotateCcw className="h-4 w-4 text-orange-700" />
-                  <span className="text-sm font-bold text-gray-800">ย้อนกลับกระบวนการ</span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  สแกนแล้วเลือกกระบวนการที่ต้องการย้อนกลับไปทำใหม่<br />
-                  ข้อมูลเวลาเดิมจะยังคงอยู่
-                </p>
-              </div>
-            </div>
-
+              )
+            })}
           </div>
         </div>
       )}

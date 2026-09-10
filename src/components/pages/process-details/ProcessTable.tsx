@@ -3,6 +3,7 @@
 import { Plus, Trash2, ScanBarcode, CheckCircle2, PauseCircle } from 'lucide-react'
 import { Fragment, useMemo } from 'react'
 import { isRowCompleted } from '@/lib/workers'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 function parseTimeParts(t: string): { date: string; time: string } | null {
   if (!t) return null
@@ -49,6 +50,7 @@ export interface ProcessRow {
   process: string
   target_time: string
   skill: string
+  overtime_grace?: string
   workers: WorkerLog[]
   elapsed_time: string
   remark: string
@@ -79,6 +81,9 @@ const workerColors = [
 ]
 
 export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onDeleteRow }: ProcessTableProps) {
+  const { role } = useCurrentUser()
+  const canSeeSkill = role !== 'User'
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm font-sans overflow-hidden">
       {/* ── Header Bar ── */}
@@ -112,9 +117,15 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                 เป้าหมาย<br />
                 <span className="font-normal text-[10px]">(นาที)</span>
               </th>
-              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">
-                SKILL
+              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-amber-700 px-2 py-1.5 w-16 leading-snug" title="เลยเป้าหมายไปกี่นาทีถึงจะเป็น OVERTIME (ว่าง = ใช้ค่าเริ่มต้นของระบบ)">
+                OVERTIME<br />
+                <span className="font-normal text-[10px]">(นาที)</span>
               </th>
+              {canSeeSkill && (
+                <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">
+                  SKILL
+                </th>
+              )}
 
               {workerColors.map((c, i) => (
                 <th key={i} colSpan={3}
@@ -224,17 +235,31 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                     />
                   </td>
 
-                  {/* SKILL */}
+                  {/* OVERTIME grace (นาทีหลังเลยเป้าหมาย) */}
                   <td className={`border border-slate-300 p-0 ${isActive ? 'bg-blue-100' : ''}`}>
                     <input
                       type="text"
-                      value={row.skill}
-                      onChange={(e) => onChange(index, 'skill', e.target.value)}
-                      placeholder="0"
-                      className={`w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700 ${isActive ? 'bg-blue-100' : 'bg-white'}`}
+                      value={row.overtime_grace ?? ''}
+                      onChange={(e) => onChange(index, 'overtime_grace', e.target.value)}
+                      placeholder="ค่าเริ่มต้น"
+                      className={`w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400 text-amber-700 placeholder:text-gray-300 placeholder:text-[10px] ${isActive ? 'bg-blue-100' : 'bg-white'}`}
                       style={{ fontSize: '12px' }}
                     />
                   </td>
+
+                  {/* SKILL */}
+                  {canSeeSkill && (
+                    <td className={`border border-slate-300 p-0 ${isActive ? 'bg-blue-100' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.skill}
+                        onChange={(e) => onChange(index, 'skill', e.target.value)}
+                        placeholder="0"
+                        className={`w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700 ${isActive ? 'bg-blue-100' : 'bg-white'}`}
+                        style={{ fontSize: '12px' }}
+                      />
+                    </td>
+                  )}
 
                   {/* Workers x4 */}
                   {row.workers?.map((worker, wIndex) => {
