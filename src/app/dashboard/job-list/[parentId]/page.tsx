@@ -108,7 +108,7 @@ function StatusChip({
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
         <CheckCircle2 className="h-2.5 w-2.5" />
-        รอปิดงาน
+        รอรับงาน
       </span>
     )
   }

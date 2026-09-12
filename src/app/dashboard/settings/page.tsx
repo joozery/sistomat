@@ -14,6 +14,7 @@ import {
   Signature,
   Upload,
   Timer,
+  Gauge,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,9 +23,13 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { useProcessOptions } from '@/lib/useProcessOptions'
 import { useInspectors, type Inspector } from '@/lib/useInspectors'
 import { useOvertimeThreshold } from '@/lib/useOvertimeThreshold'
+import { useMachineRates, type MachineRate } from '@/lib/useMachineRates'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -343,6 +348,158 @@ function OvertimeThresholdSection() {
   )
 }
 
+/* ── Machine hour rates (ค่า ชม.เครื่อง) — default rates used by the quotation page ── */
+function MachineRatesSection() {
+  const { rates, loading, refresh } = useMachineRates()
+  const { options: processOptions } = useProcessOptions()
+  const [draft, setDraft] = useState<MachineRate[]>([])
+  const [syncedFrom, setSyncedFrom] = useState<MachineRate[] | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!loading && syncedFrom !== rates && JSON.stringify(syncedFrom) !== JSON.stringify(rates)) {
+    setDraft(rates)
+    setSyncedFrom(rates)
+  }
+
+  function updateRow(index: number, patch: Partial<MachineRate>) {
+    setDraft((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+    setSaved(false)
+  }
+
+  function removeRow(index: number) {
+    setDraft((prev) => prev.filter((_, i) => i !== index))
+    setSaved(false)
+  }
+
+  function addRow() {
+    setDraft((prev) => [...prev, { process: '', rate: 0 }])
+    setSaved(false)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/settings/machine-rates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ rates: draft }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'บันทึกไม่สำเร็จ')
+        return
+      }
+      setSaved(true)
+      refresh()
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-cyan-50 border-cyan-100">
+            <Gauge className="h-5 w-5 text-cyan-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">ค่า ชม.เครื่อง (บาท/ชม.)</h3>
+            <p className="text-xs text-gray-400">
+              อัตราเริ่มต้นต่อกระบวนการ — หน้าใบเสนอราคาจะดึงค่านี้มาใช้อัตโนมัติถ้าใบเสนอราคานั้นยังไม่เคยแก้ค่าเอง
+            </p>
+          </div>
+        </div>
+        {saved && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+            <CheckCircle2 className="h-4 w-4" />
+            บันทึกแล้ว
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">กำลังโหลด...</span>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            {draft.map((r, index) => {
+              const rowOptions = r.process && !processOptions.includes(r.process)
+                ? [r.process, ...processOptions]
+                : processOptions
+              return (
+              <div key={index} className="flex items-center gap-2">
+                <Select value={r.process} onValueChange={(v) => updateRow(index, { process: v })}>
+                  <SelectTrigger className="rounded-xl h-10 text-sm border-gray-200 flex-1">
+                    <SelectValue placeholder="เลือกกระบวนการ / เครื่องจักร" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rowOptions.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  value={r.rate}
+                  onChange={(e) => updateRow(index, { rate: Number(e.target.value) || 0 })}
+                  placeholder="0"
+                  className="rounded-xl h-10 text-sm border-gray-200 w-28"
+                />
+                <span className="text-xs text-gray-400 shrink-0">บาท/ชม.</span>
+                <button
+                  type="button"
+                  onClick={() => removeRow(index)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  title="ลบ"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              )
+            })}
+            {draft.length === 0 && (
+              <p className="text-xs text-gray-400 py-2">ยังไม่มีอัตรากระบวนการ — กด &quot;เพิ่มแถว&quot; เพื่อเริ่มต้น</p>
+            )}
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addRow}
+            className="gap-1.5 rounded-xl h-9 px-4 text-xs font-semibold mt-3"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            เพิ่มแถว
+          </Button>
+
+          {error && <p className="text-xs text-red-600 font-medium mt-3">{error}</p>}
+
+          <div className="flex justify-end mt-5">
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-xs font-semibold"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              บันทึกอัตราค่าเครื่อง
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ── Inspectors & Signatures Manager ── */
 const emptyInspectorForm = { name: '', signature_url: '' }
 
@@ -639,6 +796,8 @@ export default function SettingsPage() {
       />
 
       <OvertimeThresholdSection />
+
+      <MachineRatesSection />
 
       <InspectorsSection />
 

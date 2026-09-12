@@ -55,6 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
       submit_date: body.submit_date ?? '',
       price_valid_days: body.price_valid_days ?? '',
       discount_percent: Number(body.discount_percent) || 0,
+      discount_type: body.discount_type === 'amount' ? 'amount' : 'percent',
       vat_enabled: Boolean(body.vat_enabled),
       vat_rate: Number(body.vat_rate) || 7,
       remarks: body.remarks ?? '',
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
       approval_date: body.approval_date ?? '',
       buyer_date: body.buyer_date ?? '',
       rows: Array.isArray(body.rows) ? body.rows : [],
+      machine_rates: Array.isArray(body.machine_rates) ? body.machine_rates : [],
       updated_at: new Date(),
     }
 

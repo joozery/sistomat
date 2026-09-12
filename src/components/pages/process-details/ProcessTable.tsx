@@ -286,7 +286,9 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                             onChange={(e) => onWorkerChange(index, wIndex, 'worker_id', e.target.value)}
                             onFocus={(e) => {
                               e.target.blur()
-                              onWorkerSlotActivate?.(index, wIndex)
+                              // ช่องที่มีรหัสพนักงานสแกนไว้แล้ว ไม่ต้องกดเพื่อเข้าโหมดสแกนซ้ำ —
+                              // แค่คลิกแถว (สแกนรหัสเดิมอีกครั้ง) ก็หยุดงานได้เลย
+                              if (!worker.worker_id) onWorkerSlotActivate?.(index, wIndex)
                             }}
                             className="w-full h-9 text-center border-0 outline-none text-slate-700 cursor-pointer"
                             style={{ backgroundColor: 'transparent', fontSize: '12px' }}

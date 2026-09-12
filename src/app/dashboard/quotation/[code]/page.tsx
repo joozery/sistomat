@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Printer, ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
+import { useMachineRates } from '@/lib/useMachineRates'
 
 interface Job {
   job_code: string
@@ -155,10 +156,13 @@ export default function QuotationPage() {
   const [priceValidDays, setPriceValidDays] = useState('30')
 
   const [activeTab, setActiveTab] = useState<'quote' | 'estimate'>('quote')
+  // อ่านอย่างเดียว — ตั้งค่าได้ที่หน้า "ตั้งค่าระบบ" > "ค่า ชม.เครื่อง" เท่านั้น
   const [machineRates, setMachineRates] = useState<MachineRate[]>(DEFAULT_MACHINE_RATES)
+  const { rates: defaultMachineRates } = useMachineRates()
 
   // Discount & Tax state
-  const [discountPercent, setDiscountPercent] = useState(10)
+  const [discountType, setDiscountType] = useState<'percent' | 'amount'>('percent')
+  const [discountValue, setDiscountValue] = useState(10)
   const [vatEnabled, setVatEnabled] = useState(false)
   const [vatRate, setVatRate] = useState(7)
   const [remarks, setRemarks] = useState('')
@@ -217,7 +221,8 @@ export default function QuotationPage() {
         if (saved.doc_date) setDocDate(saved.doc_date)
         if (saved.submit_date) setSubmitDate(saved.submit_date)
         if (saved.price_valid_days) setPriceValidDays(saved.price_valid_days)
-        if (typeof saved.discount_percent === 'number') setDiscountPercent(saved.discount_percent)
+        if (typeof saved.discount_percent === 'number') setDiscountValue(saved.discount_percent)
+        if (saved.discount_type === 'amount' || saved.discount_type === 'percent') setDiscountType(saved.discount_type)
         if (typeof saved.vat_enabled === 'boolean') setVatEnabled(saved.vat_enabled)
         if (typeof saved.vat_rate === 'number') setVatRate(saved.vat_rate)
         if (saved.remarks) setRemarks(saved.remarks)
@@ -226,7 +231,6 @@ export default function QuotationPage() {
         if (saved.sales_date) setSalesDate(saved.sales_date)
         if (saved.approval_date) setApprovalDate(saved.approval_date)
         if (saved.buyer_date) setBuyerDate(saved.buyer_date)
-        if (Array.isArray(saved.machine_rates) && saved.machine_rates.length > 0) setMachineRates(saved.machine_rates)
 
         if (Array.isArray(saved.rows) && saved.rows.length > 0) {
           const savedRows: QuoteRow[] = saved.rows
@@ -251,6 +255,11 @@ export default function QuotationPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // ค่า ชม.เครื่อง อ่านอย่างเดียว ดึงจากหน้า "ตั้งค่าระบบ" เสมอ — แก้ได้ที่หน้านั้นที่เดียว
+  useEffect(() => {
+    if (defaultMachineRates.length > 0) setMachineRates(defaultMachineRates)
+  }, [defaultMachineRates])
+
   async function handleSave() {
     setSaving(true)
     setSaveSuccess(false)
@@ -263,7 +272,8 @@ export default function QuotationPage() {
         doc_date: docDate,
         submit_date: submitDate,
         price_valid_days: priceValidDays,
-        discount_percent: discountPercent,
+        discount_percent: discountValue,
+        discount_type: discountType,
         vat_enabled: vatEnabled,
         vat_rate: vatRate,
         remarks: remarks,
@@ -273,7 +283,6 @@ export default function QuotationPage() {
         approval_date: approvalDate,
         buyer_date: buyerDate,
         rows: rows,
-        machine_rates: machineRates,
       }
 
       const res = await fetch(`/api/quotations/${encodeURIComponent(code)}`, {
@@ -312,7 +321,7 @@ export default function QuotationPage() {
 
   const totalQuantity = rows.reduce((s, r) => s + (r.quantity || 0), 0)
   const subtotal = rows.reduce((s, r) => s + (r.quantity || 0) * (r.unit_price || 0), 0)
-  const discountAmount = (subtotal * discountPercent) / 100
+  const discountAmount = discountType === 'percent' ? (subtotal * discountValue) / 100 : discountValue
   const afterDiscount = subtotal - discountAmount
   const vatAmount = vatEnabled ? (afterDiscount * vatRate) / 100 : 0
   const netTotal = afterDiscount + vatAmount
@@ -774,9 +783,9 @@ export default function QuotationPage() {
                       <input
                         type="number"
                         min={0}
-                        max={100}
-                        value={discountPercent}
-                        onChange={(e) => setDiscountPercent(Number(e.target.value) || 0)}
+                        max={discountType === 'percent' ? 100 : undefined}
+                        value={discountValue}
+                        onChange={(e) => setDiscountValue(Number(e.target.value) || 0)}
                         className="q-input no-print"
                         style={{
                           width: '46px',
@@ -788,7 +797,26 @@ export default function QuotationPage() {
                           margin: '0 2px',
                         }}
                       />
-                      <span className="print-only">{discountPercent}</span>%
+                      <select
+                        value={discountType}
+                        onChange={(e) => setDiscountType(e.target.value as 'percent' | 'amount')}
+                        className="no-print"
+                        style={{
+                          fontSize: '10px',
+                          color: '#cc0000',
+                          fontWeight: 'bold',
+                          padding: '1px 2px',
+                          border: '1px solid #cc0000',
+                          borderRadius: '3px',
+                          background: 'white',
+                        }}
+                      >
+                        <option value="percent">%</option>
+                        <option value="amount">บาท</option>
+                      </select>
+                      <span className="print-only">
+                        {discountValue}{discountType === 'percent' ? '%' : ' บาท'}
+                      </span>
                     </td>
                     <td style={{ padding: '3px 6px', borderBottom: gridBorder, textAlign: 'right', color: '#cc0000', fontWeight: 'bold' }}>
                       {discountAmount > 0 ? formatMoney(discountAmount) : '-'}
@@ -1048,7 +1076,7 @@ export default function QuotationPage() {
                         <td style={p2tdc()}>{docNo}</td>
                         <td style={p2tdc()}>{code}</td>
                         <td style={p2tdc({ fontWeight: 'bold' })}>{expense ? formatMoney(expense) : '-'}</td>
-                        <td style={p2tdc()}>{discountPercent > 0 ? `${discountPercent}%` : '-'}</td>
+                        <td style={p2tdc()}>{discountValue > 0 ? (discountType === 'percent' ? `${discountValue}%` : formatMoney(discountValue)) : '-'}</td>
                         <td style={p2tdc({ fontWeight: 'bold', color: '#002060' })}>{totM ? formatMoney(totM) : '-'}</td>
                         <td style={p2tdc({ fontWeight: 'bold', color: profit >= 0 ? '#006600' : '#cc0000' })}>{totM ? formatMoney(profit) : '-'}</td>
                       </tr>
@@ -1071,31 +1099,14 @@ export default function QuotationPage() {
                     <tbody>
                       {machineRates.map((mr, mi) => (
                         <tr key={mi}>
-                          <td style={p2td()}>
-                            <input
-                              value={mr.process}
-                              onChange={(e) => setMachineRates((prev) => prev.map((x, xi) => xi === mi ? { ...x, process: e.target.value } : x))}
-                              style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '9px', fontFamily: 'Tahoma, Arial, sans-serif' }}
-                            />
+                          <td style={{ ...p2td(), fontSize: '9px', fontFamily: 'Tahoma, Arial, sans-serif' }}>
+                            {mr.process}
                           </td>
-                          <td style={p2tdc()}>
-                            <input
-                              type="number"
-                              value={mr.rate}
-                              onChange={(e) => setMachineRates((prev) => prev.map((x, xi) => xi === mi ? { ...x, rate: Number(e.target.value) || 0 } : x))}
-                              style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '9px', textAlign: 'right', fontFamily: 'Tahoma, Arial, sans-serif' }}
-                            />
+                          <td style={{ ...p2tdc(), fontSize: '9px', textAlign: 'right', fontFamily: 'Tahoma, Arial, sans-serif' }}>
+                            {mr.rate}
                           </td>
                         </tr>
                       ))}
-                      <tr className="no-print">
-                        <td colSpan={2} style={{ border: p2Border, padding: '1px' }}>
-                          <button
-                            onClick={() => setMachineRates((prev) => [...prev, { process: '', rate: 0 }])}
-                            style={{ width: '100%', fontSize: '9px', background: 'none', border: 'none', cursor: 'pointer', color: '#666' }}
-                          >+ เพิ่ม</button>
-                        </td>
-                      </tr>
                     </tbody>
                   </table>
                 </div>

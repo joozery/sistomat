@@ -1248,6 +1248,8 @@ export default function ProcessDetailsPage() {
   }
 
   // ── Main ──
+  const isJobFinished = ['รับงาน', 'ไม่รับงาน', 'จบงาน', 'ยกเลิก'].includes(project.status)
+
   return (
     <>
     <ScanToast toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
@@ -1342,6 +1344,15 @@ export default function ProcessDetailsPage() {
           />
 
           {/* Command Barcodes: ปกติโชว์ workflow ทั่วไป — พอสแกน FN_GOOD แล้วสลับมาโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว */}
+          {isJobFinished ? (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+              <p className="text-sm text-emerald-800">
+                งานนี้ปิดแล้ว — สถานะ: <span className="font-bold">{project.status}</span> ไม่ต้องสแกนบาร์โค้ดเพิ่มเติม
+              </p>
+            </div>
+          ) : (
+            <>
           {awaitingFinishDecision && (
             <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-2.5">
               <p className="text-xs font-medium text-blue-800">
@@ -1390,6 +1401,8 @@ export default function ProcessDetailsPage() {
               )
             })}
           </div>
+            </>
+          )}
         </div>
       )}
 
