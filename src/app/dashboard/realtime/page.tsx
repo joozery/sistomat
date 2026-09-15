@@ -430,14 +430,18 @@ export default function RealtimePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // socket.io — re-fetch immediately when server emits realtime:update
+  // socket.io — server broadcasts the computed payload directly (debounced),
+  // so we just apply it here instead of triggering a re-fetch per client
   useEffect(() => {
     const socket: Socket = socketIO({ path: '/api/socket', transports: ['websocket', 'polling'] })
     socket.on('connect', () => setConnected(true))
     socket.on('disconnect', () => setConnected(false))
-    socket.on('realtime:update', () => fetchData())
+    socket.on('realtime:update', (payload: RealtimeData) => {
+      setData(payload)
+      setLastUpdated(new Date())
+    })
     return () => { socket.disconnect() }
-  }, [fetchData])
+  }, [])
 
   // fallback poll every 30s in case socket misses something
   useEffect(() => {

@@ -142,6 +142,9 @@ export async function DELETE(
       return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })
     }
 
+    // notify realtime page clients immediately
+    emitRealtimeUpdate()
+
     return NextResponse.json({ message: 'ลบสำเร็จ' })
   } catch (e) {
     console.error('DELETE /api/projects/[id]:', e)

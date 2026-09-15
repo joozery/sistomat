@@ -115,11 +115,11 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               </th>
               <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16 leading-snug">
                 เป้าหมาย<br />
-                <span className="font-normal text-[10px]">(นาที)</span>
+                <span className="font-normal text-[10px]">(ชม.)</span>
               </th>
               <th rowSpan={2} className="border border-slate-300 text-center font-bold text-amber-700 px-2 py-1.5 w-16 leading-snug" title="เลยเป้าหมายไปกี่นาทีถึงจะเป็น OVERTIME (ว่าง = ใช้ค่าเริ่มต้นของระบบ)">
                 OVERTIME<br />
-                <span className="font-normal text-[10px]">(นาที)</span>
+                <span className="font-normal text-[10px]">(ชม.)</span>
               </th>
               {canSeeSkill && (
                 <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">
@@ -236,15 +236,41 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                   </td>
 
                   {/* OVERTIME grace (นาทีหลังเลยเป้าหมาย) */}
-                  <td className={`border border-slate-300 p-0 ${isActive ? 'bg-blue-100' : ''}`}>
-                    <input
-                      type="text"
-                      value={row.overtime_grace ?? ''}
-                      onChange={(e) => onChange(index, 'overtime_grace', e.target.value)}
-                      placeholder="ค่าเริ่มต้น"
-                      className={`w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400 text-amber-700 placeholder:text-gray-300 placeholder:text-[10px] ${isActive ? 'bg-blue-100' : 'bg-white'}`}
-                      style={{ fontSize: '12px' }}
-                    />
+                  <td className={`border border-slate-300 p-0.5 ${isActive ? 'bg-blue-100' : ''}`}>
+                    <div className="flex items-center justify-center h-8">
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => {
+                          const current = row.overtime_grace?.trim() ? Number(row.overtime_grace) || 0 : 0
+                          onChange(index, 'overtime_grace', String(Math.max(0, current - 5)))
+                        }}
+                        className="flex-none h-6 w-4 flex items-center justify-center text-amber-600 hover:bg-amber-100 rounded-sm leading-none"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={row.overtime_grace ?? ''}
+                        onChange={(e) => onChange(index, 'overtime_grace', e.target.value.replace(/[^0-9]/g, ''))}
+                        placeholder="ค่าเริ่มต้น"
+                        title="นาทีหลังเลยเป้าหมาย (ว่าง = ใช้ค่าเริ่มต้นของระบบ)"
+                        className="w-6 min-w-0 h-8 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400 bg-transparent text-amber-700 placeholder:text-gray-300 placeholder:text-[8px] px-0"
+                        style={{ fontSize: '12px' }}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => {
+                          const current = row.overtime_grace?.trim() ? Number(row.overtime_grace) || 0 : 0
+                          onChange(index, 'overtime_grace', String(current + 5))
+                        }}
+                        className="flex-none h-6 w-4 flex items-center justify-center text-amber-600 hover:bg-amber-100 rounded-sm leading-none"
+                      >
+                        +
+                      </button>
+                    </div>
                   </td>
 
                   {/* SKILL */}
