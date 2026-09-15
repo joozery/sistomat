@@ -474,6 +474,17 @@ function ReverseModal({
   )
 }
 
+interface ProjectAttachment {
+  file_url: string
+  file_name: string
+}
+
+interface ProjectFlags {
+  has_rework?: boolean
+  has_hold?: boolean
+  awaiting_finish_decision?: boolean
+}
+
 interface ProjectData {
   project_id: string
   dwg_name?: string
@@ -481,6 +492,10 @@ interface ProjectData {
   due_date: string
   status: string
   processes?: any[]
+  file_url?: string
+  file_name?: string
+  attachments?: ProjectAttachment[]
+  flags?: ProjectFlags
 }
 
 function formatThaiDate(iso: string) {
@@ -506,6 +521,8 @@ export default function ProcessDetailsPage() {
   const { options: processOptions } = useProcessOptions()
 
   const [project, setProject] = useState<ProjectData | null>(null)
+  const projectRef = useRef<ProjectData | null>(null)
+  useEffect(() => { projectRef.current = project }, [project])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processList, setProcessList] = useState<ProcessRow[]>([])
@@ -531,6 +548,8 @@ export default function ProcessDetailsPage() {
 
   const [infoBarcodeValue, setInfoBarcodeValue] = useState<string | null>(null)
   const [awaitingFinishDecision, setAwaitingFinishDecision] = useState(false)
+  const awaitingFinishDecisionRef = useRef(false)
+  useEffect(() => { awaitingFinishDecisionRef.current = awaitingFinishDecision }, [awaitingFinishDecision])
 
   // Blocked workers
   const blockedCodesRef = useRef<Set<number>>(new Set())
@@ -582,7 +601,8 @@ export default function ProcessDetailsPage() {
         const data: ProjectData = await res.json()
         if (cancelled) return
         setProject(data)
-        
+        setAwaitingFinishDecision(!!data.flags?.awaiting_finish_decision)
+
         // Migrate legacy data and format workers array
         const mappedProcesses = (data.processes ?? []).map((p: any) => {
           let workers = p.workers || []
@@ -687,11 +707,12 @@ export default function ProcessDetailsPage() {
     if (!entry) return
     const { status, title, subtitle } = entry
     setAwaitingFinishDecision(false)
-    setProject((prev) => prev ? { ...prev, status } : prev)
+    const newFlags = { ...projectRef.current?.flags, awaiting_finish_decision: false }
+    setProject((prev) => prev ? { ...prev, status, flags: newFlags } : prev)
     fetch(`/api/projects/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, flags: newFlags }),
     }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
     showToast('success', title, subtitle)
   }, [id, showToast])
@@ -701,6 +722,13 @@ export default function ProcessDetailsPage() {
       const raw = e.detail.barcode.trim()
       const list = processListRef.current
       const rawUpper = raw.toUpperCase()
+
+      // ── รอตัดสินใจ FN Good อยู่ → บล็อกทุกอย่างจนกว่าจะเลือก Acpt-FN / Cancel-FN ──
+      if (awaitingFinishDecisionRef.current && rawUpper !== 'ACPT_FN' && rawUpper !== 'CANCEL_FN') {
+        e.preventDefault()
+        showToast('warning', 'รอการตัดสินใจ FN Good', 'ต้องสแกน Acpt-FN หรือ Cancel-FN ก่อนทำงานต่อ')
+        return
+      }
 
       // ── CMD_CANCEL/RESET/NEXT ทำงานได้แม้ modal เปิด ──
       // ── ถ้า modal เปิดอยู่ → modal จัดการ scan เอง ──
@@ -819,10 +847,12 @@ export default function ProcessDetailsPage() {
           const nextList = [...list]
           nextList[targetIdx] = { ...targetRow, workers: stoppedWorkers, on_hold: true }
           setProcessList(nextList)
+          const newFlags = { ...projectRef.current?.flags, has_hold: true }
+          setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
           fetch(`/api/projects/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-            body: JSON.stringify({ processes: nextList }),
+            body: JSON.stringify({ processes: nextList, flags: newFlags }),
           }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
           showToast('warning', `HOLD — "${targetRow.process}"`, 'หยุดพักชั่วคราว สแกน CMD_HOLD อีกครั้งเพื่อดำเนินการต่อ')
         }
@@ -860,7 +890,20 @@ export default function ProcessDetailsPage() {
       // FN_GOOD = งานผลิตเสร็จแล้ว แต่ยังไม่รู้ว่าลูกค้าจะรับงานหรือไม่ → สลับการ์ดบาร์โค้ดด้านล่างเป็น ACPT_FN / CANCEL_FN แทนการปิดสถานะทันที (ไม่มี popup)
       if (rawUpper === 'FN_GOOD') {
         e.preventDefault()
+        const currentIdx = list.findIndex((row) => !row.next_confirmed_at)
+        const currentProcess = currentIdx !== -1 ? list[currentIdx]?.process : list[list.length - 1]?.process
+        if (currentProcess !== 'QC') {
+          showToast('warning', 'ต้องอยู่ในกระบวนการ QC เท่านั้น', 'FN Good ใช้ยืนยันตรวจสอบงานในขั้นตอน QC เท่านั้น')
+          return
+        }
+        const newFlags = { ...projectRef.current?.flags, awaiting_finish_decision: true }
         setAwaitingFinishDecision(true)
+        setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
+        fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ flags: newFlags }),
+        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
         return
       }
       if (FINISH_STATUS_MAP[rawUpper]) {
@@ -1169,10 +1212,12 @@ export default function ProcessDetailsPage() {
       ri >= idx ? { ...row, next_confirmed_at: undefined } : row
     )
     setProcessList(next)
+    const newFlags = { ...projectRef.current?.flags, has_rework: true }
+    setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
     fetch(`/api/projects/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ processes: next }),
+      body: JSON.stringify({ processes: next, flags: newFlags }),
     }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
     showToast('success', `ย้อนกลับไป "${targetProcessName}" แล้ว`, 'สแกน QR ใบงานหรือรหัสพนักงานเพื่อเริ่มงาน')
   }, [id, showToast])
@@ -1318,8 +1363,13 @@ export default function ProcessDetailsPage() {
             dwgName={project.dwg_name}
             receivedDate={formatThaiDate(project.received_date)}
             dueDate={formatThaiDate(project.due_date)}
+            fileUrl={project.file_url}
+            fileName={project.file_name}
+            attachments={project.attachments}
+            hasRework={!!project.flags?.has_rework}
+            hasHold={!!project.flags?.has_hold}
           />
-          
+
           <ProcessTable
             processList={processList}
             processOptions={processOptions}
@@ -1360,7 +1410,16 @@ export default function ProcessDetailsPage() {
               </p>
               <button
                 type="button"
-                onClick={() => setAwaitingFinishDecision(false)}
+                onClick={() => {
+                  setAwaitingFinishDecision(false)
+                  const newFlags = { ...projectRef.current?.flags, awaiting_finish_decision: false }
+                  setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
+                  fetch(`/api/projects/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+                    body: JSON.stringify({ flags: newFlags }),
+                  }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+                }}
                 className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
               >
                 ยกเลิก

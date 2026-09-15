@@ -3,22 +3,35 @@
 import { useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Card, CardContent } from '@/components/ui/card'
-import { Calendar, Tag, Download, QrCode, Barcode } from 'lucide-react'
+import { Calendar, Tag, Download, QrCode, Barcode, RotateCcw, PauseCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
+import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ssr: false })
 const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
+
+interface JobHeaderAttachment {
+  file_url: string
+  file_name: string
+}
 
 interface JobHeaderProps {
   id: string
   dwgName?: string
   receivedDate: string
   dueDate: string
+  fileUrl?: string
+  fileName?: string
+  attachments?: JobHeaderAttachment[]
+  hasRework?: boolean
+  hasHold?: boolean
 }
 
-export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps) {
+export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasHold }: JobHeaderProps) {
   const codeRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<'qr' | 'barcode'>('qr')
+  const [previewOpen, setPreviewOpen] = useState(false)
   const qrValue = dwgName?.trim() ? `${id}|${dwgName.trim()}` : id
 
   const handleDownload = () => {
@@ -69,6 +82,36 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
             <p className="text-xs text-gray-400">
               บาร์โค้ดประจำใบงานสำหรับสแกนเข้าสถานีปฏิบัติงาน
             </p>
+            {(hasRework || hasHold) && (
+              <div className="flex items-center justify-center md:justify-start gap-1.5 pt-1">
+                {hasRework && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-700 border border-orange-100">
+                    <RotateCcw className="h-3 w-3" />
+                    มีการ Rework
+                  </span>
+                )}
+                {hasHold && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-100">
+                    <PauseCircle className="h-3 w-3" />
+                    มีการ Hold
+                  </span>
+                )}
+              </div>
+            )}
+            {fileUrl && fileName && (
+              <div className="flex items-center justify-center md:justify-start gap-2 pt-1">
+                <FileThumbnail
+                  fileUrl={fileUrl}
+                  fileName={fileName}
+                  size={40}
+                  onClick={() => setPreviewOpen(true)}
+                />
+                <div className="text-left">
+                  <p className="text-xs font-medium text-gray-700 truncate max-w-[160px]">{fileName}</p>
+                  <p className="text-[10px] text-gray-400">คลิกเพื่อดู PDF/3D</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Code display + toggle + Download */}
@@ -169,6 +212,16 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate }: JobHeaderProps
 
         </div>
       </CardContent>
+
+      {fileUrl && fileName && (
+        <FilePreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          fileUrl={fileUrl}
+          fileName={fileName}
+          attachments={attachments}
+        />
+      )}
     </Card>
   )
 }

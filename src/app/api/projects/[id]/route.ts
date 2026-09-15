@@ -48,7 +48,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await req.json()
-    const { processes, status, qc } = body
+    const { processes, status, qc, flags } = body
 
     const client = await getClientPromise()
     const db = client.db('sistomat')
@@ -61,6 +61,7 @@ export async function PUT(
     if (processes !== undefined) update.processes = processes
     if (status !== undefined) update.status = status
     if (qc !== undefined) update.qc = qc
+    if (flags !== undefined) update.flags = flags
 
     const result = await db
       .collection('projects')
