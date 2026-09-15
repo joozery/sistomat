@@ -32,8 +32,16 @@ export function PdfPagePreview({ fileUrl, className, onOrientation }: PdfPagePre
         const isLandscape = baseViewport.width > baseViewport.height
         onOrientation?.(isLandscape)
 
-        const targetWidthPx = 210 * PX_PER_MM
-        const scale = targetWidthPx / baseViewport.width
+        // The print page (page 1) switches to A4 landscape to match a landscape
+        // drawing — see print/page.tsx's `@page :first` rule — so fit the render
+        // to whichever orientation's box matches, instead of scaling to width
+        // only (which made a landscape drawing render tiny on a portrait box).
+        const pageWidthMm = isLandscape ? 297 : 210
+        const pageHeightMm = isLandscape ? 210 : 297
+        const scale = Math.min(
+          (pageWidthMm * PX_PER_MM) / baseViewport.width,
+          (pageHeightMm * PX_PER_MM) / baseViewport.height,
+        )
         const viewport = page.getViewport({ scale })
 
         const canvas = canvasRef.current

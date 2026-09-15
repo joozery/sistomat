@@ -147,8 +147,13 @@ export default function PrintPreviewPage() {
     }}>
       {/* ── Print CSS ── */}
       <style>{`
-        /* @page rules */
+        /* @page rules
+           Named pages (page: x / @page x {...}) inserted blank pages at the
+           orientation boundary in Chrome. @page :first is a much older, more
+           standard pseudo-class (sets size for page 1 only) — the drawing page
+           is always page 1 here, so this should avoid that bug entirely. */
         @page { size: A4 portrait; margin: 0; }
+        ${drawingIsPdf ? `@page :first { size: A4 ${drawingLandscape ? 'landscape' : 'portrait'}; margin: 0; }` : ''}
 
         @media screen {
           .print-page {
@@ -160,7 +165,8 @@ export default function PrintPreviewPage() {
             background-color: #fff;
           }
           .print-page.drawing-print-page {
-            min-height: 297mm;
+            width: ${drawingLandscape ? '297mm' : '210mm'};
+            min-height: ${drawingLandscape ? '210mm' : '297mm'};
             display: flex;
             align-items: center;
             justify-content: center;
@@ -247,6 +253,10 @@ export default function PrintPreviewPage() {
             overflow: hidden !important;
           }
           .print-page.drawing-print-page {
+            width: ${drawingLandscape ? '297mm' : '210mm'} !important;
+            max-width: ${drawingLandscape ? '297mm' : '210mm'} !important;
+            height: ${drawingLandscape ? '210mm' : '295mm'} !important;
+            max-height: ${drawingLandscape ? '210mm' : '295mm'} !important;
             padding: 0 !important;
             display: flex !important;
             align-items: center !important;
@@ -297,6 +307,7 @@ export default function PrintPreviewPage() {
             style={{
               ...pageStyle,
               padding: 0,
+              width: drawingLandscape ? '297mm' : pageStyle.width,
             }}
           >
             <PdfPagePreview fileUrl={drawingPdfUrl!} onOrientation={setDrawingLandscape} />
