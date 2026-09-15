@@ -325,15 +325,11 @@ export function ProjectTable({
                             size="sm"
                             className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 hover:text-[#5C1212] text-xs font-semibold gap-1"
                             onClick={() => {
-                              // Excel-imported level1 already has the J prefix (e.g. JA-0298);
-                              // projects created via "เพิ่มกระบวนการ" store the raw id (e.g. A-0298)
-                              // and their job hierarchy lives under J + that id.
-                              const isLevel1 = /^J[A-Z]-\d{3,4}$/.test(project.project_id)
-                              const isRawLevel1 = /^[A-Z]-\d{3,4}$/.test(project.project_id)
-                              const href = isLevel1
+                              // job-list/[parentId] itself retries with a "J" prefix if this
+                              // level1 has no jobs, so just link verbatim — no need to guess here
+                              const looksLikeLevel1 = /^J?[A-Z]-\d{3,4}$/.test(project.project_id)
+                              const href = looksLikeLevel1
                                 ? `/dashboard/job-list/${project.project_id}`
-                                : isRawLevel1
-                                ? `/dashboard/job-list/J${project.project_id}`
                                 : `/dashboard/process-details/${project.project_id}`
                               router.push(href)
                             }}

@@ -180,11 +180,21 @@ export default function JobListPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/jobs?level1=${encodeURIComponent(parentId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const json = await res.json()
-      const data = Array.isArray(json) ? json : (json.jobs ?? [])
+      const fetchLevel1 = async (level1: string) => {
+        const res = await fetch(`/api/jobs?level1=${encodeURIComponent(level1)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const json = await res.json()
+        return Array.isArray(json) ? json : (json.jobs ?? [])
+      }
+
+      let data = await fetchLevel1(parentId)
+      // Some older jobs got created without the "J" prefix by mistake (e.g. a
+      // level1 shell saved as "A-2909" instead of "JA-2909") — retry with it
+      // added before giving up, so links generated either way still resolve.
+      if (data.length === 0 && !parentId.toUpperCase().startsWith('J')) {
+        data = await fetchLevel1(`J${parentId}`)
+      }
       setJobs(data)
       // auto-expand all level2 groups
       const allKeys = new Set<string>(data.map((j: Job) => j.level2 ?? j.job_code))

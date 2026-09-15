@@ -49,6 +49,16 @@ function deriveLevel1(code: string) {
   return m ? m[1] : code
 }
 
+// Job codes are always grouped under a "J" + letter prefix (e.g. "JA-2917") —
+// auto-prepend it if someone types the bare form (e.g. "A-2917"), so the job
+// hierarchy this creates always lines up with itself instead of splitting
+// into two different level1 groups.
+function normalizeJobCode(code: string) {
+  const upper = code.toUpperCase()
+  if (/^[A-Z]-/.test(upper) && !upper.startsWith('J')) return `J${upper}`
+  return upper
+}
+
 const ALLOWED_EXT = ['pdf', 'stl', 'step', 'stp', 'obj', '3mf', 'glb', 'gltf']
 
 function getFileIcon(name: string) {
@@ -202,13 +212,16 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     setSaveError('')
     try {
       const token = localStorage.getItem('token')
+      // "เลขที่โปรเจค" is just a display label for this project shell — keep
+      // it exactly as typed (unlike job codes, it isn't parsed into level1/2/3)
+      const projectId = form.projectId.trim()
 
       // อัปโหลดไฟล์ที่แนบไว้ (ถ้ามี) แล้วผูกเข้ากับตัวโปรเจคแม่โดยตรง
       const uploaded: { file_url: string; file_name: string }[] = []
       for (const file of files) {
         setUploadingFileName(file.name)
         setUploadProgress(0)
-        const url = await uploadOne(file, form.projectId, token, setUploadProgress)
+        const url = await uploadOne(file, projectId, token, setUploadProgress)
         uploaded.push({ file_url: url, file_name: file.name })
       }
       const primary = uploaded.find((f) => is3DFile(f.file_name)) ?? uploaded[0]
@@ -217,7 +230,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          projectId: form.projectId,
+          projectId,
           dwgName: '',
           receivedDate: form.receivedDate,
           dueDate: form.dueDate,
@@ -253,6 +266,10 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     setSaving(true)
     setSaveError('')
     const token = localStorage.getItem('token')
+    // "เลขที่โปรเจค" is just a display label for this project shell — keep it
+    // exactly as typed. Only the job codes below (level1/2/3 hierarchy) need
+    // the "J" prefix normalized.
+    const projectId = form.projectId.trim()
 
     try {
       // อัปโหลดไฟล์ของทุก Job ย่อยก่อน แล้วค่อยสร้างโปรเจคแม่ด้วยไฟล์จริง (ไม่ใช่ null)
@@ -266,7 +283,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         for (const file of r.files) {
           setUploadingFileName(file.name)
           setUploadProgress(0)
-          const url = await uploadOne(file, form.projectId, token, setUploadProgress)
+          const url = await uploadOne(file, projectId, token, setUploadProgress)
           uploaded.push({ file_url: url, file_name: file.name })
         }
         rowUploads.push({ row: r, uploaded })
@@ -279,7 +296,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          projectId: form.projectId,
+          projectId,
           dwgName: '',
           receivedDate: form.receivedDate,
           dueDate: form.dueDate,
@@ -298,7 +315,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       for (const { row: r, uploaded } of rowUploads) {
         // prefer 3D file as primary (for 3D viewer), fallback to first
         const primary = uploaded.find((f) => is3DFile(f.file_name)) ?? uploaded[0]
-        const fullJobCode = r.level3.trim() || r.jobCode.trim()
+        const fullJobCode = normalizeJobCode(r.level3.trim() || r.jobCode.trim())
 
         const jobRes = await fetch('/api/jobs', {
           method: 'POST',
@@ -324,7 +341,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         }
       }
 
-      const level1 = deriveLevel1(rows[0].jobCode.trim())
+      const level1 = deriveLevel1(normalizeJobCode(rows[0].jobCode.trim()))
       resetAll()
       onOpenChange(false)
       onSuccess()

@@ -1,9 +1,29 @@
 'use client'
 
 import { Plus, Trash2, ScanBarcode, CheckCircle2, PauseCircle } from 'lucide-react'
-import { Fragment, useMemo } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { isRowCompleted } from '@/lib/workers'
 import { useCurrentUser } from '@/lib/useCurrentUser'
+
+type OvertimeUnit = 'min' | 'hour'
+
+// overtime_grace is always stored as plain minutes — these only convert for display/input
+function formatOvertimeForUnit(raw: string | undefined, unit: OvertimeUnit): string {
+  if (!raw?.trim()) return ''
+  const minutes = Number(raw)
+  if (isNaN(minutes)) return ''
+  if (unit === 'min') return String(minutes)
+  return String(Math.round((minutes / 60) * 100) / 100)
+}
+
+function parseOvertimeInput(text: string, unit: OvertimeUnit): string {
+  const cleaned = unit === 'hour' ? text.replace(/[^0-9.]/g, '') : text.replace(/[^0-9]/g, '')
+  if (!cleaned || cleaned === '.') return ''
+  const num = Number(cleaned)
+  if (isNaN(num)) return ''
+  const minutes = unit === 'min' ? num : num * 60
+  return String(Math.round(minutes))
+}
 
 function parseTimeParts(t: string): { date: string; time: string } | null {
   if (!t) return null
@@ -83,6 +103,7 @@ const workerColors = [
 export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onDeleteRow }: ProcessTableProps) {
   const { role } = useCurrentUser()
   const canSeeSkill = role !== 'User'
+  const [overtimeUnits, setOvertimeUnits] = useState<Record<number, OvertimeUnit>>({})
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm font-sans overflow-hidden">
@@ -117,9 +138,9 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                 เป้าหมาย<br />
                 <span className="font-normal text-[10px]">(ชม.)</span>
               </th>
-              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-amber-700 px-2 py-1.5 w-16 leading-snug" title="เลยเป้าหมายไปกี่นาทีถึงจะเป็น OVERTIME (ว่าง = ใช้ค่าเริ่มต้นของระบบ)">
+              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-amber-700 px-2 py-1.5 w-24 leading-snug" title="เลยเป้าหมายไปเท่าไหร่ถึงจะเป็น OVERTIME (ว่าง = ใช้ค่าเริ่มต้นของระบบ) — เลือกหน่วยชั่วโมง/นาทีได้">
                 OVERTIME<br />
-                <span className="font-normal text-[10px]">(ชม.)</span>
+                <span className="font-normal text-[10px]">(เลือกหน่วย)</span>
               </th>
               {canSeeSkill && (
                 <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">
@@ -235,42 +256,66 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                     />
                   </td>
 
-                  {/* OVERTIME grace (นาทีหลังเลยเป้าหมาย) */}
+                  {/* OVERTIME grace — เก็บเป็นนาทีเสมอ แต่เลือกกรอก/แสดงเป็น ชม. หรือ นาที ได้ */}
                   <td className={`border border-slate-300 p-0.5 ${isActive ? 'bg-blue-100' : ''}`}>
-                    <div className="flex items-center justify-center h-8">
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() => {
-                          const current = row.overtime_grace?.trim() ? Number(row.overtime_grace) || 0 : 0
-                          onChange(index, 'overtime_grace', String(Math.max(0, current - 5)))
-                        }}
-                        className="flex-none h-6 w-4 flex items-center justify-center text-amber-600 hover:bg-amber-100 rounded-sm leading-none"
-                      >
-                        −
-                      </button>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={row.overtime_grace ?? ''}
-                        onChange={(e) => onChange(index, 'overtime_grace', e.target.value.replace(/[^0-9]/g, ''))}
-                        placeholder="ค่าเริ่มต้น"
-                        title="นาทีหลังเลยเป้าหมาย (ว่าง = ใช้ค่าเริ่มต้นของระบบ)"
-                        className="w-6 min-w-0 h-8 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400 bg-transparent text-amber-700 placeholder:text-gray-300 placeholder:text-[8px] px-0"
-                        style={{ fontSize: '12px' }}
-                      />
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() => {
-                          const current = row.overtime_grace?.trim() ? Number(row.overtime_grace) || 0 : 0
-                          onChange(index, 'overtime_grace', String(current + 5))
-                        }}
-                        className="flex-none h-6 w-4 flex items-center justify-center text-amber-600 hover:bg-amber-100 rounded-sm leading-none"
-                      >
-                        +
-                      </button>
-                    </div>
+                    {(() => {
+                      const unit = overtimeUnits[index] ?? 'min'
+                      const step = unit === 'hour' ? 60 : 5
+                      const displayValue = formatOvertimeForUnit(row.overtime_grace, unit)
+                      return (
+                        <div className="flex flex-col items-center gap-0.5 py-0.5">
+                          <div className="flex gap-0.5">
+                            {(['min', 'hour'] as const).map((u) => (
+                              <button
+                                key={u}
+                                type="button"
+                                tabIndex={-1}
+                                onClick={() => setOvertimeUnits((prev) => ({ ...prev, [index]: u }))}
+                                className={`text-[8px] px-1 rounded-sm leading-tight font-semibold ${
+                                  unit === u ? 'bg-amber-200 text-amber-800' : 'text-gray-400 hover:bg-gray-100'
+                                }`}
+                              >
+                                {u === 'min' ? 'นาที' : 'ชม.'}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex items-center h-6">
+                            <button
+                              type="button"
+                              tabIndex={-1}
+                              onClick={() => {
+                                const current = row.overtime_grace?.trim() ? Number(row.overtime_grace) || 0 : 0
+                                onChange(index, 'overtime_grace', String(Math.max(0, current - step)))
+                              }}
+                              className="flex-none h-6 w-4 flex items-center justify-center text-amber-600 hover:bg-amber-100 rounded-sm leading-none"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="text"
+                              inputMode={unit === 'hour' ? 'decimal' : 'numeric'}
+                              value={displayValue}
+                              onChange={(e) => onChange(index, 'overtime_grace', parseOvertimeInput(e.target.value, unit))}
+                              placeholder="ค่าเริ่มต้น"
+                              title="เลยเป้าหมายไปเท่าไหร่ถึงจะเป็น OVERTIME (ว่าง = ใช้ค่าเริ่มต้นของระบบ)"
+                              className="w-8 min-w-0 h-6 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400 bg-transparent text-amber-700 placeholder:text-gray-300 placeholder:text-[8px] px-0"
+                              style={{ fontSize: '12px' }}
+                            />
+                            <button
+                              type="button"
+                              tabIndex={-1}
+                              onClick={() => {
+                                const current = row.overtime_grace?.trim() ? Number(row.overtime_grace) || 0 : 0
+                                onChange(index, 'overtime_grace', String(current + step))
+                              }}
+                              className="flex-none h-6 w-4 flex items-center justify-center text-amber-600 hover:bg-amber-100 rounded-sm leading-none"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </td>
 
                   {/* SKILL */}
