@@ -221,7 +221,7 @@ function ScanToast({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: num
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center ${cfg.overlay} backdrop-blur-[2px]`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center ${cfg.overlay} backdrop-blur-[2px]`}
       onClick={() => onDismiss(latest.id)}
     >
       <div
@@ -267,23 +267,42 @@ function getNowFormatted(): string {
 
 function ActionModal({
   mode, processName, initialWorkerId, workers, stopReasons,
-  onConfirm, onClose,
+  onConfirm, onClose, allowManualEntry,
 }: {
   mode: 'start' | 'stop'
   processName: string; initialWorkerId: string; workers: WorkerData[]; stopReasons: string[];
   onConfirm: (workerId: string, workerName: string, nowTime: string, reason?: string) => void;
   onClose: () => void;
+  // สิทธิ์พิเศษเฉพาะ role superadmin — พิมพ์รหัสพนักงานเองแล้วกดเริ่ม/หยุดงานได้เลย ไม่ต้องสแกนจริง
+  allowManualEntry?: boolean;
 }) {
   const [clockDisplay, setClockDisplay] = useState('')
   const [flash, setFlash] = useState(false)
   const [mismatch, setMismatch] = useState(false)
   const [needsReason, setNeedsReason] = useState(false)
   const [reason, setReason] = useState('')
+  const [manualCode, setManualCode] = useState('')
+  const [manualError, setManualError] = useState('')
   const onConfirmRef = useRef(onConfirm)
   useEffect(() => { onConfirmRef.current = onConfirm }, [onConfirm])
 
   const isStop = mode === 'stop'
   const lockedWorker = useMemo(() => (initialWorkerId ? findWorker(initialWorkerId, workers) : null), [initialWorkerId, workers])
+
+  // สำหรับ start เท่านั้น — stop ยังคงต้องสแกน/กดปุ่ม "หยุดงาน" ที่ยืนยันกับ initialWorkerId เดิม
+  // เพื่อไม่ให้เปิดช่องพิมพ์รหัสไปหยุดงานของคนอื่นแทนได้
+  function submitManualCode() {
+    const code = manualCode.trim()
+    if (!code) return
+    const worker = findWorker(code, workers)
+    if (!worker) {
+      setManualError(`ไม่พบรหัสพนักงาน "${code}"`)
+      return
+    }
+    setManualError('')
+    onConfirmRef.current(String(worker.code), worker.name, getNowFormatted())
+    setManualCode('')
+  }
 
   // ตั้งเหตุผลเริ่มต้นเป็นตัวแรกในรายการ พอโหลดเสร็จ (เลือกใหม่ได้เสมอ) — ปรับ state
   // ระหว่าง render แทน effect เพื่อไม่ให้เกิด cascading render เกินจำเป็น
@@ -427,6 +446,32 @@ function ActionModal({
           )}
         </div>
 
+        {/* superadmin only: พิมพ์รหัสพนักงานแล้วกดเริ่มงานได้เลย ไม่ต้องสแกน */}
+        {!isStop && allowManualEntry && (
+          <div className="mb-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={manualCode}
+                onChange={(e) => { setManualCode(e.target.value); setManualError('') }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitManualCode() } }}
+                placeholder="พิมพ์รหัสพนักงาน..."
+                className={`flex-1 h-11 rounded-full border px-4 text-sm outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400 ${manualError ? 'border-red-300' : 'border-amber-200'}`}
+              />
+              <button
+                type="button"
+                onClick={submitManualCode}
+                disabled={!manualCode.trim()}
+                className="h-11 px-5 rounded-full bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-bold shrink-0 transition-colors"
+              >
+                เริ่มงาน
+              </button>
+            </div>
+            {manualError && <p className="text-[11px] text-red-500 mt-1.5 text-center">{manualError}</p>}
+          </div>
+        )}
+
         {/* Fallback button */}
         <div className="flex gap-3">
           <button
@@ -568,8 +613,10 @@ export default function ProcessDetailsPage() {
   const { options: processOptions } = useProcessOptions()
   const { options: stopReasons } = useStopReasons()
   const { role } = useCurrentUser()
-  // role "User" ดูหน้านี้ได้อย่างเดียว — ปุ่มกด/บาร์โค้ดถูกซ่อน เหลือแค่ "ย้อนกลับ"
-  const isReadOnly = role === 'User'
+  // role "User" และ "ช่าง" ดูหน้านี้ได้อย่างเดียว แก้ตารางไม่ได้ เหลือแค่ "ย้อนกลับ"
+  const isReadOnly = role === 'User' || role === 'ช่าง'
+  // ช่างต้องสแกนบาร์โค้ดเริ่ม/หยุดงานจริง — ซ่อนชุดบาร์โค้ดคำสั่งเฉพาะ role User เท่านั้น
+  const hideBarcodes = role === 'User'
 
   const [project, setProject] = useState<ProjectData | null>(null)
   const projectRef = useRef<ProjectData | null>(null)
@@ -1029,6 +1076,13 @@ export default function ProcessDetailsPage() {
           setActiveWorkerSlot(null)
           return
         }
+        // ห้ามกรอกรหัสพนักงานคนใหม่ทับ ถ้ายังมีคนอื่นทำกระบวนการนี้ค้างอยู่ (เริ่มแล้วยังไม่หยุด)
+        const slotOtherRunningIdx = list[slot.row]?.workers.findIndex((w) => w.worker_id && w.start_time && !w.stop_time) ?? -1
+        if (slotOtherRunningIdx !== -1) {
+          showToast('warning', 'มีคนกำลังทำกระบวนการนี้อยู่', `รอ ${list[slot.row].workers[slotOtherRunningIdx].worker_id} หยุดงานก่อน ถึงจะกรอกรหัสคนถัดไปได้`)
+          setActiveWorkerSlot(null)
+          return
+        }
         const code = String(scannedWorker.code)
         const slotNext = processListRef.current.map((row, ri) => {
           if (ri !== slot.row) return row
@@ -1164,6 +1218,12 @@ export default function ProcessDetailsPage() {
         showToast('error', 'ช่องพนักงานเต็ม', 'รองรับสูงสุด 4 คนต่อกระบวนการ')
         return
       }
+      // ห้ามเริ่มคนใหม่ทับ ถ้ายังมีคนอื่นทำกระบวนการนี้ค้างอยู่ (เริ่มแล้วยังไม่หยุด)
+      const otherRunningIdx = workers.findIndex((w) => w.worker_id && w.start_time && !w.stop_time)
+      if (otherRunningIdx !== -1) {
+        showToast('warning', 'มีคนกำลังทำกระบวนการนี้อยู่', `รอ ${workers[otherRunningIdx].worker_id} หยุดงานก่อน ถึงจะเริ่มคนถัดไปได้`)
+        return
+      }
       workers[emptyIdx] = { worker_id: workerIdStr, start_time: nowTime, stop_time: '' }
       row.workers = workers
       next[rowIndex] = row
@@ -1249,6 +1309,12 @@ export default function ProcessDetailsPage() {
       const blockingRow = current.slice(0, row).findIndex((r) => !isRowCompleted(r))
       if (blockingRow !== -1) {
         showToast('warning', 'รอกระบวนการก่อนหน้าให้เสร็จก่อน', `"${current[blockingRow].process}" ยังไม่เสร็จ`)
+        return
+      }
+      // ห้ามเริ่มคนใหม่ทับ ถ้ายังมีคนอื่นทำกระบวนการนี้ค้างอยู่ (เริ่มแล้วยังไม่หยุด)
+      const otherRunningIdx = current[row]?.workers.findIndex((w) => w.worker_id && w.start_time && !w.stop_time) ?? -1
+      if (otherRunningIdx !== -1) {
+        showToast('warning', 'มีคนกำลังทำกระบวนการนี้อยู่', `รอ ${current[row].workers[otherRunningIdx].worker_id} หยุดงานก่อน ถึงจะเริ่มคนถัดไปได้`)
         return
       }
     }
@@ -1385,6 +1451,7 @@ export default function ProcessDetailsPage() {
         stopReasons={stopReasons}
         onConfirm={handleActionFromModal}
         onClose={() => setActionModal(null)}
+        allowManualEntry={role === 'superadmin'}
       />
     )}
     {pendingStop && (
@@ -1475,8 +1542,8 @@ export default function ProcessDetailsPage() {
             onDeleteRow={handleDeleteRow}
           />
 
-          {/* Command Barcodes: ปกติโชว์ workflow ทั่วไป — พอสแกน FN_GOOD แล้วสลับมาโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว — role User มองไม่เห็นบาร์โค้ดชุดนี้ */}
-          {isReadOnly ? null : isJobFinished ? (
+          {/* Command Barcodes: ปกติโชว์ workflow ทั่วไป — พอสแกน FN_GOOD แล้วสลับมาโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว — role User มองไม่เห็นบาร์โค้ดชุดนี้ (ช่างเห็นได้ ใช้สแกนจริง) */}
+          {hideBarcodes ? null : isJobFinished ? (
             <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
               <p className="text-sm text-emerald-800">
@@ -1509,7 +1576,10 @@ export default function ProcessDetailsPage() {
             </div>
           )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {(awaitingFinishDecision ? FINISH_DECISION_BARCODES : PAGE_COMMAND_BARCODES).map(({ value, label, desc, status, accent, icon: Icon }) => {
+            {(awaitingFinishDecision ? FINISH_DECISION_BARCODES : PAGE_COMMAND_BARCODES)
+              // role "ช่าง" เห็นแค่ "ยืนยันจบกระบวนการ" (CMD_NEXT) — คำสั่งอื่นสงวนไว้ให้ Admin
+              .filter((c) => role !== 'ช่าง' || c.value === 'CMD_NEXT')
+              .map(({ value, label, desc, status, accent, icon: Icon }) => {
               const a = COMMAND_BARCODE_ACCENTS[accent]
               return (
                 <div

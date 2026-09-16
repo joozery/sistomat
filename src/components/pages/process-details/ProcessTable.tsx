@@ -108,10 +108,13 @@ const workerColors = [
 
 export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
   const { role } = useCurrentUser()
-  const canSeeSkill = role !== 'User'
-  // role "User" ดูตารางนี้ได้อย่างเดียว แก้ไข/กดปุ่มอะไรไม่ได้เลย — สแกนบาร์โค้ดจริงยังทำงานได้ปกติ
+  const canSeeSkill = role !== 'User' && role !== 'ช่าง'
+  // role "User" และ "ช่าง" ดูตารางนี้ได้อย่างเดียว แก้ไข/กดปุ่มอะไรไม่ได้เลย — สแกนบาร์โค้ดจริงยังทำงานได้ปกติ
   // เพราะไม่ได้ขึ้นกับปุ่มบนหน้าจอ (GlobalBarcodeScanner ดักที่ keystroke ไม่ใช่การคลิก)
-  const isReadOnly = role === 'User'
+  const isReadOnly = role === 'User' || role === 'ช่าง'
+  // ช่างต้องใช้ flow เดียวกับ Admin ได้ — คลิกช่องรหัสพนักงานเพื่อเข้าโหมดสแกน, สแกนบาร์โค้ดกรอกรหัส,
+  // กด "+ เริ่ม/+ หยุด" (ซึ่งเปิด modal บังคับสแกนยืนยันตัวตนอยู่แล้ว) — จำกัดเฉพาะ role User เท่านั้นที่กดอะไรไม่ได้เลย
+  const canSelectRow = role !== 'User'
   const [overtimeUnits, setOvertimeUnits] = useState<Record<number, OvertimeUnit>>({})
 
   return (
@@ -228,8 +231,8 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               return (
                 <tr
                   key={row.id}
-                  onClick={isReadOnly ? undefined : () => onRowClick?.(index)}
-                  className={`${isReadOnly ? '' : 'cursor-pointer'} ${rowClass}`}
+                  onClick={canSelectRow ? () => onRowClick?.(index) : undefined}
+                  className={`${canSelectRow ? 'cursor-pointer' : ''} ${rowClass}`}
                 >
                   <td className={`border border-slate-200 text-center font-medium px-2 py-1 ${isActive ? 'bg-blue-100 text-gray-500' : isDone ? 'bg-emerald-100/60 text-emerald-600' : isOnHold ? 'bg-amber-100/80 text-amber-600' : 'bg-gray-50 text-gray-500'}`}>
                     {isDone
@@ -372,7 +375,7 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                           <button
                             className="w-full h-9 flex items-center justify-center gap-1 text-amber-600 font-semibold animate-pulse"
                             style={{ fontSize: '11px', backgroundColor: 'transparent', border: 'none', cursor: 'default' }}
-                            onClick={isReadOnly ? undefined : (e) => { e.stopPropagation(); onWorkerSlotActivate?.(index, wIndex) }}
+                            onClick={canSelectRow ? (e) => { e.stopPropagation(); onWorkerSlotActivate?.(index, wIndex) } : undefined}
                           >
                             <ScanBarcode className="h-3.5 w-3.5" />
                             สแกน...
@@ -384,12 +387,12 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                             onChange={(e) => onWorkerChange(index, wIndex, 'worker_id', e.target.value)}
                             onFocus={(e) => {
                               e.target.blur()
-                              if (isReadOnly) return
+                              if (!canSelectRow) return
                               // ช่องที่มีรหัสพนักงานสแกนไว้แล้ว ไม่ต้องกดเพื่อเข้าโหมดสแกนซ้ำ —
                               // แค่คลิกแถว (สแกนรหัสเดิมอีกครั้ง) ก็หยุดงานได้เลย
                               if (!worker.worker_id) onWorkerSlotActivate?.(index, wIndex)
                             }}
-                            className={`w-full h-9 text-center border-0 outline-none text-slate-700 ${isReadOnly ? '' : 'cursor-pointer'}`}
+                            className={`w-full h-9 text-center border-0 outline-none text-slate-700 ${canSelectRow ? 'cursor-pointer' : ''}`}
                             style={{ backgroundColor: 'transparent', fontSize: '12px' }}
                             readOnly
                           />
@@ -398,13 +401,13 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                       <TimeCell
                         value={worker.start_time}
                         bgColor={isActive ? '#dbeafe' : workerColors[wIndex].cell}
-                        onClick={!isReadOnly && !worker.start_time ? () => onStartClick?.(index, wIndex) : undefined}
+                        onClick={canSelectRow && !worker.start_time ? () => onStartClick?.(index, wIndex) : undefined}
                         hint={!worker.start_time ? { label: '+ เริ่ม', color: 'text-emerald-400' } : undefined}
                       />
                       <TimeCell
                         value={worker.stop_time}
                         bgColor={isActive ? '#dbeafe' : workerColors[wIndex].cell}
-                        onClick={!isReadOnly && worker.start_time && !worker.stop_time ? () => onStopClick?.(index, wIndex) : undefined}
+                        onClick={canSelectRow && worker.start_time && !worker.stop_time ? () => onStopClick?.(index, wIndex) : undefined}
                         hint={worker.start_time && !worker.stop_time ? { label: '+ หยุด', color: 'text-red-400' } : undefined}
                         title={worker.stop_reason ? `เหตุผลหยุดงาน: ${worker.stop_reason}` : undefined}
                         subLabel={worker.stop_reason}

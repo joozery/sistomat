@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
 
     const skip = (pageNum - 1) * limit
     const [jobs, total] = await Promise.all([
-      db.collection('jobs').find(filter).sort({ level1: 1, level2: 1, seq: 1 }).skip(skip).limit(limit).toArray(),
+      // sort by job_code (not the unused "seq" field) so BU suffixes like -01..-12 always list in order
+      db.collection('jobs').find(filter).sort({ level1: 1, level2: 1, job_code: 1 }).skip(skip).limit(limit).toArray(),
       db.collection('jobs').countDocuments(filter),
     ])
 

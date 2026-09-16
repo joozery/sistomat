@@ -32,7 +32,8 @@ interface JobHeaderProps {
 
 export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasHold }: JobHeaderProps) {
   const { role } = useCurrentUser()
-  const isReadOnly = role === 'User'
+  // ช่างต้องเปิดดูไฟล์ PDF/3D, QR/บาร์โค้ดใบงาน และใบงาน QC ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
+  const canViewFile = role !== 'User'
   const codeRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<'qr' | 'barcode'>('qr')
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -102,7 +103,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
                 )}
               </div>
             )}
-            {!isReadOnly && fileUrl && fileName && (
+            {canViewFile && fileUrl && fileName && (
               <div className="flex items-center justify-center md:justify-start gap-2 pt-1">
                 <FileThumbnail
                   fileUrl={fileUrl}
@@ -125,8 +126,8 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
             )}
           </div>
 
-          {/* Code display + toggle + Download */}
-          {!isReadOnly && (
+          {/* Code display + toggle + Download — ช่างต้องเห็น/โหลด QR-บาร์โค้ดใบงานได้ */}
+          {canViewFile && (
           <div className="flex flex-col items-center gap-2">
             {/* Toggle */}
             <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-full">
@@ -226,7 +227,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
         </div>
       </CardContent>
 
-      {!isReadOnly && fileUrl && fileName && (
+      {canViewFile && fileUrl && fileName && (
         <FilePreviewDialog
           open={previewOpen}
           onOpenChange={setPreviewOpen}

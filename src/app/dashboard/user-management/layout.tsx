@@ -1,23 +1,67 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Users, Cpu, ShieldCheck, Wrench, UserCheck, IdCard, UsersRound } from 'lucide-react'
-
-const stats = [
-  { label: 'พนักงานทั้งหมด', value: '12 คน', icon: Users, color: 'text-gray-700 bg-gray-100', border: 'border-gray-200' },
-  { label: 'ผู้ดูแลระบบ', value: '3 คน', icon: ShieldCheck, color: 'text-[#7B1A1A] bg-red-50', border: 'border-red-100' },
-  { label: 'ช่างเครื่องจักร', value: '7 คน', icon: Cpu, color: 'text-purple-700 bg-purple-50', border: 'border-purple-100' },
-  { label: 'ฝ่าย QC / MAT', value: '4 คน', icon: Wrench, color: 'text-emerald-700 bg-emerald-50', border: 'border-emerald-100' },
-]
+import { Users, Cpu, ShieldCheck, UserCheck, IdCard, UsersRound, HardHat, Crown } from 'lucide-react'
 
 const tabs = [
   { label: 'จัดการผู้ใช้งาน', href: '/dashboard/user-management', icon: UsersRound },
   { label: 'บาร์โค้ดพนักงาน', href: '/dashboard/user-management/barcodes', icon: IdCard },
 ]
 
+// เมตาการแสดงผลต่อ role — role ไหนไม่มีข้อมูลจริงจะไม่โชว์การ์ดเลย
+const ROLE_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string; border: string }> = {
+  superadmin: { label: 'ผู้ดูแลระบบสูงสุด', icon: Crown, color: 'text-amber-700 bg-amber-50', border: 'border-amber-200' },
+  Admin: { label: 'ผู้ดูแลระบบ', icon: ShieldCheck, color: 'text-[#7B1A1A] bg-red-50', border: 'border-red-100' },
+  'ช่าง': { label: 'ช่างเครื่องจักร', icon: HardHat, color: 'text-purple-700 bg-purple-50', border: 'border-purple-100' },
+  User: { label: 'พนักงานทั่วไป', icon: Cpu, color: 'text-emerald-700 bg-emerald-50', border: 'border-emerald-100' },
+}
+
+function getToken() {
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem('token') ?? ''
+}
+
 export default function UserManagementLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const [roleCounts, setRoleCounts] = useState<Record<string, number> | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/users', { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !Array.isArray(data.users)) return
+        const counts: Record<string, number> = { __total: data.users.length }
+        for (const u of data.users as { role?: string }[]) {
+          const role = u.role || 'User'
+          counts[role] = (counts[role] ?? 0) + 1
+        }
+        setRoleCounts(counts)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // ดึงเฉพาะข้อมูลจริง — role ไหนไม่มีคนเลยไม่โชว์การ์ด
+  const stats = roleCounts
+    ? [
+        { label: 'พนักงานทั้งหมด', value: `${roleCounts.__total} คน`, icon: Users, color: 'text-gray-700 bg-gray-100', border: 'border-gray-200' },
+        ...Object.entries(roleCounts)
+          .filter(([role, count]) => role !== '__total' && count > 0)
+          .map(([role, count]) => {
+            const meta = ROLE_META[role]
+            return {
+              label: meta?.label ?? role,
+              value: `${count} คน`,
+              icon: meta?.icon ?? Users,
+              color: meta?.color ?? 'text-gray-700 bg-gray-100',
+              border: meta?.border ?? 'border-gray-200',
+            }
+          }),
+      ]
+    : []
 
   return (
     <div className="space-y-6 font-sans">
@@ -40,22 +84,24 @@ export default function UserManagementLayout({ children }: { children: React.Rea
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {stats.map((s) => (
-            <div
-              key={s.label}
-              className={`flex items-center gap-3 rounded-xl p-3 border ${s.border} bg-white transition-all`}
-            >
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${s.color}`}>
-                <s.icon className="h-5 w-5" />
+        {stats.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {stats.map((s) => (
+              <div
+                key={s.label}
+                className={`flex items-center gap-3 rounded-xl p-3 border ${s.border} bg-white transition-all`}
+              >
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${s.color}`}>
+                  <s.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 font-medium">{s.label}</p>
+                  <p className="text-sm font-bold text-gray-800">{s.value}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-400 font-medium">{s.label}</p>
-                <p className="text-sm font-bold text-gray-800">{s.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

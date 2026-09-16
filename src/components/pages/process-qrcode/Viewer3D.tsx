@@ -2,7 +2,7 @@
 
 import { useEffect, Suspense, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, Center, Environment } from '@react-three/drei'
+import { OrbitControls, Center } from '@react-three/drei'
 import { useLoader } from '@react-three/fiber'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
@@ -154,7 +154,6 @@ function StepViewer({ url }: { url: string }) {
           <ambientLight intensity={0.6} />
           <directionalLight position={[5, 10, 5]} intensity={1.2} castShadow />
           <directionalLight position={[-5, -5, -5]} intensity={0.3} />
-          <Environment preset="city" />
           <Suspense fallback={null}>
             <STEPMeshes meshes={meshes} />
             <AutoCamera />
@@ -186,7 +185,6 @@ export default function Viewer3D({ fileUrl, ext }: Viewer3DProps) {
           <ambientLight intensity={0.6} />
           <directionalLight position={[5, 10, 5]} intensity={1.2} castShadow />
           <directionalLight position={[-5, -5, -5]} intensity={0.3} />
-          <Environment preset="city" />
           <Suspense fallback={null}>
             {(ext === 'stl') && <STLModel url={fileUrl} />}
             {(ext === 'obj') && <OBJModel url={fileUrl} />}

@@ -26,6 +26,7 @@ interface BuRow {
   jobCode: string       // level2
   level3: string        // level3 (auto or manual)
   level3Touched: boolean
+  quantity: string
 }
 
 type Step = 1 | 2 | 3
@@ -46,6 +47,16 @@ function FileIcon({ name }: { name: string }) {
   return ext === 'pdf'
     ? <FileText className="h-4 w-4 text-red-500 shrink-0" />
     : <Box className="h-4 w-4 text-blue-500 shrink-0" />
+}
+
+// Job codes are always grouped under a "J" + letter prefix (e.g. "JA-8888") —
+// auto-prepend it if someone types the bare form (e.g. "A-8888"), so the job
+// hierarchy this creates always lines up with the rest of the project tree
+// instead of splitting into a separate, invisible level1 group.
+function normalizeJobCode(code: string) {
+  const upper = code.toUpperCase()
+  if (/^[A-Z]-/.test(upper) && !upper.startsWith('J')) return `J${upper}`
+  return upper
 }
 
 function suggestLevel2(parentId: string, existingCodes: string[]): string {
@@ -104,10 +115,8 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
 
   // Step 1 fields
   const [jobCode, setJobCode] = useState('')   // level2 base (e.g. JA-0298-002)
+  const [receivedDate, setReceivedDate] = useState('')
   const [dueDate, setDueDate] = useState('')
-  const [quantity, setQuantity] = useState('1')
-  const [coating, setCoating] = useState('')
-  const [outsource, setOutsource] = useState('')
 
   // Step 2 files
   const [files, setFiles] = useState<File[]>([])
@@ -127,22 +136,29 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
   useEffect(() => {
     if (!open) return
     const token = localStorage.getItem('token')
-    fetch(`/api/jobs?level1=${encodeURIComponent(parentId)}&limit=200`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const normalizedParent = normalizeJobCode(parentId)
+    // เผื่อมี job เก่าที่ยังไม่ได้ normalize เป็น "J" prefix ค้างอยู่ใน level1 อีกฟอร์มหนึ่ง —
+    // ดึงทั้ง 2 ฟอร์มมารวมกัน ไม่งั้นเลข BU ถัดไปจะชนของเดิมที่มองไม่เห็น
+    const variants = Array.from(new Set([parentId, normalizedParent]))
+    Promise.all(
+      variants.map((level1) =>
+        fetch(`/api/jobs?level1=${encodeURIComponent(level1)}&limit=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((r) => r.json())
+          .then((data) => (Array.isArray(data) ? data : (data.jobs ?? [])))
+          .catch(() => [])
+      )
+    ).then((lists) => {
+      const codes = Array.from(new Set(lists.flat().map((j: { job_code: string }) => j.job_code)))
+      setExistingCodes(codes)
+      setJobCode(suggestLevel2(normalizedParent, codes))
     })
-      .then((r) => r.json())
-      .then((data) => {
-        const jobs = Array.isArray(data) ? data : (data.jobs ?? [])
-        const codes = jobs.map((j: { job_code: string }) => j.job_code)
-        setExistingCodes(codes)
-        setJobCode(suggestLevel2(parentId, codes))
-      })
-      .catch(() => setJobCode(`${parentId}-001`))
   }, [open, parentId])
 
   function reset() {
     setStep(1); setSaving(false); setSaveError('')
-    setJobCode(''); setDueDate(''); setQuantity('1'); setCoating(''); setOutsource('')
+    setJobCode(''); setReceivedDate(''); setDueDate('')
     setFiles([]); setFileError(''); setRows([]); setSyncCode(false); setExistingCodes([])
     setUploadingFileName(''); setUploadIndex(0); setUploadProgress(0)
   }
@@ -189,6 +205,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
       jobCode: jobCode.trim(),
       level3: `${jobCode.trim()}-${String(startSuffix + i).padStart(2, '0')}`,
       level3Touched: false,
+      quantity: '1',
     }))
     setRows(buRows)
     setStep(3)
@@ -226,7 +243,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
         }
 
         const primary = uploaded.find((f) => is3D(f.file_name)) ?? uploaded[0]
-        const fullCode = r.level3.trim() || r.jobCode.trim()
+        const fullCode = normalizeJobCode(r.level3.trim() || r.jobCode.trim())
 
         const res = await fetch('/api/jobs', {
           method: 'POST',
@@ -234,11 +251,10 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
           body: JSON.stringify({
             job_code: fullCode,
             drawing_name: r.drawingName.trim(),
-            quantity: Number(quantity) || 1,
+            quantity: Number(r.quantity) || 1,
+            received_date: receivedDate,
             due_date: dueDate,
             status: 'กำลังดำเนินการ',
-            coating,
-            outsource_process: outsource,
             file_url: primary?.file_url ?? null,
             file_name: primary?.file_name ?? null,
             attachments: uploaded,
@@ -270,13 +286,12 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          job_code: jobCode.trim(),
+          job_code: normalizeJobCode(jobCode.trim()),
           drawing_name: '',
-          quantity: Number(quantity) || 1,
+          quantity: 1,
+          received_date: receivedDate,
           due_date: dueDate,
           status: 'กำลังดำเนินการ',
-          coating,
-          outsource_process: outsource,
         }),
       })
       const d = await res.json()
@@ -336,23 +351,12 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-700">จำนวน (ชิ้น)</Label>
-                <Input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="rounded-xl h-10 text-sm border-gray-200" />
+                <Label className="text-xs font-semibold text-gray-700">วันผลิต</Label>
+                <Input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} className="rounded-xl h-10 text-sm border-gray-200" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-700">กำหนดส่ง</Label>
+                <Label className="text-xs font-semibold text-gray-700">กำหนดส่งมอบ</Label>
                 <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="rounded-xl h-10 text-sm border-gray-200" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-700">Coating / ชุบ</Label>
-                <Input value={coating} onChange={(e) => setCoating(e.target.value)} placeholder="เช่น Black Anodize" className="rounded-xl h-10 text-sm border-gray-200" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-700">Outsource Process</Label>
-                <Input value={outsource} onChange={(e) => setOutsource(e.target.value)} placeholder="เช่น ชุบนอก" className="rounded-xl h-10 text-sm border-gray-200" />
               </div>
             </div>
 
@@ -496,7 +500,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                         <Input value={r.drawingName} onChange={(e) => updateRow(r.id, { drawingName: e.target.value })} className="rounded-lg h-9 text-sm border-gray-200" />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
                             <Hash className="h-3 w-3" /> Level 2 (Job)
@@ -534,6 +538,17 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                             value={r.level3}
                             onChange={(e) => updateRow(r.id, { level3: e.target.value, level3Touched: true })}
                             className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${!r.level3Touched && r.level3 ? 'text-emerald-700 bg-emerald-50/50' : ''}`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-semibold text-gray-600">จำนวน</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="1"
+                            value={r.quantity}
+                            onChange={(e) => updateRow(r.id, { quantity: e.target.value })}
+                            className="rounded-lg h-9 text-sm border-gray-200"
                           />
                         </div>
                       </div>

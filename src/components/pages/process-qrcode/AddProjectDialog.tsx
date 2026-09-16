@@ -42,6 +42,7 @@ interface JobRowInput {
   jobCode: string
   level3: string
   level3Touched: boolean
+  quantity: string
 }
 
 function deriveLevel1(code: string) {
@@ -193,6 +194,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         jobCode: '',
         level3: '',
         level3Touched: false,
+        quantity: '1',
       }))
     )
     setStep(3)
@@ -323,7 +325,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
           body: JSON.stringify({
             job_code: fullJobCode,
             drawing_name: r.drawingName.trim(),
-            quantity: 1,
+            quantity: Number(r.quantity) || 1,
             received_date: form.receivedDate,
             due_date: form.dueDate,
             file_url: primary.file_url,
@@ -589,7 +591,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
                             <Hash className="h-3 w-3" /> หมายเลข JOB
@@ -634,6 +636,17 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                             value={r.level3}
                             onChange={(e) => updateRow(r.id, { level3: e.target.value, level3Touched: true })}
                             className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${!r.level3Touched && r.level3 ? 'text-emerald-700 bg-emerald-50/50' : ''}`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-semibold text-gray-600">จำนวน</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="1"
+                            value={r.quantity}
+                            onChange={(e) => updateRow(r.id, { quantity: e.target.value })}
+                            className="rounded-lg h-9 text-sm border-gray-200"
                           />
                         </div>
                       </div>

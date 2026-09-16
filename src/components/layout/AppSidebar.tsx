@@ -56,8 +56,8 @@ const managementMenuItems: MenuItem[] = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { role } = useCurrentUser()
-  const isAdmin = role === 'Admin'
-  const isUser = role === 'User'
+  const isAdmin = role === 'Admin' || role === 'superadmin'
+  const isUser = role === 'User' || role === 'ช่าง'
 
   const renderMenuSection = (items: MenuItem[]) => (
     <SidebarMenu className="gap-1.5">

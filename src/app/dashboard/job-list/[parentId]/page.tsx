@@ -4,6 +4,14 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
@@ -19,6 +27,8 @@ import {
   Receipt,
   ClipboardCheck,
   FileText,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
@@ -174,32 +184,68 @@ export default function JobListPage() {
   const { parentId } = useParams<{ parentId: string }>()
   const router = useRouter()
   const { role } = useCurrentUser()
-  // role "User" ดูรายการนี้ได้อย่างเดียว — ซ่อนปุ่มใบเสนอราคา, QC, เพิ่ม Job ย่อย
-  const isReadOnly = role === 'User'
+  // role "User" และ "ช่าง" ดูรายการนี้ได้อย่างเดียว — ซ่อนปุ่มใบเสนอราคา, QC, เพิ่ม Job ย่อย
+  const isReadOnly = role === 'User' || role === 'ช่าง'
+  // ช่างต้องเปิดดูไฟล์ PDF/3D ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
+  const canViewFile = role !== 'User'
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [addOpen, setAddOpen] = useState(false)
   const [preview, setPreview] = useState<{ url: string; name: string; attachments?: Attachment[] } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/projects/${encodeURIComponent(deleteTarget)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'ลบไม่สำเร็จ')
+      setDeleteTarget(null)
+      loadJobs()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   async function loadJobs() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
       const fetchLevel1 = async (level1: string) => {
-        const res = await fetch(`/api/jobs?level1=${encodeURIComponent(level1)}`, {
+        const res = await fetch(`/api/jobs?level1=${encodeURIComponent(level1)}&limit=200`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         const json = await res.json()
         return Array.isArray(json) ? json : (json.jobs ?? [])
       }
 
-      let data = await fetchLevel1(parentId)
-      // Some older jobs got created without the "J" prefix by mistake (e.g. a
-      // level1 shell saved as "A-2909" instead of "JA-2909") — retry with it
-      // added before giving up, so links generated either way still resolve.
-      if (data.length === 0 && !parentId.toUpperCase().startsWith('J')) {
-        data = await fetchLevel1(`J${parentId}`)
+      // Some jobs get created without the "J" prefix by mistake (e.g. a level1
+      // shell saved as "A-2909" instead of "JA-2909") — always fetch BOTH forms
+      // and merge, so a sibling group under the other prefix never disappears
+      // just because the other variant already returned results.
+      const variants = parentId.toUpperCase().startsWith('J')
+        ? [parentId]
+        : [parentId, `J${parentId}`]
+      const results = await Promise.all(variants.map(fetchLevel1))
+      const seen = new Set<string>()
+      const data: Job[] = []
+      for (const list of results) {
+        for (const j of list) {
+          if (seen.has(j.job_code)) continue
+          seen.add(j.job_code)
+          data.push(j)
+        }
       }
       setJobs(data)
       // auto-expand all level2 groups
@@ -436,6 +482,16 @@ export default function JobListPage() {
                             >
                               เปิดใบงาน <ExternalLink className="h-3.5 w-3.5" />
                             </Button>
+                            {!isReadOnly && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => { setDeleteError(''); setDeleteTarget(singleJob.job_code) }}
+                                className="h-8 w-8 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </>
                         ) : (
                           <button
@@ -473,7 +529,7 @@ export default function JobListPage() {
                             <JobThumbnail
                               job={job}
                               size={48}
-                              isReadOnly={isReadOnly}
+                              isReadOnly={!canViewFile}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
                             <span className="font-mono text-xs font-semibold text-gray-700">{job.job_code}</span>
@@ -521,6 +577,16 @@ export default function JobListPage() {
                               >
                                 ใบงาน <ExternalLink className="h-3 w-3" />
                               </Button>
+                              {!isReadOnly && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
+                                  className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -540,7 +606,7 @@ export default function JobListPage() {
                             <JobThumbnail
                               job={job}
                               size={48}
-                              isReadOnly={isReadOnly}
+                              isReadOnly={!canViewFile}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
                             <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">{job.job_code}</span>
@@ -568,6 +634,16 @@ export default function JobListPage() {
                             >
                               ใบงาน <ExternalLink className="h-3 w-3" />
                             </Button>
+                            {!isReadOnly && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
+                                className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -596,6 +672,46 @@ export default function JobListPage() {
           attachments={preview.attachments}
         />
       )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) { setDeleteTarget(null); setDeleteError('') } }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl p-6 bg-white border-0 font-sans">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              ยืนยันการลบ Job
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 text-xs mt-1">
+              ต้องการลบ Job <span className="font-mono font-bold text-gray-700">{deleteTarget}</span> ใช่หรือไม่?
+              การลบไม่สามารถย้อนกลับได้
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{deleteError}</p>
+          )}
+
+          <DialogFooter className="pt-2 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setDeleteTarget(null); setDeleteError('') }}
+              disabled={deleting}
+              className="rounded-full h-9 border-gray-200"
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="rounded-full h-9 bg-red-600 hover:bg-red-700 text-white px-5 gap-1"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              {deleting ? 'กำลังลบ...' : 'ลบ Job'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

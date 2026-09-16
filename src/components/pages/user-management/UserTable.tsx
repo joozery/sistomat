@@ -32,7 +32,7 @@ interface UserItem {
   locked?: boolean
 }
 
-const ROLE_OPTIONS = ['Admin', 'User', 'ช่าง']
+const ROLE_OPTIONS = ['superadmin', 'Admin', 'User', 'ช่าง']
 
 const avatarGradients = [
   'from-red-500 to-rose-600',
@@ -50,6 +50,7 @@ function getInitials(name: string) {
 }
 
 function getRoleBadge(role: string) {
+  if (role === 'superadmin') return 'text-amber-700 bg-amber-50 border-amber-200'
   if (role === 'Admin') return 'text-[#7B1A1A] bg-red-50 border-red-100'
   if (role === 'ช่าง')  return 'text-purple-700 bg-purple-50 border-purple-100'
   return 'text-gray-700 bg-gray-50 border-gray-200'

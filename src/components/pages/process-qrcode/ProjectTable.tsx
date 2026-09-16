@@ -92,8 +92,8 @@ export function ProjectTable({
 }: ProjectTableProps) {
   const router = useRouter()
   const { role } = useCurrentUser()
-  // role "User" ดูรายการนี้ได้อย่างเดียว — ลบ/ติ๊กเลือก/นำเข้า Excel/เพิ่มกระบวนการ ทำไม่ได้
-  const isReadOnly = role === 'User'
+  // role "User" และ "ช่าง" ดูรายการนี้ได้อย่างเดียว — ลบ/ติ๊กเลือก/นำเข้า Excel/เพิ่มกระบวนการ ทำไม่ได้
+  const isReadOnly = role === 'User' || role === 'ช่าง'
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')

@@ -137,6 +137,9 @@ export async function DELETE(
       db.collection('projects').deleteOne({ project_id: id }),
       db.collection('projects').deleteMany({ level1: { $in: childLevel1s } }),
       db.collection('jobs').deleteMany({ level1: { $in: childLevel1s } }),
+      // เผื่อ id เป็น job_code เดี่ยว (เช่น "JA-8888-001-01") ไม่ใช่ level1 root —
+      // ลบ entry ใน jobs collection ที่ตรงกันด้วย ไม่งั้นจะเหลือค้างให้เห็นในหน้า job-list
+      db.collection('jobs').deleteOne({ job_code: id }),
     ])
 
     if (projectResult.deletedCount === 0) {

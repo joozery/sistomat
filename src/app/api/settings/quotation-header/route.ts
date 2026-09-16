@@ -18,7 +18,7 @@ function verifyAdmin(req: NextRequest) {
   const token = getToken(req)
   if (!token) throw new Error('Unauthorized')
   const payload = jwt.verify(token, process.env.JWT_SECRET!) as { role: string }
-  if (payload.role !== 'Admin') throw new Error('Forbidden')
+  if (payload.role !== 'Admin' && payload.role !== 'superadmin') throw new Error('Forbidden')
 }
 
 interface QuotationHeader {

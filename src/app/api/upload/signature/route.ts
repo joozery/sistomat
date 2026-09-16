@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
   try {
     const payload = jwt.verify(token, JWT_SECRET) as { role: string }
-    if (payload.role !== 'Admin') {
+    if (payload.role !== 'Admin' && payload.role !== 'superadmin') {
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
     }
   } catch {
