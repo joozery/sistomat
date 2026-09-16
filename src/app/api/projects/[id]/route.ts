@@ -132,10 +132,15 @@ export async function DELETE(
 
     // เผื่อ id เป็น level1 project ที่มี sub-job ผูกอยู่ (เช่น "A-2917" → level1 "JA-2917")
     const childLevel1s = /^J[A-Z]-\d{3,4}$/.test(id) ? [id] : [id, `J${id}`]
+    const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // fallback ด้วย project_id prefix เผื่อ projects doc เก่าที่ไม่มี field level1 (สร้างผ่าน /api/jobs ก่อนหน้านี้)
+    const level1PrefixPattern = new RegExp(`^(${childLevel1s.map(escapeRegExp).join('|')})-`)
 
     const [projectResult] = await Promise.all([
       db.collection('projects').deleteOne({ project_id: id }),
-      db.collection('projects').deleteMany({ level1: { $in: childLevel1s } }),
+      db.collection('projects').deleteMany({
+        $or: [{ level1: { $in: childLevel1s } }, { project_id: { $regex: level1PrefixPattern } }],
+      }),
       db.collection('jobs').deleteMany({ level1: { $in: childLevel1s } }),
       // เผื่อ id เป็น job_code เดี่ยว (เช่น "JA-8888-001-01") ไม่ใช่ level1 root —
       // ลบ entry ใน jobs collection ที่ตรงกันด้วย ไม่งั้นจะเหลือค้างให้เห็นในหน้า job-list

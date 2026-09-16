@@ -193,6 +193,8 @@ export async function POST(req: NextRequest) {
           due_date: due_date ? new Date(due_date) : null,
           status: status || 'กำลังดำเนินการ',
           quantity: Number(quantity) || 1,
+          level1: levels.level1,
+          level2: levels.level2,
           type: 'job',
           file_url: file_url || null,
           file_name: file_name || null,

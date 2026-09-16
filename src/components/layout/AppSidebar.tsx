@@ -26,6 +26,7 @@ import {
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface MenuItem {
@@ -45,7 +46,7 @@ const mainMenuItems: MenuItem[] = [
 
 const managementMenuItems: MenuItem[] = [
   { label: 'ติดตาม Real-time', path: '/dashboard/realtime', icon: Radio },
-  { label: 'การแจ้งเตือน', path: '/dashboard/notifications', icon: Bell, badge: '3', hiddenForUser: true },
+  { label: 'การแจ้งเตือน', path: '/dashboard/notifications', icon: Bell, hiddenForUser: true },
   { label: 'สรุปรายการทั้งหมด', path: '/dashboard/monthly-summary', icon: BarChart2, hiddenForUser: true },
   { label: 'Export ตารางงาน', path: '/dashboard/export-jobs', icon: FileSpreadsheet, hiddenForUser: true },
   { label: 'แพลนงานทั้งหมด', path: '/dashboard/all-plans', icon: ClipboardList },
@@ -58,6 +59,32 @@ export function AppSidebar() {
   const { role } = useCurrentUser()
   const isAdmin = role === 'Admin' || role === 'superadmin'
   const isUser = role === 'User' || role === 'ช่าง'
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchUnreadCount() {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/notifications', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        setUnreadCount(data.unreadCount ?? 0)
+      } catch {
+        // keep previous count on failure
+      }
+    }
+
+    fetchUnreadCount()
+    const interval = setInterval(fetchUnreadCount, 60000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
 
   const renderMenuSection = (items: MenuItem[]) => (
     <SidebarMenu className="gap-1.5">
@@ -66,6 +93,7 @@ export function AppSidebar() {
           item.path === '/dashboard'
             ? pathname === '/dashboard'
             : pathname.startsWith(item.path)
+        const badge = item.path === '/dashboard/notifications' ? (unreadCount > 0 ? unreadCount : undefined) : item.badge
 
         return (
           <SidebarMenuItem key={item.path} className="flex justify-center">
@@ -93,7 +121,7 @@ export function AppSidebar() {
                 </span>
               </div>
 
-              {item.badge ? (
+              {badge ? (
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full group-data-[collapsible=icon]:hidden ${
                     isActive
@@ -101,7 +129,7 @@ export function AppSidebar() {
                       : 'bg-red-100 text-[#7B1A1A]'
                   }`}
                 >
-                  {item.badge}
+                  {badge}
                 </span>
               ) : isActive ? (
                 <ChevronRight className="h-4 w-4 text-[#7B1A1A] opacity-70 group-data-[collapsible=icon]:hidden" />

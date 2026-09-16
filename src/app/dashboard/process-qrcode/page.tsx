@@ -24,14 +24,6 @@ interface MatchedJob {
   status?: string
 }
 
-const demoProjects: Project[] = [
-  { project_id: 'PRJ-2025-081', received_date: '2025-07-28', due_date: '2025-08-05' },
-  { project_id: 'PRJ-2025-082', received_date: '2025-07-29', due_date: '2025-08-06' },
-  { project_id: 'PRJ-2025-083', received_date: '2025-07-30', due_date: '2025-08-07' },
-  { project_id: 'PRJ-2025-084', received_date: '2025-07-31', due_date: '2025-08-08' },
-  { project_id: 'PRJ-2025-085', received_date: '2025-07-31', due_date: '2025-08-09' },
-]
-
 export default function ProcessQRCodePage() {
   const router = useRouter()
   const scanInputRef = useRef<HTMLInputElement>(null)
@@ -75,13 +67,9 @@ export default function ProcessQRCodePage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
-      if (Array.isArray(data) && data.length > 0) {
-        setProjects(data)
-      } else {
-        setProjects(demoProjects)
-      }
+      setProjects(Array.isArray(data) ? data : [])
     } catch {
-      setProjects(demoProjects)
+      setProjects([])
     } finally {
       setLoading(false)
     }

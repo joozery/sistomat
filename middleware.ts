@@ -13,6 +13,7 @@ function decodeRole(token: string): string | null {
 }
 
 const ADMIN_ONLY_PATHS = ['/dashboard/user-management', '/dashboard/settings']
+const ADMIN_ROLES = ['Admin', 'superadmin']
 
 export function middleware(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value
@@ -27,7 +28,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (token && ADMIN_ONLY_PATHS.some((p) => pathname.startsWith(p))) {
-    if (decodeRole(token) !== 'Admin') {
+    if (!ADMIN_ROLES.includes(decodeRole(token) ?? '')) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
