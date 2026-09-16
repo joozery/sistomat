@@ -87,7 +87,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { id, username, password, role, name, code, email, phone } = body
+    const { id, username, password, role, name, code, email, phone, locked } = body
 
     if (!id) return NextResponse.json({ error: 'กรุณาระบุ id' }, { status: 400 })
 
@@ -102,6 +102,7 @@ export async function PUT(req: NextRequest) {
     if (code !== undefined) $set.code = code ? Number(code) : null
     if (email !== undefined) $set.email = email
     if (phone !== undefined) $set.phone = phone
+    if (locked !== undefined) $set.locked = !!locked
     if (password) $set.password = await bcrypt.hash(password, 10)
 
     const result = await db.collection('users').updateOne(

@@ -34,21 +34,22 @@ interface MenuItem {
   icon: React.ComponentType<{ className?: string }>
   badge?: string | number
   adminOnly?: boolean
+  hiddenForUser?: boolean
 }
 
 const mainMenuItems: MenuItem[] = [
-  { label: 'แดชบอร์ด', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'แดชบอร์ด', path: '/dashboard', icon: LayoutDashboard, hiddenForUser: true },
   { label: 'การจัดการผู้ใช้งาน', path: '/dashboard/user-management', icon: Users, adminOnly: true },
   { label: 'จัดการ QR Code', path: '/dashboard/process-qrcode', icon: QrCode },
 ]
 
 const managementMenuItems: MenuItem[] = [
   { label: 'ติดตาม Real-time', path: '/dashboard/realtime', icon: Radio },
-  { label: 'การแจ้งเตือน', path: '/dashboard/notifications', icon: Bell, badge: '3' },
-  { label: 'สรุปรายการทั้งหมด', path: '/dashboard/monthly-summary', icon: BarChart2 },
-  { label: 'Export ตารางงาน', path: '/dashboard/export-jobs', icon: FileSpreadsheet },
+  { label: 'การแจ้งเตือน', path: '/dashboard/notifications', icon: Bell, badge: '3', hiddenForUser: true },
+  { label: 'สรุปรายการทั้งหมด', path: '/dashboard/monthly-summary', icon: BarChart2, hiddenForUser: true },
+  { label: 'Export ตารางงาน', path: '/dashboard/export-jobs', icon: FileSpreadsheet, hiddenForUser: true },
   { label: 'แพลนงานทั้งหมด', path: '/dashboard/all-plans', icon: ClipboardList },
-  { label: 'ประวัติกิจกรรม', path: '/dashboard/activity-log', icon: Activity },
+  { label: 'ประวัติกิจกรรม', path: '/dashboard/activity-log', icon: Activity, hiddenForUser: true },
   { label: 'ตั้งค่าระบบ', path: '/dashboard/settings', icon: Settings, adminOnly: true },
 ]
 
@@ -56,10 +57,11 @@ export function AppSidebar() {
   const pathname = usePathname()
   const { role } = useCurrentUser()
   const isAdmin = role === 'Admin'
+  const isUser = role === 'User'
 
   const renderMenuSection = (items: MenuItem[]) => (
     <SidebarMenu className="gap-1.5">
-      {items.filter((item) => !item.adminOnly || isAdmin).map((item) => {
+      {items.filter((item) => (!item.adminOnly || isAdmin) && (!item.hiddenForUser || !isUser)).map((item) => {
         const isActive =
           item.path === '/dashboard'
             ? pathname === '/dashboard'

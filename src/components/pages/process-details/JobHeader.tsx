@@ -2,11 +2,13 @@
 
 import { useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { Calendar, Tag, Download, QrCode, Barcode, RotateCcw, PauseCircle } from 'lucide-react'
+import { Calendar, Tag, Download, QrCode, Barcode, RotateCcw, PauseCircle, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
 import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ssr: false })
 const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
@@ -29,6 +31,8 @@ interface JobHeaderProps {
 }
 
 export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasHold }: JobHeaderProps) {
+  const { role } = useCurrentUser()
+  const isReadOnly = role === 'User'
   const codeRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<'qr' | 'barcode'>('qr')
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -98,7 +102,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
                 )}
               </div>
             )}
-            {fileUrl && fileName && (
+            {!isReadOnly && fileUrl && fileName && (
               <div className="flex items-center justify-center md:justify-start gap-2 pt-1">
                 <FileThumbnail
                   fileUrl={fileUrl}
@@ -110,11 +114,19 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
                   <p className="text-xs font-medium text-gray-700 truncate max-w-[160px]">{fileName}</p>
                   <p className="text-[10px] text-gray-400">คลิกเพื่อดู PDF/3D</p>
                 </div>
+                <Link
+                  href={`/dashboard/process-details/${id}/qc`}
+                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors shrink-0"
+                >
+                  <ClipboardCheck className="h-3 w-3" />
+                  ดูใบงาน QC
+                </Link>
               </div>
             )}
           </div>
 
           {/* Code display + toggle + Download */}
+          {!isReadOnly && (
           <div className="flex flex-col items-center gap-2">
             {/* Toggle */}
             <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-full">
@@ -191,6 +203,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
               โหลด {mode === 'qr' ? 'QR Code' : 'Barcode'} PNG
             </Button>
           </div>
+          )}
 
           {/* Date Information */}
           <div className="flex flex-col gap-2 min-w-[180px]">
@@ -213,7 +226,7 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
         </div>
       </CardContent>
 
-      {fileUrl && fileName && (
+      {!isReadOnly && fileUrl && fileName && (
         <FilePreviewDialog
           open={previewOpen}
           onOpenChange={setPreviewOpen}

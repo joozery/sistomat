@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Printer, ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
 import { useMachineRates } from '@/lib/useMachineRates'
+import { useQuotationHeader } from '@/lib/useQuotationHeader'
 
 interface Job {
   job_code: string
@@ -34,6 +35,11 @@ interface MachineRate {
   rate: number
 }
 
+interface JobProcess {
+  process: string
+  target_time: string
+}
+
 const DEFAULT_MACHINE_RATES: MachineRate[] = [
   { process: 'Material-PO',  rate: 200 },
   { process: 'Material-CUT', rate: 200 },
@@ -45,6 +51,43 @@ const DEFAULT_MACHINE_RATES: MachineRate[] = [
   { process: 'Lathe',        rate: 200 },
   { process: 'TAP',          rate: 200 },
 ]
+
+// แปลง target_time แบบ "HH:MM" (หรือ "H:MM") เป็นจำนวนชั่วโมง
+function parseTargetHours(t: string): number {
+  if (!t) return 0
+  const parts = t.split(':').map((n) => Number(n))
+  const h = parts[0]
+  const m = parts[1]
+  if (isNaN(h)) return 0
+  return h + (isNaN(m) ? 0 : m / 60)
+}
+
+// จับคู่ชื่อกระบวนการจาก process-details กับตาราง ค่า ชม.เครื่อง แบบ fuzzy
+// (เช่น "CAM1" จับคู่กับ "CAM" ได้ และ "MATERAIL" จับคู่กับ "Material-PO"/"Material-CUT"
+// ได้แม้สะกดสลับตัวอักษรกัน — เทียบตัวอักษรที่เรียงใหม่แล้วของคำแรกในชื่อเรท)
+function letterSet(s: string): string {
+  return [...s.replace(/[^A-Z]/g, '')].sort().join('')
+}
+function findMachineRate(processName: string, rates: MachineRate[]): number {
+  const target = processName.trim().toUpperCase()
+  if (!target) return 0
+  const targetLetters = letterSet(target)
+  const match = rates.find((r) => {
+    const rp = r.process.trim().toUpperCase()
+    if (rp === target || target.includes(rp) || rp.includes(target)) return true
+    const rpFirstWord = rp.split(/[\s-]/)[0]
+    return letterSet(rpFirstWord) === targetLetters
+  })
+  return match?.rate ?? 0
+}
+
+// ราคา WC ต่อชิ้น = รวม (เวลาเป้าหมายแต่ละกระบวนการ x ค่า ชม.เครื่อง) ของทุกกระบวนการใน
+// process-details ของ job นี้ แล้วหารด้วยจำนวนที่ทำ
+function calcWcPricePerPiece(processes: JobProcess[], rates: MachineRate[], quantity: number): number {
+  if (!quantity) return 0
+  const totalCost = processes.reduce((sum, p) => sum + parseTargetHours(p.target_time) * findMachineRate(p.process, rates), 0)
+  return totalCost / quantity
+}
 
 // สูตร ประเมินราคา
 function calcRow(r: QuoteRow) {
@@ -67,6 +110,21 @@ function getToken() {
 
 function todayISO() {
   return new Date().toISOString().split('T')[0]
+}
+
+// ใช้เฉพาะ "วันที่" ใต้ผู้เสนอราคาเท่านั้น — เช่น "15 Monday 2026"
+function formatDayWeekdayYear(dateStr: string) {
+  if (!dateStr) return '-'
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    const day = d.getDate()
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
+    const year = d.getFullYear()
+    return `${weekday} ${day} ${year}`
+  } catch {
+    return dateStr
+  }
 }
 
 function formatShortThaiDate(dateStr: string) {
@@ -136,6 +194,14 @@ function bahtText(num: number): string {
 
 const LEVEL1_RE = /^J[A-Z]-\d{3,4}$/
 
+// แสดงเลขโปรเจกต์แบบดิบ (ไม่มี J นำหน้า, ตัดส่วน level2/3 ทิ้ง) — เช่น "JA-8888-001" -> "A-8888"
+function deriveJobDisplay(code: string) {
+  const m = code.match(/^([A-Z]+)(-\d{3,4})/)
+  if (!m) return code
+  const prefix = m[1].startsWith('J') ? m[1].slice(1) : m[1]
+  return `${prefix}${m[2]}`
+}
+
 export default function QuotationPage() {
   const params = useParams()
   const router = useRouter()
@@ -146,11 +212,13 @@ export default function QuotationPage() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [rows, setRows] = useState<QuoteRow[]>([])
+  // process-details ของแต่ละ job_code (ดึงมาเพื่อคำนวณราคา WC อัตโนมัติ) — คีย์ด้วย job_code
+  const [jobProcesses, setJobProcesses] = useState<Record<string, JobProcess[]>>({})
 
   // Header & Meta state
-  const [contactPerson, setContactPerson] = useState('คุณณัฐนนท์')
+  const [contactPerson, setContactPerson] = useState('')
   const [department, setDepartment] = useState('BU 2')
-  const [docNo, setDocNo] = useState(`JB-${code.replace(/^J[A-Z]-/, '')}-001`)
+  const [docNo, setDocNo] = useState(code)
   const [docDate, setDocDate] = useState(todayISO())
   const [submitDate, setSubmitDate] = useState(todayISO())
   const [priceValidDays, setPriceValidDays] = useState('30')
@@ -159,6 +227,8 @@ export default function QuotationPage() {
   // อ่านอย่างเดียว — ตั้งค่าได้ที่หน้า "ตั้งค่าระบบ" > "ค่า ชม.เครื่อง" เท่านั้น
   const [machineRates, setMachineRates] = useState<MachineRate[]>(DEFAULT_MACHINE_RATES)
   const { rates: defaultMachineRates } = useMachineRates()
+  // อ่านอย่างเดียว — ตั้งค่าได้ที่หน้า "ตั้งค่าระบบ" > "หัวกระดาษใบเสนอราคา" เท่านั้น
+  const { header: quotationHeader } = useQuotationHeader()
 
   // Discount & Tax state
   const [discountType, setDiscountType] = useState<'percent' | 'amount'>('percent')
@@ -255,6 +325,31 @@ export default function QuotationPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // ดึง process-details (target_time ของแต่ละกระบวนการ) ของทุก job_code ในตาราง
+  // มาเก็บไว้คำนวณราคา WC อัตโนมัติ — ดึงครั้งเดียวต่อ job_code ที่ยังไม่มีใน cache
+  useEffect(() => {
+    const token = getToken()
+    const missing = rows.filter((r) => r.job_code && !(r.job_code in jobProcesses))
+    if (missing.length === 0) return
+    missing.forEach(async (r) => {
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(r.job_code)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          setJobProcesses((prev) => ({ ...prev, [r.job_code]: [] }))
+          return
+        }
+        const data = await res.json()
+        const rawProcesses: { process?: string; target_time?: string }[] = Array.isArray(data.processes) ? data.processes : []
+        const processes: JobProcess[] = rawProcesses.map((p) => ({ process: p.process ?? '', target_time: p.target_time ?? '' }))
+        setJobProcesses((prev) => ({ ...prev, [r.job_code]: processes }))
+      } catch {
+        setJobProcesses((prev) => ({ ...prev, [r.job_code]: [] }))
+      }
+    })
+  }, [rows, jobProcesses])
+
   // ค่า ชม.เครื่อง อ่านอย่างเดียว ดึงจากหน้า "ตั้งค่าระบบ" เสมอ — แก้ได้ที่หน้านั้นที่เดียว
   useEffect(() => {
     if (defaultMachineRates.length > 0) setMachineRates(defaultMachineRates)
@@ -282,7 +377,11 @@ export default function QuotationPage() {
         sales_date: salesDate,
         approval_date: approvalDate,
         buyer_date: buyerDate,
-        rows: rows,
+        // snapshot the auto-computed WC price (target_time x ค่า ชม.เครื่อง / จำนวน) ณ ตอนบันทึก
+        rows: rows.map((r) => ({
+          ...r,
+          extra_price: calcWcPricePerPiece(jobProcesses[r.job_code] ?? [], machineRates, r.quantity),
+        })),
       }
 
       const res = await fetch(`/api/quotations/${encodeURIComponent(code)}`, {
@@ -476,8 +575,10 @@ export default function QuotationPage() {
             <button
               onClick={() => {
                 setRows((prev) => prev.map((r) => {
-                  const c = calcRow(r)
-                  return c.netPer > 0 ? { ...r, unit_price: Math.round(c.netPer * 100) / 100 } : r
+                  const extra_price = calcWcPricePerPiece(jobProcesses[r.job_code] ?? [], machineRates, r.quantity)
+                  const c = calcRow({ ...r, extra_price })
+                  const next = c.netPer > 0 ? { ...r, unit_price: Math.round(c.netPer * 100) / 100 } : r
+                  return r.mat_type?.trim() ? { ...next, material: r.mat_type.trim() } : next
                 }))
                 setActiveTab('quote')
               }}
@@ -487,7 +588,7 @@ export default function QuotationPage() {
                 borderRadius: '20px', padding: '7px 14px',
                 fontSize: '12px', fontWeight: 'bold', cursor: 'pointer',
               }}
-              title="นำ ราคาสุทธิ/ชิ้น จากสูตรไปเป็นราคาขายในใบเสนอราคา"
+              title="นำ ราคาสุทธิ/ชิ้น และ ชนิดแมท จากสูตร ไปเป็นราคาขาย/วัตถุดิบในใบเสนอราคา"
             >
               ส่งราคาสุทธิ → ใบเสนอ
             </button>
@@ -546,15 +647,15 @@ export default function QuotationPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             {/* Logo & Company Name */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <img src="/logo.svg" alt="SISTOMAT" style={{ height: '42px', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png' }} />
+              <img src={quotationHeader?.logo_url || '/logo.svg'} alt={quotationHeader?.company_name || 'SISTOMAT'} style={{ height: '42px', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png' }} />
               <div>
                 <div style={{ color: '#002060', fontWeight: 'bold', fontSize: '15px', lineHeight: '1.2' }}>
-                  บริษัท สยาม อินทิเกรชั่น ซิสเต็มส์ จำกัด (สำนักงานใหญ่)
+                  {quotationHeader?.company_name}
                 </div>
                 <div style={{ fontSize: '10px', color: '#000', marginTop: '2px', lineHeight: '1.3' }}>
-                  75/33 หมู่ที่ 11 ตำบล คลองหนึ่ง อำเภอ คลองหลวง จังหวัด ปทุมธานี 12120<br />
-                  โทร. 02-529-0880 ต่อ 113 , 095-8400163<br />
-                  E-mail : bu10@sistomat.com
+                  {quotationHeader?.address}<br />
+                  {quotationHeader?.phone}<br />
+                  E-mail : {quotationHeader?.email}
                 </div>
               </div>
             </div>
@@ -582,7 +683,7 @@ export default function QuotationPage() {
                   <tr>
                     <td style={{ width: '85px', fontWeight: 'bold', padding: '3px 6px', borderRight: gridBorder, borderBottom: gridBorder }}>ชื่อผู้ติดต่อ</td>
                     <td style={{ padding: '3px 6px', borderBottom: gridBorder, fontWeight: 'bold' }}>
-                      <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} className="q-input" style={{ width: '100%', fontWeight: 'bold', fontSize: '11px' }} />
+                      <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="รอใส่ชื่อ" className="q-input" style={{ width: '100%', fontWeight: 'bold', fontSize: '11px' }} />
                     </td>
                   </tr>
                   <tr>
@@ -593,7 +694,7 @@ export default function QuotationPage() {
                   </tr>
                   <tr>
                     <td style={{ fontWeight: 'bold', padding: '3px 6px', borderRight: gridBorder, borderBottom: gridBorder }}>JOB</td>
-                    <td style={{ padding: '3px 6px', borderBottom: gridBorder, fontSize: '11px' }}>{code}</td>
+                    <td style={{ padding: '3px 6px', borderBottom: gridBorder, fontSize: '11px' }}>{deriveJobDisplay(code)}</td>
                   </tr>
                   <tr>
                     <td style={{ fontWeight: 'bold', padding: '3px 6px', borderRight: gridBorder }}>จำนวนชิ้นงาน</td>
@@ -867,7 +968,7 @@ export default function QuotationPage() {
                     className="q-input no-print"
                     style={{ fontSize: '10px', marginLeft: '4px' }}
                   />
-                  <span>{formatShortThaiDate(salesDate)}</span>
+                  <span>{formatDayWeekdayYear(salesDate)}</span>
                 </div>
                 <div style={{ marginBottom: '6px' }}>ผู้สั่งซื้อ........................................................</div>
                 <div>
@@ -931,16 +1032,22 @@ export default function QuotationPage() {
             textAlign: 'right', fontFamily: 'Tahoma, Arial, sans-serif',
           })
 
+          // ราคา = ดึงกระบวนการ + เวลาเป้าหมายจาก process-details ของ job นี้ x ค่า ชม.เครื่อง แล้วหารด้วยจำนวน
+          // (แทนการกรอกเอง) — ถ้ายังโหลด process-details ไม่เสร็จ ใช้ 0 ไปก่อน
+          const getComputedExtra = (r: QuoteRow) =>
+            calcWcPricePerPiece(jobProcesses[r.job_code] ?? [], machineRates, r.quantity)
+          const withComputedExtra = (r: QuoteRow): QuoteRow => ({ ...r, extra_price: getComputedExtra(r) })
+
           // Totals
           const totQty  = rows.reduce((s, r) => s + (r.quantity || 0), 0)
           const totF    = rows.reduce((s, r) => s + (r.mat_cost || 0), 0)
           const totG    = rows.reduce((s, r) => s + (r.coating_cost || 0), 0)
           const totH    = rows.reduce((s, r) => s + (r.wc_cost || 0), 0)
-          const totI    = rows.reduce((s, r) => s + (r.extra_price || 0), 0)
-          const totJ    = rows.reduce((s, r) => s + calcRow(r).totalMat, 0)
-          const totK    = rows.reduce((s, r) => s + calcRow(r).totalOut, 0)
-          const totL    = rows.reduce((s, r) => s + calcRow(r).netPer, 0)
-          const totM    = rows.reduce((s, r) => s + calcRow(r).total, 0)
+          const totI    = rows.reduce((s, r) => s + getComputedExtra(r), 0)
+          const totJ    = rows.reduce((s, r) => s + calcRow(withComputedExtra(r)).totalMat, 0)
+          const totK    = rows.reduce((s, r) => s + calcRow(withComputedExtra(r)).totalOut, 0)
+          const totL    = rows.reduce((s, r) => s + calcRow(withComputedExtra(r)).netPer, 0)
+          const totM    = rows.reduce((s, r) => s + calcRow(withComputedExtra(r)).total, 0)
           const expense = totJ + totK
           const profit  = totM - expense
 
@@ -994,8 +1101,8 @@ export default function QuotationPage() {
                     </thead>
                     <tbody>
                       {p2Rows.map((r, i) => {
-                        const c = r.isReal ? calcRow(r as QuoteRow) : { totalMat: 0, totalOut: 0, netPer: 0, total: 0 }
                         const rr = r as QuoteRow
+                        const c = r.isReal ? calcRow(withComputedExtra(rr)) : { totalMat: 0, totalOut: 0, netPer: 0, total: 0 }
                         return (
                           <tr key={i} style={{ height: '18px' }}>
                             <td style={p2tdc()}>{r.index}</td>
@@ -1032,9 +1139,11 @@ export default function QuotationPage() {
                                 ? <input type="number" value={rr.wc_cost ?? ''} onChange={(e) => updateRow(i, { wc_cost: Number(e.target.value) || 0 })} style={numInput(rr.wc_cost, () => {})} />
                                 : ''}
                             </td>
-                            <td style={p2tdc()}>
+                            <td style={p2tdc()} title="เวลาเป้าหมาย x ค่า ชม.เครื่อง ของแต่ละกระบวนการใน process-details ของ job นี้ หารด้วยจำนวน">
                               {r.isReal
-                                ? <input type="number" value={rr.extra_price ?? ''} onChange={(e) => updateRow(i, { extra_price: Number(e.target.value) || 0 })} style={numInput(rr.extra_price, () => {})} />
+                                ? (jobProcesses[rr.job_code]
+                                  ? (getComputedExtra(rr) ? formatMoney(getComputedExtra(rr)) : '-')
+                                  : <Loader2 size={9} className="animate-spin" style={{ display: 'inline' }} />)
                                 : ''}
                             </td>
                             <td style={p2tdc({ color: '#333' })}>{r.isReal && c.totalMat ? formatMoney(c.totalMat) : ''}</td>

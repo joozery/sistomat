@@ -31,6 +31,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (user.locked) {
+      return NextResponse.json(
+        { message: 'บัญชีนี้ถูกล็อก กรุณาติดต่อผู้ดูแลระบบ' },
+        { status: 403 }
+      )
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.password)
 
     if (!isPasswordValid) {

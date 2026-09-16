@@ -23,6 +23,7 @@ import {
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
 import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface ProcessEntry {
   process: string
@@ -134,10 +135,12 @@ function JobThumbnail({
   job,
   size,
   onPreview,
+  isReadOnly,
 }: {
   job: Job
   size: number
   onPreview: (a: Attachment, attachments?: Attachment[]) => void
+  isReadOnly?: boolean
 }) {
   const hasPdf = job.attachments?.some((a) => a.file_name.split('.').pop()?.toLowerCase() === 'pdf')
   const has3D = job.file_name && ['stl','obj','glb','gltf','step','stp'].includes(job.file_name.split('.').pop()?.toLowerCase() ?? '')
@@ -150,12 +153,12 @@ function JobThumbnail({
           fileUrl={job.file_url}
           fileName={job.file_name}
           size={size}
-          onClick={() => onPreview({ file_url: job.file_url!, file_name: job.file_name! }, job.attachments)}
+          onClick={isReadOnly ? undefined : () => onPreview({ file_url: job.file_url!, file_name: job.file_name! }, job.attachments)}
         />
       ) : (
         <div style={{ width: size, height: size }} className="rounded-lg border border-dashed border-gray-100" />
       )}
-      {showPdfBadge && (
+      {showPdfBadge && !isReadOnly && (
         <button
           onClick={() => onPreview({ file_url: job.file_url!, file_name: job.file_name! }, job.attachments)}
           className="flex items-center gap-0.5 text-[9px] font-bold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 rounded px-1.5 py-0.5 transition-colors"
@@ -170,6 +173,9 @@ function JobThumbnail({
 export default function JobListPage() {
   const { parentId } = useParams<{ parentId: string }>()
   const router = useRouter()
+  const { role } = useCurrentUser()
+  // role "User" ดูรายการนี้ได้อย่างเดียว — ซ่อนปุ่มใบเสนอราคา, QC, เพิ่ม Job ย่อย
+  const isReadOnly = role === 'User'
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -236,13 +242,15 @@ export default function JobListPage() {
           ย้อนกลับ
         </Button>
         <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setAddOpen(true)}
-            className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            เพิ่ม Job ย่อย
-          </Button>
+          {!isReadOnly && (
+            <Button
+              onClick={() => setAddOpen(true)}
+              className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
+            >
+              <Plus className="h-4 w-4" />
+              เพิ่ม Job ย่อย
+            </Button>
+          )}
         </div>
       </div>
 
@@ -397,25 +405,29 @@ export default function JobListPage() {
 
                       {/* Action */}
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(level2Code)}`)}
-                          className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
-                        >
-                          <Receipt className="h-3.5 w-3.5" /> ใบเสนอราคา
-                        </Button>
+                        {!isReadOnly && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(level2Code)}`)}
+                            className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
+                          >
+                            <Receipt className="h-3.5 w-3.5" /> ใบเสนอราคา
+                          </Button>
+                        )}
                         {singleJob ? (
                           <>
                             {/* No BU → link directly to process-details */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => router.push(`/dashboard/process-details/${level2Code}/qc`)}
-                              className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
-                            >
-                              <ClipboardCheck className="h-3.5 w-3.5" /> QC
-                            </Button>
+                            {!isReadOnly && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.push(`/dashboard/process-details/${level2Code}/qc`)}
+                                className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
+                              >
+                                <ClipboardCheck className="h-3.5 w-3.5" /> QC
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"
@@ -461,6 +473,7 @@ export default function JobListPage() {
                             <JobThumbnail
                               job={job}
                               size={48}
+                              isReadOnly={isReadOnly}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
                             <span className="font-mono text-xs font-semibold text-gray-700">{job.job_code}</span>
@@ -490,14 +503,16 @@ export default function JobListPage() {
                               />
                             </div>
                             <div className="flex items-center gap-1.5 justify-end">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
-                                className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
-                              >
-                                <ClipboardCheck className="h-3 w-3" /> QC
-                              </Button>
+                              {!isReadOnly && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
+                                  className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
+                                >
+                                  <ClipboardCheck className="h-3 w-3" /> QC
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -525,6 +540,7 @@ export default function JobListPage() {
                             <JobThumbnail
                               job={job}
                               size={48}
+                              isReadOnly={isReadOnly}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
                             <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">{job.job_code}</span>
@@ -534,14 +550,16 @@ export default function JobListPage() {
                               currentProcessName={job.current_process_name}
                               currentProcessActive={job.current_process_active}
                             />
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
-                              className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
-                            >
-                              <ClipboardCheck className="h-3 w-3" /> QC
-                            </Button>
+                            {!isReadOnly && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
+                                className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
+                              >
+                                <ClipboardCheck className="h-3 w-3" /> QC
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"

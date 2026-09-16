@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Search, Pencil, Trash2, UserPlus, MoreHorizontal,
-  CheckCircle2, Sparkles, Eye, EyeOff, Mail, Phone, Loader2,
+  CheckCircle2, Sparkles, Eye, EyeOff, Mail, Phone, Loader2, Lock, Unlock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,9 +29,10 @@ interface UserItem {
   email?: string
   phone?: string
   created_at?: string
+  locked?: boolean
 }
 
-const ROLE_OPTIONS = ['Admin', 'User', 'QC', 'MAT']
+const ROLE_OPTIONS = ['Admin', 'User', 'ช่าง']
 
 const avatarGradients = [
   'from-red-500 to-rose-600',
@@ -50,8 +51,7 @@ function getInitials(name: string) {
 
 function getRoleBadge(role: string) {
   if (role === 'Admin') return 'text-[#7B1A1A] bg-red-50 border-red-100'
-  if (role === 'QC')    return 'text-rose-700 bg-rose-50 border-rose-100'
-  if (role === 'MAT')   return 'text-emerald-700 bg-emerald-50 border-emerald-100'
+  if (role === 'ช่าง')  return 'text-purple-700 bg-purple-50 border-purple-100'
   return 'text-gray-700 bg-gray-50 border-gray-200'
 }
 
@@ -103,6 +103,9 @@ export function UserTable() {
 
   // Delete confirm
   const [deletingUser, setDeletingUser] = useState<UserItem | null>(null)
+
+  // Lock/unlock login
+  const [togglingLock, setTogglingLock] = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -177,6 +180,18 @@ export function UserTable() {
       setDeletingUser(null)
       await fetchUsers()
     } finally { setSaving(false) }
+  }
+
+  const handleToggleLock = async (u: UserItem) => {
+    setTogglingLock(u._id)
+    try {
+      await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ id: u._id, locked: !u.locked }),
+      })
+      await fetchUsers()
+    } finally { setTogglingLock(null) }
   }
 
   const openEdit = (u: UserItem) => {
@@ -278,10 +293,18 @@ export function UserTable() {
                   </TableCell>
 
                   <TableCell>
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${getRoleBadge(u.role)}`}>
-                      <CheckCircle2 className="h-3 w-3" />
-                      {u.role}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${getRoleBadge(u.role)}`}>
+                        <CheckCircle2 className="h-3 w-3" />
+                        {u.role}
+                      </span>
+                      {u.locked && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600">
+                          <Lock className="h-2.5 w-2.5" />
+                          ถูกล็อก
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
 
                   <TableCell className="text-center">
@@ -297,6 +320,20 @@ export function UserTable() {
                             className="gap-2 text-xs font-medium cursor-pointer rounded-lg">
                             <Pencil className="h-3.5 w-3.5 text-blue-600" />
                             แก้ไขข้อมูล
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleToggleLock(u)}
+                            disabled={togglingLock === u._id}
+                            className="gap-2 text-xs font-medium cursor-pointer rounded-lg"
+                          >
+                            {togglingLock === u._id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
+                            ) : u.locked ? (
+                              <Unlock className="h-3.5 w-3.5 text-emerald-600" />
+                            ) : (
+                              <Lock className="h-3.5 w-3.5 text-amber-600" />
+                            )}
+                            {u.locked ? 'ปลดล็อก' : 'ล็อกไม่ให้ล็อกอิน'}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setDeletingUser(u)}
                             className="gap-2 text-xs font-semibold text-[#7B1A1A] cursor-pointer rounded-lg hover:bg-red-50 focus:bg-red-50">

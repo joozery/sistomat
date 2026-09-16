@@ -35,19 +35,23 @@ function parseTimeParts(t: string): { date: string; time: string } | null {
   return { date: '', time: t.slice(0, 5) }
 }
 
-function TimeCell({ value, bgColor, onClick, hint }: { value: string; bgColor: string; onClick?: () => void; hint?: { label: string; color: string } }) {
+function TimeCell({ value, bgColor, onClick, hint, title, subLabel }: { value: string; bgColor: string; onClick?: () => void; hint?: { label: string; color: string }; title?: string; subLabel?: string }) {
   const parts = useMemo(() => parseTimeParts(value), [value])
   return (
     <td
       className={`border border-slate-300 p-0 ${onClick ? 'cursor-pointer hover:brightness-95 active:brightness-90' : ''}`}
       style={{ backgroundColor: bgColor }}
       onClick={onClick}
+      title={title}
     >
-      <div className="flex flex-col items-center justify-center h-9 leading-none">
+      <div className="flex flex-col items-center justify-center min-h-9 py-0.5 leading-none gap-0.5">
         {parts ? (
           <>
             {parts.date && <span className="text-[9px] text-gray-400 font-medium">{parts.date}</span>}
             <span className="text-[11px] font-semibold text-slate-700">{parts.time}</span>
+            {subLabel && (
+              <span className="text-[8px] font-semibold text-amber-600 truncate max-w-[64px]">{subLabel}</span>
+            )}
           </>
         ) : hint ? (
           <span className={`text-[11px] font-semibold ${hint.color}`}>{hint.label}</span>
@@ -63,6 +67,7 @@ export interface WorkerLog {
   worker_id: string
   start_time: string
   stop_time: string
+  stop_reason?: string
 }
 
 export interface ProcessRow {
@@ -90,6 +95,7 @@ interface ProcessTableProps {
   onStartClick?: (row: number, col: number) => void
   onStopClick?: (row: number, col: number) => void
   onAddRow: () => void
+  onInsertRow?: (index: number) => void
   onDeleteRow?: (index: number) => void
 }
 
@@ -100,9 +106,12 @@ const workerColors = [
   { header: '#fbcfe8', subHeader: '#fce7f3', cell: '#fdf2f8' },
 ]
 
-export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onDeleteRow }: ProcessTableProps) {
+export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
   const { role } = useCurrentUser()
   const canSeeSkill = role !== 'User'
+  // role "User" ดูตารางนี้ได้อย่างเดียว แก้ไข/กดปุ่มอะไรไม่ได้เลย — สแกนบาร์โค้ดจริงยังทำงานได้ปกติ
+  // เพราะไม่ได้ขึ้นกับปุ่มบนหน้าจอ (GlobalBarcodeScanner ดักที่ keystroke ไม่ใช่การคลิก)
+  const isReadOnly = role === 'User'
   const [overtimeUnits, setOvertimeUnits] = useState<Record<number, OvertimeUnit>>({})
 
   return (
@@ -112,13 +121,15 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
         <div className="flex-1" />
         <h2 className="text-base font-bold text-gray-900 tracking-wide">กระบวนการผลิต</h2>
         <div className="flex-1 flex justify-end">
-          <button
-            onClick={onAddRow}
-            className="inline-flex items-center gap-1.5 rounded-full h-8 bg-gray-900 hover:bg-gray-800 text-white px-4 text-xs font-semibold shadow-sm transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>เพิ่มแถว</span>
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={onAddRow}
+              className="inline-flex items-center gap-1.5 rounded-full h-8 bg-gray-900 hover:bg-gray-800 text-white px-4 text-xs font-semibold shadow-sm transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>เพิ่มแถว</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -134,14 +145,18 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[120px]">
                 กระบวนการ
               </th>
-              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16 leading-snug">
-                เป้าหมาย<br />
-                <span className="font-normal text-[10px]">(ชม.)</span>
-              </th>
-              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-amber-700 px-2 py-1.5 w-24 leading-snug" title="เลยเป้าหมายไปเท่าไหร่ถึงจะเป็น OVERTIME (ว่าง = ใช้ค่าเริ่มต้นของระบบ) — เลือกหน่วยชั่วโมง/นาทีได้">
-                OVERTIME<br />
-                <span className="font-normal text-[10px]">(เลือกหน่วย)</span>
-              </th>
+              {!isReadOnly && (
+                <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16 leading-snug">
+                  เป้าหมาย<br />
+                  <span className="font-normal text-[10px]">(ชม.)</span>
+                </th>
+              )}
+              {!isReadOnly && (
+                <th rowSpan={2} className="border border-slate-300 text-center font-bold text-amber-700 px-2 py-1.5 w-24 leading-snug" title="เลยเป้าหมายไปเท่าไหร่ถึงจะเป็น OVERTIME (ว่าง = ใช้ค่าเริ่มต้นของระบบ) — เลือกหน่วยชั่วโมง/นาทีได้">
+                  OVERTIME<br />
+                  <span className="font-normal text-[10px]">(เลือกหน่วย)</span>
+                </th>
+              )}
               {canSeeSkill && (
                 <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">
                   SKILL
@@ -164,9 +179,9 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[100px]">
                 หมายเหตุ
               </th>
-              {onDeleteRow && (
-                <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-10">
-                  ลบ
+              {!isReadOnly && (onInsertRow || onDeleteRow) && (
+                <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16">
+                  จัดการ
                 </th>
               )}
             </tr>
@@ -213,8 +228,8 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               return (
                 <tr
                   key={row.id}
-                  onClick={() => onRowClick?.(index)}
-                  className={`cursor-pointer ${rowClass}`}
+                  onClick={isReadOnly ? undefined : () => onRowClick?.(index)}
+                  className={`${isReadOnly ? '' : 'cursor-pointer'} ${rowClass}`}
                 >
                   <td className={`border border-slate-200 text-center font-medium px-2 py-1 ${isActive ? 'bg-blue-100 text-gray-500' : isDone ? 'bg-emerald-100/60 text-emerald-600' : isOnHold ? 'bg-amber-100/80 text-amber-600' : 'bg-gray-50 text-gray-500'}`}>
                     {isDone
@@ -227,24 +242,33 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
 
                   {/* กระบวนการ */}
                   <td className={`border border-slate-300 p-0 relative ${isActive ? 'bg-blue-100' : isDone ? 'bg-emerald-50/40' : ''}`}>
-                    <select
-                      value={row.process}
-                      onChange={(e) => onChange(index, 'process', e.target.value)}
-                      className={`w-full h-9 border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 px-2 pr-6 text-slate-700 font-medium cursor-pointer appearance-none ${isActive ? 'bg-blue-100' : 'bg-white'}`}
-                      style={{ fontSize: '12px' }}
-                    >
-                      {processOptions.map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-slate-400">
-                      <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
+                    {isReadOnly ? (
+                      <div className="w-full h-9 flex items-center px-2 text-slate-700 font-medium" style={{ fontSize: '12px' }}>
+                        {row.process}
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={row.process}
+                          onChange={(e) => onChange(index, 'process', e.target.value)}
+                          className={`w-full h-9 border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 px-2 pr-6 text-slate-700 font-medium cursor-pointer appearance-none ${isActive ? 'bg-blue-100' : 'bg-white'}`}
+                          style={{ fontSize: '12px' }}
+                        >
+                          {processOptions.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-slate-400">
+                          <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20">
+                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                          </svg>
+                        </div>
+                      </>
+                    )}
                   </td>
 
                   {/* เป้าหมาย */}
+                  {!isReadOnly && (
                   <td className={`border border-slate-300 p-0 ${isActive ? 'bg-blue-100' : ''}`}>
                     <input
                       type="text"
@@ -255,8 +279,10 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                       style={{ fontSize: '12px' }}
                     />
                   </td>
+                  )}
 
                   {/* OVERTIME grace — เก็บเป็นนาทีเสมอ แต่เลือกกรอก/แสดงเป็น ชม. หรือ นาที ได้ */}
+                  {!isReadOnly && (
                   <td className={`border border-slate-300 p-0.5 ${isActive ? 'bg-blue-100' : ''}`}>
                     {(() => {
                       const unit = overtimeUnits[index] ?? 'min'
@@ -317,8 +343,9 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                       )
                     })()}
                   </td>
+                  )}
 
-                  {/* SKILL */}
+                  {/* SKILL — canSeeSkill เท่ากับ !isReadOnly อยู่แล้ว (role User มองไม่เห็นคอลัมน์นี้เลย) */}
                   {canSeeSkill && (
                     <td className={`border border-slate-300 p-0 ${isActive ? 'bg-blue-100' : ''}`}>
                       <input
@@ -345,7 +372,7 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                           <button
                             className="w-full h-9 flex items-center justify-center gap-1 text-amber-600 font-semibold animate-pulse"
                             style={{ fontSize: '11px', backgroundColor: 'transparent', border: 'none', cursor: 'default' }}
-                            onClick={(e) => { e.stopPropagation(); onWorkerSlotActivate?.(index, wIndex) }}
+                            onClick={isReadOnly ? undefined : (e) => { e.stopPropagation(); onWorkerSlotActivate?.(index, wIndex) }}
                           >
                             <ScanBarcode className="h-3.5 w-3.5" />
                             สแกน...
@@ -357,11 +384,12 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                             onChange={(e) => onWorkerChange(index, wIndex, 'worker_id', e.target.value)}
                             onFocus={(e) => {
                               e.target.blur()
+                              if (isReadOnly) return
                               // ช่องที่มีรหัสพนักงานสแกนไว้แล้ว ไม่ต้องกดเพื่อเข้าโหมดสแกนซ้ำ —
                               // แค่คลิกแถว (สแกนรหัสเดิมอีกครั้ง) ก็หยุดงานได้เลย
                               if (!worker.worker_id) onWorkerSlotActivate?.(index, wIndex)
                             }}
-                            className="w-full h-9 text-center border-0 outline-none text-slate-700 cursor-pointer"
+                            className={`w-full h-9 text-center border-0 outline-none text-slate-700 ${isReadOnly ? '' : 'cursor-pointer'}`}
                             style={{ backgroundColor: 'transparent', fontSize: '12px' }}
                             readOnly
                           />
@@ -370,14 +398,16 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                       <TimeCell
                         value={worker.start_time}
                         bgColor={isActive ? '#dbeafe' : workerColors[wIndex].cell}
-                        onClick={!worker.start_time ? () => onStartClick?.(index, wIndex) : undefined}
+                        onClick={!isReadOnly && !worker.start_time ? () => onStartClick?.(index, wIndex) : undefined}
                         hint={!worker.start_time ? { label: '+ เริ่ม', color: 'text-emerald-400' } : undefined}
                       />
                       <TimeCell
                         value={worker.stop_time}
                         bgColor={isActive ? '#dbeafe' : workerColors[wIndex].cell}
-                        onClick={worker.start_time && !worker.stop_time ? () => onStopClick?.(index, wIndex) : undefined}
+                        onClick={!isReadOnly && worker.start_time && !worker.stop_time ? () => onStopClick?.(index, wIndex) : undefined}
                         hint={worker.start_time && !worker.stop_time ? { label: '+ หยุด', color: 'text-red-400' } : undefined}
+                        title={worker.stop_reason ? `เหตุผลหยุดงาน: ${worker.stop_reason}` : undefined}
+                        subLabel={worker.stop_reason}
                       />
                     </Fragment>
                   )
@@ -396,24 +426,44 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
 
                   {/* หมายเหตุ */}
                   <td className="border border-slate-300 p-0">
-                    <input
-                      type="text"
-                      value={row.remark}
-                      onChange={(e) => onChange(index, 'remark', e.target.value)}
-                      className="w-full h-9 bg-white border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700 px-2"
-                      style={{ fontSize: '12px' }}
-                    />
+                    {isReadOnly ? (
+                      <div className="w-full h-9 flex items-center text-slate-700 px-2" style={{ fontSize: '12px' }}>
+                        {row.remark}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={row.remark}
+                        onChange={(e) => onChange(index, 'remark', e.target.value)}
+                        className="w-full h-9 bg-white border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700 px-2"
+                        style={{ fontSize: '12px' }}
+                      />
+                    )}
                   </td>
 
-                  {/* ลบ */}
-                  {onDeleteRow && (
+                  {/* แทรกแถว / ลบ */}
+                  {!isReadOnly && (onInsertRow || onDeleteRow) && (
                     <td className="border border-slate-300 p-0 text-center">
-                      <button
-                        onClick={() => onDeleteRow(index)}
-                        className="h-6 w-6 inline-flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors mx-auto"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center justify-center gap-0.5">
+                        {onInsertRow && (
+                          <button
+                            onClick={() => onInsertRow(index)}
+                            title="แทรกแถวใหม่ต่อจากแถวนี้"
+                            className="h-6 w-6 inline-flex items-center justify-center rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {onDeleteRow && (
+                          <button
+                            onClick={() => onDeleteRow(index)}
+                            title="ลบแถวนี้"
+                            className="h-6 w-6 inline-flex items-center justify-center rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>

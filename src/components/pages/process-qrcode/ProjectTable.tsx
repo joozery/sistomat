@@ -22,6 +22,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface Project {
   project_id: string
@@ -90,6 +91,9 @@ export function ProjectTable({
   matchedJobs,
 }: ProjectTableProps) {
   const router = useRouter()
+  const { role } = useCurrentUser()
+  // role "User" ดูรายการนี้ได้อย่างเดียว — ลบ/ติ๊กเลือก/นำเข้า Excel/เพิ่มกระบวนการ ทำไม่ได้
+  const isReadOnly = role === 'User'
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -189,7 +193,7 @@ export function ProjectTable({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {selected.size > 0 && (
+          {!isReadOnly && selected.size > 0 && (
             <Button
               onClick={() => { setBulkDeleteError(''); setBulkDeleteOpen(true) }}
               variant="outline"
@@ -199,21 +203,25 @@ export function ProjectTable({
               <span>ลบที่เลือก ({selected.size})</span>
             </Button>
           )}
-          <Button
-            onClick={onOpenImportDialog}
-            variant="outline"
-            className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#7B1A1A] hover:text-[#7B1A1A] px-4 text-sm"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            <span>นำเข้า Excel</span>
-          </Button>
-          <Button
-            onClick={onOpenAddDialog}
-            className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 shadow-sm transition-all"
-          >
-            <Plus className="h-4 w-4" />
-            <span>เพิ่มกระบวนการ</span>
-          </Button>
+          {!isReadOnly && (
+            <Button
+              onClick={onOpenImportDialog}
+              variant="outline"
+              className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#7B1A1A] hover:text-[#7B1A1A] px-4 text-sm"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              <span>นำเข้า Excel</span>
+            </Button>
+          )}
+          {!isReadOnly && (
+            <Button
+              onClick={onOpenAddDialog}
+              className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 shadow-sm transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              <span>เพิ่มกระบวนการ</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -228,12 +236,14 @@ export function ProjectTable({
             <TableHeader className="bg-gray-50/80">
               <TableRow className="hover:bg-transparent border-gray-100">
                 <TableHead className="w-10 text-center">
-                  <input
-                    type="checkbox"
-                    checked={allOnPageSelected}
-                    onChange={toggleSelectAll}
-                    className="h-3.5 w-3.5 rounded border-gray-300 accent-[#7B1A1A] cursor-pointer"
-                  />
+                  {!isReadOnly && (
+                    <input
+                      type="checkbox"
+                      checked={allOnPageSelected}
+                      onChange={toggleSelectAll}
+                      className="h-3.5 w-3.5 rounded border-gray-300 accent-[#7B1A1A] cursor-pointer"
+                    />
+                  )}
                 </TableHead>
                 <TableHead className="w-12 text-center text-xs font-bold text-gray-400 uppercase">#</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">เลขที่โปรเจค</TableHead>
@@ -268,12 +278,14 @@ export function ProjectTable({
                   <Fragment key={project.project_id}>
                     <TableRow className="hover:bg-red-50/20 transition-colors group">
                       <TableCell className="text-center">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(project.project_id)}
-                          onChange={() => toggleSelectOne(project.project_id)}
-                          className="h-3.5 w-3.5 rounded border-gray-300 accent-[#7B1A1A] cursor-pointer"
-                        />
+                        {!isReadOnly && (
+                          <input
+                            type="checkbox"
+                            checked={selected.has(project.project_id)}
+                            onChange={() => toggleSelectOne(project.project_id)}
+                            className="h-3.5 w-3.5 rounded border-gray-300 accent-[#7B1A1A] cursor-pointer"
+                          />
+                        )}
                       </TableCell>
                       <TableCell className="text-xs font-bold text-gray-400 text-center">
                         {String((currentPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}
@@ -337,14 +349,16 @@ export function ProjectTable({
                             <span>ดูรายละเอียด</span>
                             <ExternalLink className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
-                            onClick={() => setDeleteTarget(project.project_id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {!isReadOnly && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
+                              onClick={() => setDeleteTarget(project.project_id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

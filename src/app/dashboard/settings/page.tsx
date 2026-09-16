@@ -15,6 +15,8 @@ import {
   Upload,
   Timer,
   Gauge,
+  Building2,
+  PauseCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +32,8 @@ import { useProcessOptions } from '@/lib/useProcessOptions'
 import { useInspectors, type Inspector } from '@/lib/useInspectors'
 import { useOvertimeThreshold } from '@/lib/useOvertimeThreshold'
 import { useMachineRates, type MachineRate } from '@/lib/useMachineRates'
+import { useQuotationHeader, type QuotationHeader } from '@/lib/useQuotationHeader'
+import { useStopReasons } from '@/lib/useStopReasons'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -340,6 +344,190 @@ function OvertimeThresholdSection() {
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               บันทึกเกณฑ์ OVERTIME
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ── หัวกระดาษใบเสนอราคา (โลโก้, ชื่อบริษัท, ที่อยู่, เบอร์โทร, อีเมล) ── */
+function QuotationHeaderSection() {
+  const { header, loading, refresh } = useQuotationHeader()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [draft, setDraft] = useState<QuotationHeader | null>(null)
+  const [syncedFrom, setSyncedFrom] = useState<QuotationHeader | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!loading && header && syncedFrom !== header && JSON.stringify(syncedFrom) !== JSON.stringify(header)) {
+    setDraft(header)
+    setSyncedFrom(header)
+  }
+
+  function updateDraft(patch: Partial<QuotationHeader>) {
+    setDraft((d) => (d ? { ...d, ...patch } : d))
+    setSaved(false)
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError('')
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/upload/logo', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.message || 'อัปโหลดไม่สำเร็จ')
+        return
+      }
+      updateDraft({ logo_url: data.publicUrl })
+    } catch {
+      setError('เกิดข้อผิดพลาดในการอัปโหลด')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleSave() {
+    if (!draft) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/settings/quotation-header', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(draft),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'บันทึกไม่สำเร็จ')
+        return
+      }
+      setSaved(true)
+      refresh()
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-amber-50 border-amber-100">
+            <Building2 className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">หัวกระดาษใบเสนอราคา</h3>
+            <p className="text-xs text-gray-400">โลโก้ ชื่อบริษัท ที่อยู่ เบอร์โทร อีเมล ที่แสดงบนหัวกระดาษใบเสนอราคาทุกใบ</p>
+          </div>
+        </div>
+        {saved && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+            <CheckCircle2 className="h-4 w-4" />
+            บันทึกแล้ว
+          </div>
+        )}
+      </div>
+
+      {loading || !draft ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">กำลังโหลด...</span>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-lg bg-gray-50 border border-gray-200 overflow-hidden p-2">
+              {draft.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={draft.logo_url} alt="โลโก้บริษัท" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <Building2 className="h-6 w-6 text-gray-300" />
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              onChange={handleFileChange}
+              className="hidden"
+              id="quotation-logo-file"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-1.5 rounded-xl h-9 text-xs font-semibold"
+            >
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {draft.logo_url ? 'เปลี่ยนโลโก้' : 'อัปโหลดโลโก้'}
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700">ชื่อบริษัท</Label>
+              <Input
+                value={draft.company_name}
+                onChange={(e) => updateDraft({ company_name: e.target.value })}
+                className="rounded-xl h-10 text-sm border-gray-200"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700">ที่อยู่</Label>
+              <Input
+                value={draft.address}
+                onChange={(e) => updateDraft({ address: e.target.value })}
+                className="rounded-xl h-10 text-sm border-gray-200"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-700">เบอร์โทร</Label>
+                <Input
+                  value={draft.phone}
+                  onChange={(e) => updateDraft({ phone: e.target.value })}
+                  className="rounded-xl h-10 text-sm border-gray-200"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-gray-700">อีเมล</Label>
+                <Input
+                  value={draft.email}
+                  onChange={(e) => updateDraft({ email: e.target.value })}
+                  className="rounded-xl h-10 text-sm border-gray-200"
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && <p className="text-xs text-red-600 font-medium mt-3">{error}</p>}
+
+          <div className="flex justify-end mt-5">
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-xs font-semibold"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              บันทึกหัวกระดาษ
             </Button>
           </div>
         </>
@@ -795,7 +983,24 @@ export default function SettingsPage() {
         useOptions={useProcessOptions}
       />
 
+      <OptionsListSection
+        endpoint="/api/settings/stop-reasons"
+        title="เหตุผลการหยุดงาน"
+        description="ตัวเลือกที่ขึ้นให้เลือกตอนสแกนบาร์โค้ดหยุดงาน เช่น จบงาน, พักกินข้าว, พักเบรก"
+        icon={PauseCircle}
+        iconBg="bg-amber-50 border-amber-100"
+        iconColor="text-amber-600"
+        chipBg="bg-amber-50"
+        chipText="text-amber-700"
+        chipBorder="border-amber-100"
+        placeholder="เพิ่มเหตุผลใหม่ เช่น รอวัตถุดิบ"
+        saveLabel="บันทึกเหตุผล"
+        useOptions={useStopReasons}
+      />
+
       <OvertimeThresholdSection />
+
+      <QuotationHeaderSection />
 
       <MachineRatesSection />
 

@@ -11,6 +11,8 @@ import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
 import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess, isRowCompleted, type WorkerData } from '@/lib/workers'
 import { useWorkersList } from '@/lib/useWorkersList'
 import { useProcessOptions } from '@/lib/useProcessOptions'
+import { useStopReasons } from '@/lib/useStopReasons'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then((m) => m.QRCodeSVG), { ssr: false })
 const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
@@ -83,11 +85,11 @@ const COMMAND_BARCODES: CommandBarcodeSpec[] = [
     ],
   },
   {
-    value: 'CMD_REVERSE', label: 'ย้อนกลับกระบวนการ', desc: 'เลือกกระบวนการที่ต้องการย้อนกลับ', status: '', accent: 'orange', icon: RotateCcw,
+    value: 'CMD_REVERSE', label: 'ตั้งสถานะ Rework', desc: 'ติดป้าย Rework ให้ใบงานนี้', status: '', accent: 'orange', icon: RotateCcw,
     detail: [
-      'ใช้เมื่อต้องการย้อนกลับไปทำกระบวนการที่ยืนยันไปแล้วใหม่ (เช่น ทำผิดขั้นตอน)',
-      'ต้องมีอย่างน้อย 1 กระบวนการที่ยืนยันด้วย CMD_NEXT แล้ว ระบบจะเปิดหน้าต่างให้เลือกกระบวนการที่จะย้อนกลับ',
-      'ข้อมูลเวลาที่บันทึกไว้เดิมจะยังคงอยู่ ไม่ถูกลบทิ้ง',
+      'ใช้เมื่อต้องการทำ rework — สแกนแล้วระบบจะติดป้าย "มีการ Rework" ไว้ที่หัวใบงานทันที ไม่ต้องเลือกกระบวนการ',
+      'ไปเพิ่มแถวใหม่ในตารางกระบวนการเองสำหรับงาน rework ที่จะทำ',
+      'ไม่กระทบข้อมูลเวลาหรือสถานะยืนยันของกระบวนการเดิมที่มีอยู่แล้ว',
     ],
   },
   {
@@ -264,21 +266,28 @@ function getNowFormatted(): string {
 }
 
 function ActionModal({
-  mode, processName, initialWorkerId, workers,
+  mode, processName, initialWorkerId, workers, stopReasons,
   onConfirm, onClose,
 }: {
   mode: 'start' | 'stop'
-  processName: string; initialWorkerId: string; workers: WorkerData[];
-  onConfirm: (workerId: string, workerName: string, nowTime: string) => void;
+  processName: string; initialWorkerId: string; workers: WorkerData[]; stopReasons: string[];
+  onConfirm: (workerId: string, workerName: string, nowTime: string, reason?: string) => void;
   onClose: () => void;
 }) {
   const [clockDisplay, setClockDisplay] = useState('')
   const [flash, setFlash] = useState(false)
+  const [mismatch, setMismatch] = useState(false)
+  const [needsReason, setNeedsReason] = useState(false)
+  const [reason, setReason] = useState('')
   const onConfirmRef = useRef(onConfirm)
   useEffect(() => { onConfirmRef.current = onConfirm }, [onConfirm])
 
   const isStop = mode === 'stop'
   const lockedWorker = useMemo(() => (initialWorkerId ? findWorker(initialWorkerId, workers) : null), [initialWorkerId, workers])
+
+  // ตั้งเหตุผลเริ่มต้นเป็นตัวแรกในรายการ พอโหลดเสร็จ (เลือกใหม่ได้เสมอ) — ปรับ state
+  // ระหว่าง render แทน effect เพื่อไม่ให้เกิด cascading render เกินจำเป็น
+  if (isStop && !reason && stopReasons.length > 0) setReason(stopReasons[0])
 
   useEffect(() => {
     const tick = () => setClockDisplay(new Date().toLocaleTimeString('en-GB', { hour12: false }))
@@ -291,14 +300,29 @@ function ActionModal({
   useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault()
-      setFlash(true)
-      setTimeout(() => setFlash(false), 300)
       const raw = (e.detail.barcode as string).trim()
       if (isStop) {
-        // stop: confirm with pre-filled worker
+        // stop: ต้องสแกนรหัสพนักงานคนเดิมที่เริ่มไว้เท่านั้นถึงจะยืนยันได้ —
+        // เดิมรับสแกนบาร์โค้ดอะไรก็ได้มาปิดงานของ initialWorkerId ทำให้คนอื่นหยุดแทนกันได้
+        const scannedWorker = findWorker(raw, workers)
+        const scannedCode = scannedWorker ? String(scannedWorker.code) : raw
+        if (scannedCode !== String(initialWorkerId)) {
+          setMismatch(true)
+          setTimeout(() => setMismatch(false), 1500)
+          return
+        }
+        if (!reason) {
+          setNeedsReason(true)
+          setTimeout(() => setNeedsReason(false), 1500)
+          return
+        }
+        setFlash(true)
+        setTimeout(() => setFlash(false), 300)
         const wInfo = findWorker(initialWorkerId, workers)
-        onConfirmRef.current(initialWorkerId, wInfo?.name ?? initialWorkerId, getNowFormatted())
+        onConfirmRef.current(initialWorkerId, wInfo?.name ?? initialWorkerId, getNowFormatted(), reason)
       } else {
+        setFlash(true)
+        setTimeout(() => setFlash(false), 300)
         // start: use scanned barcode as worker identity
         const worker = findWorker(raw, workers)
         const code = worker ? String(worker.code) : raw
@@ -307,7 +331,7 @@ function ActionModal({
     }
     document.addEventListener('onBarcodeScan', handler)
     return () => document.removeEventListener('onBarcodeScan', handler)
-  }, [isStop, initialWorkerId, workers])
+  }, [isStop, initialWorkerId, workers, reason])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -337,7 +361,7 @@ function ActionModal({
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 fade-in duration-200 transition-colors ${flash ? (isStop ? 'bg-red-50' : 'bg-emerald-50') : ''}`}
+        className={`bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 fade-in duration-200 transition-colors ${(mismatch || needsReason) ? 'bg-amber-50' : flash ? (isStop ? 'bg-red-50' : 'bg-emerald-50') : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -364,7 +388,29 @@ function ActionModal({
               <p className={`text-2xl font-bold tabular-nums ${cls.idText}`}>{initialWorkerId}</p>
               <p className={`text-sm mt-0.5 font-medium ${cls.sub}`}>{lockedWorker.name}</p>
               <p className={`text-[10px] mt-0.5 ${cls.detail}`}>{lockedWorker.machines.join(', ')}</p>
-              <p className="text-xs text-gray-400 mt-3 font-medium">สแกนบาร์โค้ดใดก็ได้เพื่อยืนยัน</p>
+
+              {/* เหตุผลการหยุดงาน — ต้องเลือกก่อนสแกน/กดยืนยันถึงจะบันทึกได้ */}
+              <div className="mt-3 text-left">
+                <label className="text-[10px] font-semibold text-gray-500">เหตุผลการหยุดงาน</label>
+                <select
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className={`mt-1 w-full h-9 rounded-lg border text-sm px-2 bg-white ${needsReason ? 'border-amber-400' : 'border-gray-200'}`}
+                >
+                  {stopReasons.length === 0 && <option value="">ยังไม่มีตัวเลือก — เพิ่มได้ที่ตั้งค่าระบบ</option>}
+                  {stopReasons.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              {mismatch ? (
+                <p className="text-xs text-amber-600 mt-3 font-bold">รหัสไม่ตรงกับผู้เริ่มงาน — ต้องเป็น {initialWorkerId} เท่านั้น</p>
+              ) : needsReason ? (
+                <p className="text-xs text-amber-600 mt-3 font-bold">กรุณาเลือกเหตุผลการหยุดงานก่อน</p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-3 font-medium">ต้องสแกนรหัสพนักงานคนเดิม ({initialWorkerId}) เพื่อยืนยัน</p>
+              )}
             </>
           ) : (
             /* Start: waiting for scan */
@@ -391,7 +437,14 @@ function ActionModal({
           </button>
           {isStop && (
             <button
-              onClick={() => onConfirmRef.current(initialWorkerId, lockedWorker?.name ?? initialWorkerId, getNowFormatted())}
+              onClick={() => {
+                if (!reason) {
+                  setNeedsReason(true)
+                  setTimeout(() => setNeedsReason(false), 1500)
+                  return
+                }
+                onConfirmRef.current(initialWorkerId, lockedWorker?.name ?? initialWorkerId, getNowFormatted(), reason)
+              }}
               className={`flex-1 h-11 rounded-full text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 ${cls.btn}`}
             >
               <Square className="h-4 w-4 fill-white" />
@@ -404,75 +457,69 @@ function ActionModal({
   )
 }
 
-function ReverseModal({
-  processList,
-  onSelect,
-  onClose,
+function StopReasonModal({
+  workerName, processName, reasons, onConfirm, onCancel,
 }: {
-  processList: ProcessRow[]
-  onSelect: (idx: number) => void
-  onClose: () => void
+  workerName: string; processName: string; reasons: string[];
+  onConfirm: (reason: string) => void; onCancel: () => void;
 }) {
-  const confirmed = processList
-    .map((row, idx) => ({ row, idx }))
-    .filter(({ row }) => !!row.next_confirmed_at)
+  const [reason, setReason] = useState(reasons[0] ?? '')
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [onCancel])
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm font-sans"
-      onClick={onClose}
+      onClick={onCancel}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl px-8 py-7 max-w-md w-full mx-4 animate-in zoom-in-95 fade-in duration-200"
+        className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 fade-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-5">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 border border-amber-100 mb-3">
-            <RotateCcw className="h-6 w-6 text-amber-600" />
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 border border-red-100 mb-3">
+            <Square className="h-5 w-5 text-red-600" />
           </div>
-          <h2 className="text-base font-bold text-gray-800">ย้อนกลับกระบวนการ</h2>
-          <p className="text-xs text-gray-400 mt-1">เลือกกระบวนการที่ต้องการกลับมาทำใหม่</p>
+          <h2 className="text-base font-bold text-gray-800">เหตุผลการหยุดงาน</h2>
+          <p className="text-xs text-gray-400 mt-1">{workerName} • {processName}</p>
         </div>
 
-        {confirmed.length === 0 ? (
-          <p className="text-center text-sm text-gray-400 py-6">ยังไม่มีกระบวนการที่ยืนยันแล้ว</p>
-        ) : (
-          <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
-            {confirmed.map(({ row, idx }) => (
-              <button
-                key={idx}
-                onClick={() => onSelect(idx)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition-all text-left group"
-              >
-                <span className="flex-shrink-0 h-7 w-7 rounded-full bg-gray-100 group-hover:bg-amber-100 text-gray-600 group-hover:text-amber-700 text-xs font-bold flex items-center justify-center">
-                  {idx + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{row.process}</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">ยืนยันแล้วเมื่อ {row.next_confirmed_at?.slice(0, 16)}</p>
-                </div>
-                <RotateCcw className="h-3.5 w-3.5 text-gray-300 group-hover:text-amber-500 flex-shrink-0" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        <button
-          onClick={onClose}
-          className="mt-5 w-full py-2.5 rounded-full border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors font-medium"
+        <select
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          autoFocus
+          className="w-full h-11 rounded-xl border border-gray-200 text-sm px-3 bg-white mb-5"
         >
-          ยกเลิก
-        </button>
+          {reasons.length === 0 && <option value="">ยังไม่มีตัวเลือก — เพิ่มได้ที่ตั้งค่าระบบ</option>}
+          {reasons.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 h-11 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+          >
+            ยกเลิก
+          </button>
+          <button
+            onClick={() => reason && onConfirm(reason)}
+            disabled={!reason}
+            className="flex-1 h-11 rounded-full bg-red-700 hover:bg-red-800 text-white text-sm font-bold shadow-md shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50"
+          >
+            ยืนยันหยุดงาน
+          </button>
+        </div>
       </div>
     </div>
   )
 }
+
 
 interface ProjectAttachment {
   file_url: string
@@ -519,6 +566,10 @@ export default function ProcessDetailsPage() {
   useEffect(() => { workersRef.current = workers }, [workers])
 
   const { options: processOptions } = useProcessOptions()
+  const { options: stopReasons } = useStopReasons()
+  const { role } = useCurrentUser()
+  // role "User" ดูหน้านี้ได้อย่างเดียว — ปุ่มกด/บาร์โค้ดถูกซ่อน เหลือแค่ "ย้อนกลับ"
+  const isReadOnly = role === 'User'
 
   const [project, setProject] = useState<ProjectData | null>(null)
   const projectRef = useRef<ProjectData | null>(null)
@@ -532,6 +583,8 @@ export default function ProcessDetailsPage() {
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null)
   const [activeWorkerSlot, setActiveWorkerSlot] = useState<{ row: number; col: number } | null>(null)
   const [actionModal, setActionModal] = useState<{ mode: 'start' | 'stop'; row: number; col: number; workerId: string; processName: string } | null>(null)
+  // สแกนหยุดงานผ่านบาร์โค้ดโดยตรง (ไม่ผ่าน ActionModal) — รอเลือกเหตุผลก่อนถึงจะบันทึกจริง
+  const [pendingStop, setPendingStop] = useState<{ rowIndex: number; workerIdStr: string; workerName: string; processName: string; nowTime: string } | null>(null)
   const actionModalRef = useRef<typeof actionModal>(null)
   useEffect(() => { actionModalRef.current = actionModal }, [actionModal])
   const activeWorkerSlotRef = useRef<{ row: number; col: number } | null>(null)
@@ -541,10 +594,6 @@ export default function ProcessDetailsPage() {
 
   const [editVersion, setEditVersion] = useState(0)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const [reverseModalOpen, setReverseModalOpen] = useState(false)
-  const reverseModalOpenRef = useRef(false)
-  useEffect(() => { reverseModalOpenRef.current = reverseModalOpen }, [reverseModalOpen])
 
   const [infoBarcodeValue, setInfoBarcodeValue] = useState<string | null>(null)
   const [awaitingFinishDecision, setAwaitingFinishDecision] = useState(false)
@@ -735,7 +784,7 @@ export default function ProcessDetailsPage() {
       const isCmd = rawUpper === 'CMD_CANCEL' || rawUpper === 'CMD_RESET' || rawUpper === 'CMD_NEXT'
         || rawUpper === 'CANCEL_FN' || rawUpper === 'FN_GOOD' || rawUpper === 'ACPT_FN'
         || rawUpper === 'CMD_HOLD' || rawUpper === 'CMD_REVERSE' || rawUpper === 'CMD_REJECT'
-      if (!isCmd && (actionModalRef.current || reverseModalOpenRef.current)) {
+      if (!isCmd && actionModalRef.current) {
         e.preventDefault()
         return
       }
@@ -806,15 +855,17 @@ export default function ProcessDetailsPage() {
         return
       }
 
-      // ── CMD_REVERSE: เปิด modal เลือกกระบวนการที่ต้องการย้อนกลับ ──
+      // ── CMD_REVERSE: ตั้งสถานะ Rework เฉยๆ — ไม่ต้องเลือกกระบวนการ เพราะจะไปเพิ่มแถวใหม่เองสำหรับ rework ──
       if (rawUpper === 'CMD_REVERSE') {
         e.preventDefault()
-        const hasConfirmed = list.some((row) => !!row.next_confirmed_at)
-        if (!hasConfirmed) {
-          showToast('warning', 'ยังไม่มีกระบวนการที่ยืนยันแล้ว', 'ต้องยืนยันด้วย CMD_NEXT ก่อน')
-          return
-        }
-        setReverseModalOpen(true)
+        const newFlags = { ...projectRef.current?.flags, has_rework: true }
+        setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
+        fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ flags: newFlags }),
+        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+        showToast('warning', 'ตั้งสถานะ Rework แล้ว', 'เพิ่มแถวใหม่ในตารางกระบวนการเพื่อทำ rework')
         return
       }
 
@@ -1001,7 +1052,7 @@ export default function ProcessDetailsPage() {
       const idLower = id.toLowerCase()
       const isCurrentJobQR = rawLower === idLower || rawLower.startsWith(idLower + '|')
 
-      let worker
+      let worker: WorkerData | null | undefined
       let rowIndex: number
 
       if (isCurrentJobQR) {
@@ -1027,6 +1078,19 @@ export default function ProcessDetailsPage() {
           return
         }
         rowIndex = eligible.index
+
+        // การหยุดผ่าน QR ใบงานยืนยันตัวตนจาก login ของเครื่องเท่านั้น ไม่ใช่คนที่กดสแกนจริง —
+        // ถ้าเครื่องนี้ login ค้างเป็นคนอื่นอยู่ คนที่กดสแกนจะหยุดเวลาแทนเจ้าของตัวจริงได้โดยไม่ได้ตั้งใจ
+        // เลยบังคับให้สแกนรหัสพนักงานของตัวเองยืนยันอีกครั้งก่อนหยุดเวลาเสมอ (exact match เหมือน CMD ปกติ)
+        const loggedInWorkerCode = String(worker.code)
+        const isStopScenario = list[rowIndex].workers.some(
+          (w) => String(w.worker_id) === loggedInWorkerCode && w.start_time && !w.stop_time
+        )
+        if (isStopScenario) {
+          setActiveRowIndex(rowIndex)
+          showToast('warning', 'ยืนยันตัวตนก่อนหยุดเวลา', 'สแกนรหัสพนักงานของคุณอีกครั้งเพื่อยืนยันแล้วจะหยุดเวลาให้')
+          return
+        }
       } else if (activeRowIndex !== null) {
         // สแกนรหัสพนักงานโดยตรง (เลือกแถวไว้แล้ว)
         e.preventDefault()
@@ -1089,26 +1153,23 @@ export default function ProcessDetailsPage() {
         (w) => String(w.worker_id) === workerIdStr && w.start_time && !w.stop_time
       )
 
-      let toastMsg: { type: ToastType; title: string; subtitle: string }
-
       if (runningIdx !== -1) {
-        workers[runningIdx] = { ...workers[runningIdx], stop_time: nowTime }
-        toastMsg = { type: 'success', title: `จบงาน — ${worker!.name}`, subtitle: `${targetRow.process} • ${nowTime}` }
-      } else {
-        const emptyIdx = workers.findIndex((w) => !w.worker_id)
-        if (emptyIdx === -1) {
-          showToast('error', 'ช่องพนักงานเต็ม', 'รองรับสูงสุด 4 คนต่อกระบวนการ')
-          return
-        }
-        workers[emptyIdx] = { worker_id: workerIdStr, start_time: nowTime, stop_time: '' }
-        toastMsg = { type: 'success', title: `เริ่มงาน — ${worker!.name}`, subtitle: `${targetRow.process} • ${nowTime}` }
+        // หยุดงาน — ต้องเลือกเหตุผลก่อนถึงจะบันทึกจริง (ดู StopReasonModal ด้านล่าง)
+        setPendingStop({ rowIndex, workerIdStr, workerName: worker.name, processName: targetRow.process, nowTime })
+        return
       }
 
+      const emptyIdx = workers.findIndex((w) => !w.worker_id)
+      if (emptyIdx === -1) {
+        showToast('error', 'ช่องพนักงานเต็ม', 'รองรับสูงสุด 4 คนต่อกระบวนการ')
+        return
+      }
+      workers[emptyIdx] = { worker_id: workerIdStr, start_time: nowTime, stop_time: '' }
       row.workers = workers
       next[rowIndex] = row
 
       setProcessList(next)
-      showToast(toastMsg.type, toastMsg.title, toastMsg.subtitle)
+      showToast('success', `เริ่มงาน — ${worker!.name}`, `${targetRow.process} • ${nowTime}`)
 
       fetch(`/api/projects/${id}`, {
         method: 'PUT',
@@ -1133,25 +1194,34 @@ export default function ProcessDetailsPage() {
     })
   }
 
+  const blankProcessRow = (): ProcessRow => ({
+    id: Date.now(),
+    process: 'MATERAIL',
+    target_time: '00:00',
+    skill: '0',
+    overtime_grace: '',
+    workers: [
+      { worker_id: '', start_time: '', stop_time: '' },
+      { worker_id: '', start_time: '', stop_time: '' },
+      { worker_id: '', start_time: '', stop_time: '' },
+      { worker_id: '', start_time: '', stop_time: '' },
+    ],
+    elapsed_time: '00:00:00',
+    remark: '',
+  })
+
   const handleAddRow = () => {
-    setProcessList((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        process: 'MATERAIL',
-        target_time: '00:00',
-        skill: '0',
-        overtime_grace: '',
-        workers: [
-          { worker_id: '', start_time: '', stop_time: '' },
-          { worker_id: '', start_time: '', stop_time: '' },
-          { worker_id: '', start_time: '', stop_time: '' },
-          { worker_id: '', start_time: '', stop_time: '' },
-        ],
-        elapsed_time: '00:00:00',
-        remark: '',
-      },
-    ])
+    setProcessList((prev) => [...prev, blankProcessRow()])
+    setEditVersion((v) => v + 1)
+  }
+
+  // แทรกแถวใหม่ต่อจากแถวที่ index (ไว้ใช้เพิ่มกระบวนการ rework คั่นกลางระหว่างแถวเดิม)
+  const handleInsertRow = (index: number) => {
+    setProcessList((prev) => {
+      const next = [...prev]
+      next.splice(index + 1, 0, blankProcessRow())
+      return next
+    })
     setEditVersion((v) => v + 1)
   }
 
@@ -1160,7 +1230,7 @@ export default function ProcessDetailsPage() {
     setEditVersion((v) => v + 1)
   }
 
-  const handleActionFromModal = useCallback((workerId: string, workerName: string, nowTime: string) => {
+  const handleActionFromModal = useCallback((workerId: string, workerName: string, nowTime: string, reason?: string) => {
     if (!actionModal) return
     const { mode, row, col, processName } = actionModal
     const current = processListRef.current
@@ -1189,14 +1259,17 @@ export default function ProcessDetailsPage() {
       if (mode === 'start') {
         workers[col] = { ...workers[col], worker_id: workerId, start_time: nowTime, stop_time: '' }
       } else {
-        workers[col] = { ...workers[col], stop_time: nowTime }
+        workers[col] = { ...workers[col], stop_time: nowTime, stop_reason: reason }
       }
       return { ...r, workers }
     })
     setProcessList(next)
     setActionModal(null)
     const label = mode === 'start' ? 'เริ่มงาน' : 'หยุดงาน'
-    showToast('success', `${label} — ${workerName}`, `${processName} • ${nowTime.split(' ')[1]}`)
+    const subtitle = mode === 'stop' && reason
+      ? `${processName} • ${nowTime.split(' ')[1]} • ${reason}`
+      : `${processName} • ${nowTime.split(' ')[1]}`
+    showToast('success', `${label} — ${workerName}`, subtitle)
     fetch(`/api/projects/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
@@ -1204,23 +1277,28 @@ export default function ProcessDetailsPage() {
     }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
   }, [actionModal, id, showToast])
 
-  const handleReverse = useCallback((idx: number) => {
-    setReverseModalOpen(false)
+  // ยืนยันหยุดงานที่ค้างไว้จากการสแกนบาร์โค้ดโดยตรง (หลังเลือกเหตุผลใน StopReasonModal แล้ว)
+  const commitPendingStop = useCallback((reason: string) => {
+    if (!pendingStop) return
+    const { rowIndex, workerIdStr, workerName, processName, nowTime } = pendingStop
     const current = processListRef.current
-    const targetProcessName = current[idx]?.process ?? `ลำดับที่ ${idx + 1}`
-    const next = current.map((row, ri) =>
-      ri >= idx ? { ...row, next_confirmed_at: undefined } : row
-    )
+    const next = [...current]
+    const row = { ...next[rowIndex] }
+    const workers = [...row.workers]
+    const idx = workers.findIndex((w) => String(w.worker_id) === workerIdStr && w.start_time && !w.stop_time)
+    setPendingStop(null)
+    if (idx === -1) return
+    workers[idx] = { ...workers[idx], stop_time: nowTime, stop_reason: reason }
+    row.workers = workers
+    next[rowIndex] = row
     setProcessList(next)
-    const newFlags = { ...projectRef.current?.flags, has_rework: true }
-    setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
+    showToast('success', `จบงาน — ${workerName}`, `${processName} • ${nowTime} • ${reason}`)
     fetch(`/api/projects/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ processes: next, flags: newFlags }),
-    }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
-    showToast('success', `ย้อนกลับไป "${targetProcessName}" แล้ว`, 'สแกน QR ใบงานหรือรหัสพนักงานเพื่อเริ่มงาน')
-  }, [id, showToast])
+      body: JSON.stringify({ processes: next }),
+    }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'ข้อมูลอัปเดตในหน้าแต่ไม่ได้ save — กรุณากด "บันทึกข้อมูลใบงาน"'))
+  }, [pendingStop, id, showToast])
 
   const handleSave = async (processesToSave?: ProcessRow[]) => {
     setSaveState('saving')
@@ -1304,15 +1382,18 @@ export default function ProcessDetailsPage() {
         processName={actionModal.processName}
         initialWorkerId={actionModal.workerId}
         workers={workers}
+        stopReasons={stopReasons}
         onConfirm={handleActionFromModal}
         onClose={() => setActionModal(null)}
       />
     )}
-    {reverseModalOpen && (
-      <ReverseModal
-        processList={processList}
-        onSelect={handleReverse}
-        onClose={() => setReverseModalOpen(false)}
+    {pendingStop && (
+      <StopReasonModal
+        workerName={pendingStop.workerName}
+        processName={pendingStop.processName}
+        reasons={stopReasons}
+        onConfirm={commitPendingStop}
+        onCancel={() => setPendingStop(null)}
       />
     )}
     {infoBarcodeValue && (() => {
@@ -1390,11 +1471,12 @@ export default function ProcessDetailsPage() {
             onChange={handleChange}
             onWorkerChange={handleWorkerChange}
             onAddRow={handleAddRow}
+            onInsertRow={handleInsertRow}
             onDeleteRow={handleDeleteRow}
           />
 
-          {/* Command Barcodes: ปกติโชว์ workflow ทั่วไป — พอสแกน FN_GOOD แล้วสลับมาโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว */}
-          {isJobFinished ? (
+          {/* Command Barcodes: ปกติโชว์ workflow ทั่วไป — พอสแกน FN_GOOD แล้วสลับมาโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว — role User มองไม่เห็นบาร์โค้ดชุดนี้ */}
+          {isReadOnly ? null : isJobFinished ? (
             <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
               <p className="text-sm text-emerald-800">
@@ -1465,7 +1547,8 @@ export default function ProcessDetailsPage() {
         </div>
       )}
 
-      {/* Bottom Actions */}
+      {/* Bottom Actions — role User ไม่เห็นปุ่มพวกนี้เลย */}
+      {!isReadOnly && (
       <div className="flex justify-between items-center pt-2">
         <Button
           variant="outline"
@@ -1487,6 +1570,7 @@ export default function ProcessDetailsPage() {
           {saveState === 'saving' ? 'กำลังบันทึก...' : 'บันทึกข้อมูลใบงาน'}
         </Button>
       </div>
+      )}
     </div>
 
     {/* Print Area — hidden on screen, visible only when printing */}
