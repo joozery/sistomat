@@ -351,10 +351,8 @@ export default function PrintPreviewPage() {
               <tr style={{ backgroundColor: '#a5f3fc' }}>
                 <th style={th({ width: '40px' })}>ลำดับที่</th>
                 <th style={th({ width: '100px' })}>กระบวนการ</th>
-                <th style={th({ width: '80px' })}>เป้าหมาย<br />(นาที)</th>
                 <th style={th({ width: '40px', borderLeft: '2px solid #333' })}>ลำดับที่</th>
                 <th style={th({ width: '100px' })}>กระบวนการ</th>
-                <th style={th({ width: '80px' })}>เป้าหมาย<br />(นาที)</th>
                 <th style={th()}>หมายเหตุ</th>
               </tr>
             </thead>
@@ -369,13 +367,11 @@ export default function PrintPreviewPage() {
                     <td style={td({ color: isQcFnL ? '#7B1A1A' : '#000', fontWeight: isQcFnL ? 'bold' : 'normal', backgroundColor: isQcFnL ? '#fef08a' : '#fff' })}>
                       {rowL.process || '\u00A0'}
                     </td>
-                    <td style={tdc()}>{rowL.target_time || '\u00A0'}</td>
 
                     <td style={tdc({ borderLeft: '2px solid #333' })}>{rowR?.process ? i + 11 : '\u00A0'}</td>
                     <td style={td({ color: isQcFnR ? '#7B1A1A' : '#000', fontWeight: isQcFnR ? 'bold' : 'normal', backgroundColor: isQcFnR ? '#fef08a' : '#fff' })}>
                       {rowR?.process || '\u00A0'}
                     </td>
-                    <td style={tdc()}>{rowR?.target_time || '\u00A0'}</td>
                     <td style={td()}>{'\u00A0'}</td>
                   </tr>
                 )
