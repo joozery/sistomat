@@ -42,10 +42,10 @@ export async function GET(req: NextRequest) {
     const client = await getClientPromise()
     const db = client.db('sistomat')
 
-    // ดึง projects ทั้งหมดที่มี due_date ในปีนั้น (ทุก status)
+    // นับเฉพาะใบงานย่อยจริง (type: job) ไม่รวม project หลัก/shell เช่น E-0741
     const projects = await db.collection('projects').find(
-      { due_date: { $exists: true, $ne: null } },
-      { projection: { project_id: 1, status: 1, due_date: 1, quantity: 1, processes: 1, qc: 1 } }
+      { type: 'job' },
+      { projection: { project_id: 1, status: 1, due_date: 1, received_date: 1, created_at: 1, quantity: 1, processes: 1, qc: 1 } }
     ).toArray()
 
     // group by YYYY-MM
@@ -67,7 +67,9 @@ export async function GET(req: NextRequest) {
     }
 
     for (const p of projects) {
-      const ym = toYearMonth(p.due_date)
+      // งานที่ยังไม่มีกำหนดส่งต้องไม่หายจากรายงาน: ใช้วันรับงาน และวันสร้างเป็น fallback
+      const reportDate = p.due_date || p.received_date || p.created_at
+      const ym = toYearMonth(reportDate)
       if (!ym) continue
       const [y, m] = ym.split('-')
       if (parseInt(y) !== year) continue
@@ -79,7 +81,8 @@ export async function GET(req: NextRequest) {
       }
 
       const bucket = byMonth[ym]
-      const isDone = p.status === 'ครบ' || p.status === 'รับแล้ว'
+      // สถานะปิดงานที่ใช้จริงในระบบ รวมชื่อสถานะเก่าเพื่อรองรับข้อมูลย้อนหลัง
+      const isDone = ['รับงาน', 'จบงาน', 'ครบ', 'รับแล้ว', 'ACPT_FN'].includes(p.status)
       const qty = Number(p.quantity) || 0
 
       bucket.total++

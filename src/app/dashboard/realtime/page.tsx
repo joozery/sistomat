@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { io as socketIO, Socket } from 'socket.io-client'
 import {
@@ -10,6 +10,7 @@ import {
 import { findWorker, type WorkerData } from '@/lib/workers'
 import { useWorkersList } from '@/lib/useWorkersList'
 import { useOvertimeThreshold } from '@/lib/useOvertimeThreshold'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface RealtimeEvent {
   project_id: string
@@ -37,6 +38,11 @@ interface RealtimeData {
   completed: number
   idle: number
   timestamp: string
+}
+
+function hasActualProcess(process?: string | null) {
+  const normalized = process?.trim()
+  return Boolean(normalized && !/^[-–—]+$/.test(normalized))
 }
 
 function getToken() {
@@ -111,7 +117,7 @@ function getProcessColor(process: string): string {
   return key ? PROCESS_COLORS[key] : 'bg-gray-100 text-gray-600 border-gray-200'
 }
 
-function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: RealtimeEvent; idx: number; now: number; workers: WorkerData[]; overtimeGraceMinutes: number }) {
+function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperationalMetrics }: { ev: RealtimeEvent; idx: number; now: number; workers: WorkerData[]; overtimeGraceMinutes: number; hideOperationalMetrics?: boolean }) {
   const router = useRouter()
   const isRunning = ev.status === 'running'
   const isIdle = ev.status === 'idle'
@@ -148,7 +154,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: Realtim
       </td>
 
       {/* สถานะ */}
-      <td className="px-3 py-3 w-28">
+      {!hideOperationalMetrics && <td className="px-3 py-3 w-28">
         {isRunning ? (
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
             isOvertime ? 'bg-red-100 text-red-600' : 'bg-emerald-50 text-emerald-700'
@@ -170,7 +176,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: Realtim
             เสร็จแล้ว
           </span>
         )}
-      </td>
+      </td>}
 
       {/* JOB / DWG */}
       <td className="px-3 py-3 min-w-[160px]">
@@ -245,7 +251,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: Realtim
       </td>
 
       {/* Elapsed */}
-      <td className="px-3 py-3 w-28">
+      {!hideOperationalMetrics && <td className="px-3 py-3 w-28">
         {elapsed ? (
           <span className={`font-mono text-sm font-bold ${isOvertime ? 'text-red-500' : isRunning ? 'text-gray-800' : 'text-gray-400'}`}>
             {elapsed}
@@ -253,10 +259,10 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: Realtim
         ) : (
           <span className="text-gray-300 text-xs">—</span>
         )}
-      </td>
+      </td>}
 
       {/* Progress */}
-      <td className="px-3 py-3 w-40">
+      {!hideOperationalMetrics && <td className="px-3 py-3 w-40">
         {progress !== null ? (
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] text-gray-400">
@@ -275,7 +281,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: Realtim
         ) : (
           <span className="text-gray-300 text-xs">—</span>
         )}
-      </td>
+      </td>}
 
       {/* Link */}
       <td className="pr-4 py-3 w-10 text-right">
@@ -285,7 +291,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes }: { ev: Realtim
   )
 }
 
-function CompletedRow({ ev, idx, workers }: { ev: RealtimeEvent; idx: number; workers: WorkerData[] }) {
+function CompletedRow({ ev, idx, workers, hideElapsed }: { ev: RealtimeEvent; idx: number; workers: WorkerData[]; hideElapsed?: boolean }) {
   const router = useRouter()
   return (
     <tr
@@ -330,9 +336,9 @@ function CompletedRow({ ev, idx, workers }: { ev: RealtimeEvent; idx: number; wo
           </>
         )}
       </td>
-      <td className="px-3 py-3 w-28">
+      {!hideElapsed && <td className="px-3 py-3 w-28">
         <span className="font-mono text-sm font-bold text-gray-400">{calcElapsed(ev.start_time, ev.stop_time)}</span>
-      </td>
+      </td>}
       <td className="pr-4 py-3 w-10 text-right">
         <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />
       </td>
@@ -382,6 +388,9 @@ const PROCESS_OPTIONS = ['ทั้งหมด', 'CAM', 'CNC', 'ML', 'LATHE', '
 export default function RealtimePage() {
   const { workers } = useWorkersList()
   const { graceMinutes: overtimeGraceMinutes } = useOvertimeThreshold()
+  const { role } = useCurrentUser()
+  const normalizedRole = role.trim().toLowerCase()
+  const hideOperationalMetrics = normalizedRole !== 'admin' && normalizedRole !== 'superadmin'
   const [data, setData] = useState<RealtimeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(true)
@@ -467,6 +476,8 @@ export default function RealtimePage() {
 
   const filteredIdle = (data?.events ?? []).filter((ev) => {
     if (ev.status !== 'idle') return false
+    // ไม่แสดง project shell ที่ไม่มี process จริง เช่น E-0741 (API อาจส่ง "—" มาแทนค่าว่าง)
+    if (!hasActualProcess(ev.process)) return false
     if (!idleSearch) return true
     const q = idleSearch.toLowerCase()
     return (
@@ -492,6 +503,35 @@ export default function RealtimePage() {
   const completedTotalPages = Math.max(1, Math.ceil(filteredCompleted.length / PAGE_SIZE))
   const paginatedCompleted = filteredCompleted.slice((completedPage - 1) * PAGE_SIZE, completedPage * PAGE_SIZE)
 
+  // KPI ด้านบนนับเป็นจำนวน Job (project_id) ไม่ใช่จำนวน worker session/process
+  const jobCounts = useMemo(() => {
+    const runningJobs = new Set<string>()
+    const idleJobs = new Set<string>()
+    const completedJobs = new Set<string>()
+    const allJobs = new Set<string>()
+
+    for (const ev of data?.events ?? []) {
+      // ไม่รวม project shell ที่ยังไม่มี process จริง เช่น E-0741
+      if (!ev.project_id || !hasActualProcess(ev.process)) continue
+      allJobs.add(ev.project_id)
+      if (ev.status === 'running') runningJobs.add(ev.project_id)
+      else if (ev.status === 'idle') idleJobs.add(ev.project_id)
+      else if (ev.status === 'completed') completedJobs.add(ev.project_id)
+    }
+
+    // Job ที่กำลังทำงานอาจมี process เก่าที่เสร็จแล้วอยู่ด้วย จึงไม่นับซ้ำในช่องเสร็จแล้ว
+    for (const projectId of runningJobs) {
+      completedJobs.delete(projectId)
+    }
+
+    return {
+      running: runningJobs.size,
+      idle: idleJobs.size,
+      completed: completedJobs.size,
+      total: allJobs.size,
+    }
+  }, [data])
+
   return (
     <div className="space-y-5 font-sans">
       {/* Hero Header */}
@@ -511,19 +551,19 @@ export default function RealtimePage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-emerald-400">{data?.running ?? 0}</p>
+              <p className="text-2xl font-extrabold text-emerald-400">{jobCounts.running}</p>
               <p className="text-[10px] text-gray-300 font-medium">กำลังทำงาน</p>
             </div>
             <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-amber-300">{data?.idle ?? 0}</p>
+              <p className="text-2xl font-extrabold text-amber-300">{jobCounts.idle}</p>
               <p className="text-[10px] text-gray-300 font-medium">รอดำเนินการ</p>
             </div>
             <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-blue-300">{data?.completed ?? 0}</p>
+              <p className="text-2xl font-extrabold text-blue-300">{jobCounts.completed}</p>
               <p className="text-[10px] text-gray-300 font-medium">เสร็จแล้ว</p>
             </div>
             <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-white">{data?.total ?? 0}</p>
+              <p className="text-2xl font-extrabold text-white">{jobCounts.total}</p>
               <p className="text-[10px] text-gray-300 font-medium">รายการทั้งหมด</p>
             </div>
           </div>
@@ -611,7 +651,7 @@ export default function RealtimePage() {
             </span>
             Live Monitor
             <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${tableTab === 'active' ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-500'}`}>
-              {(data?.running ?? 0) + (data?.completed ?? 0)}
+              {jobCounts.running}
             </span>
           </button>
           <button
@@ -625,7 +665,7 @@ export default function RealtimePage() {
             <Clock className="h-3.5 w-3.5" />
             รอดำเนินการ
             <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${tableTab === 'idle' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
-              {data?.idle ?? 0}
+              {jobCounts.idle}
             </span>
           </button>
           <button
@@ -639,7 +679,7 @@ export default function RealtimePage() {
             <CheckCircle2 className="h-3.5 w-3.5" />
             เสร็จแล้ว
             <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${tableTab === 'completed' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
-              {data?.completed ?? 0}
+              {jobCounts.completed}
             </span>
           </button>
         </div>
@@ -682,13 +722,13 @@ export default function RealtimePage() {
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/80">
                       <th className="pl-5 pr-2 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-center w-8">#</th>
-                      <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">สถานะ</th>
+                      {!hideOperationalMetrics && <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">สถานะ</th>}
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left">JOB / DWG</th>
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-36">กระบวนการ</th>
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-32">พนักงาน</th>
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">เวลา เริ่ม/จบ</th>
-                      <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">ใช้เวลา</th>
-                      <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-40">ความคืบหน้า</th>
+                      {!hideOperationalMetrics && <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">ใช้เวลา</th>}
+                      {!hideOperationalMetrics && <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-40">ความคืบหน้า</th>}
                       <th className="pr-4 py-2.5 w-10" />
                     </tr>
                   </thead>
@@ -701,6 +741,7 @@ export default function RealtimePage() {
                         now={now}
                         workers={workers}
                         overtimeGraceMinutes={overtimeGraceMinutes}
+                        hideOperationalMetrics={hideOperationalMetrics}
                       />
                     ))}
                   </tbody>
@@ -869,7 +910,7 @@ export default function RealtimePage() {
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-36">กระบวนการ</th>
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">พนักงาน</th>
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">เริ่ม / จบ</th>
-                      <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">ใช้เวลา</th>
+                      {!hideOperationalMetrics && <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">ใช้เวลา</th>}
                       <th className="pr-4 py-2.5 w-10" />
                     </tr>
                   </thead>
@@ -880,6 +921,7 @@ export default function RealtimePage() {
                         ev={ev}
                         idx={(completedPage - 1) * PAGE_SIZE + i}
                         workers={workers}
+                        hideElapsed={hideOperationalMetrics}
                       />
                     ))}
                   </tbody>

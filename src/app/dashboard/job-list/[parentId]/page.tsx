@@ -29,10 +29,13 @@ import {
   FileText,
   Trash2,
   AlertTriangle,
+  Printer,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
 import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
+import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
+import type { ProcessRow } from '@/components/pages/process-details/ProcessTable'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface ProcessEntry {
@@ -49,6 +52,7 @@ interface Attachment {
 interface Job {
   _id?: string
   job_code: string
+  job_note?: string
   level1: string
   level2: string | null
   level3: string | null
@@ -69,10 +73,28 @@ interface Job {
   current_process_active?: boolean
 }
 
+interface PrintableJob {
+  jobId: string
+  dwgName: string
+  receivedDate: string
+  dueDate: string
+  processList: ProcessRow[]
+  fileUrl?: string
+  fileName?: string
+  attachments?: Attachment[]
+}
+
 function formatDate(d: string) {
   if (!d) return '-'
   try {
     return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  } catch { return d }
+}
+
+function formatPrintDate(d: string) {
+  if (!d) return '-'
+  try {
+    return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch { return d }
 }
 
@@ -196,6 +218,16 @@ export default function JobListPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [printingGroup, setPrintingGroup] = useState<string | null>(null)
+  const [printError, setPrintError] = useState('')
+  const [printJobs, setPrintJobs] = useState<PrintableJob[]>([])
+  const [printPreviewGroup, setPrintPreviewGroup] = useState<string | null>(null)
+
+  function handlePrintGroup(groupCode: string, groupJobs: Job[]) {
+    if (groupJobs.length === 0) return
+    const ids = groupJobs.map((job) => encodeURIComponent(job.job_code)).join(',')
+    router.push(`/dashboard/job-list/${encodeURIComponent(parentId)}/print?group=${encodeURIComponent(groupCode)}&ids=${ids}`)
+  }
 
   async function handleConfirmDelete() {
     if (!deleteTarget) return
@@ -276,7 +308,8 @@ export default function JobListPage() {
   const doneCount = jobs.filter((j) => isJobDone(j.status)).length
 
   return (
-    <div className="space-y-6 font-sans">
+    <>
+    <div className="space-y-6 font-sans print:hidden">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3">
         <Button
@@ -455,6 +488,20 @@ export default function JobListPage() {
                           <Button
                             size="sm"
                             variant="ghost"
+                            onClick={() => handlePrintGroup(level2Code, items)}
+                            disabled={printingGroup !== null}
+                            className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
+                          >
+                            {printingGroup === level2Code
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Printer className="h-3.5 w-3.5" />}
+                            {printingGroup === level2Code ? 'กำลังเตรียม...' : 'พิมพ์กลุ่มนี้'}
+                          </Button>
+                        )}
+                        {!isReadOnly && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(level2Code)}`)}
                             className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
                           >
@@ -532,7 +579,9 @@ export default function JobListPage() {
                               isReadOnly={!canViewFile}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
-                            <span className="font-mono text-xs font-semibold text-gray-700">{job.job_code}</span>
+                            <span className="font-mono text-xs font-semibold text-gray-700">
+                              {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
+                            </span>
                             <span className="text-xs text-gray-500 truncate">{job.drawing_name}</span>
                             <div className="text-center">
                               <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
@@ -609,7 +658,9 @@ export default function JobListPage() {
                               isReadOnly={!canViewFile}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
-                            <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">{job.job_code}</span>
+                            <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">
+                              {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
+                            </span>
                             <span className="text-xs text-gray-500 flex-1 truncate">{job.drawing_name}</span>
                             <StatusChip
                               status={job.status}
@@ -654,6 +705,10 @@ export default function JobListPage() {
             </div>
           )}
         </div>
+      )}
+
+      {printError && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">{printError}</p>
       )}
 
       <AddJobDialog
@@ -713,5 +768,131 @@ export default function JobListPage() {
         </DialogContent>
       </Dialog>
     </div>
+    {printPreviewGroup && (
+      <div id="group-print-overlay" className="fixed inset-0 z-[9999] overflow-y-auto bg-gray-300 font-sans">
+        <style>{`
+          @media screen {
+            .group-print-sheet #print-area { display: block !important; }
+            .group-print-sheet .print-page {
+              margin: 0 auto 20px;
+              border: 1px solid #bbb;
+              box-shadow: 0 2px 8px rgba(0,0,0,.15);
+              width: 210mm;
+              min-height: 297mm;
+              background-color: #fff;
+            }
+            .group-print-sheet .drawing-print-page {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+          }
+          @media print {
+            @page { size: A4 portrait; margin: 0; }
+            html, body {
+              width: 210mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #fff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            [data-slot="sidebar-wrapper"] > *:not([data-slot="sidebar-inset"]) { display: none !important; }
+            [data-slot="sidebar-wrapper"] {
+              display: block !important;
+              min-height: 0 !important;
+              height: auto !important;
+            }
+            header { display: none !important; }
+            main {
+              padding: 0 !important;
+              margin: 0 !important;
+              min-height: 0 !important;
+              height: auto !important;
+              overflow: visible !important;
+              background: #fff !important;
+              flex: none !important;
+            }
+            #group-print-overlay {
+              position: static !important;
+              width: 100% !important;
+              height: auto !important;
+              overflow: visible !important;
+              background: #fff !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+            #group-print-toolbar { display: none !important; }
+            #group-print-pages { padding: 0 !important; margin: 0 !important; background: #fff !important; }
+            .group-print-sheet #print-area { display: block !important; }
+            .group-print-sheet .print-page {
+              width: 210mm !important;
+              max-width: 210mm !important;
+              height: 295mm !important;
+              max-height: 295mm !important;
+              min-height: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              margin: 0 auto !important;
+              padding: 10mm 12mm !important;
+              box-sizing: border-box !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              overflow: hidden !important;
+            }
+            .group-print-sheet .drawing-print-page {
+              padding: 0 !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+            }
+            .group-print-sheet:last-child #print-area > div:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+          }
+        `}</style>
+        <div id="group-print-toolbar" className="sticky top-0 z-10 mb-5 flex items-center justify-between bg-[#1a1a2e] px-6 py-2.5 text-white">
+          <button
+            type="button"
+            onClick={() => setPrintPreviewGroup(null)}
+            className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" /> กลับ
+          </button>
+          <div className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo2.png" alt="Sistomat" className="h-8 w-auto" />
+            <div className="font-bold text-indigo-100">ตัวอย่างก่อนปริ้น — {printPreviewGroup}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-2 rounded-full bg-[#7B1A1A] px-5 py-2 text-sm font-bold text-white hover:bg-[#5C1212]"
+          >
+            <Printer className="h-4 w-4" /> ปริ้นเลย
+          </button>
+        </div>
+        <div id="group-print-pages" className="p-6">
+          {printJobs.map((job) => (
+            <div key={job.jobId} className="group-print-sheet">
+              <PrintJobSheet
+                jobId={job.jobId}
+                dwgName={job.dwgName}
+                receivedDate={job.receivedDate}
+                dueDate={job.dueDate}
+                processList={job.processList}
+                fileUrl={job.fileUrl}
+                fileName={job.fileName}
+                attachments={job.attachments}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+    </>
   )
 }

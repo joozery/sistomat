@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { job_code, drawing_name, quantity, received_date, due_date, status, processes, file_url, file_name, attachments } = body
+    const { job_code, job_note, drawing_name, quantity, received_date, due_date, status, processes, file_url, file_name, attachments } = body
 
     if (!job_code) return NextResponse.json({ message: 'กรุณากรอกเลข Job Code' }, { status: 400 })
 
@@ -160,6 +160,7 @@ export async function POST(req: NextRequest) {
 
     const newJob = {
       job_code: job_code.trim(),
+      job_note: typeof job_note === 'string' ? job_note.trim() : '',
       level1: levels.level1,
       level2: levels.level2,
       level3: levels.level3,
@@ -188,6 +189,7 @@ export async function POST(req: NextRequest) {
         $setOnInsert: { processes: processRows },
         $set: {
           project_id: job_code.trim(),
+          job_note: typeof job_note === 'string' ? job_note.trim() : '',
           dwg_name: drawing_name?.trim() || '',
           received_date: received_date ? new Date(received_date) : null,
           due_date: due_date ? new Date(due_date) : null,

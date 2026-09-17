@@ -30,6 +30,7 @@ interface QcData {
   inspector_signature: string
   approver: string
   approver_signature: string
+  textColors: Record<string, string>
 }
 
 function emptyPointRow(): PointRow {
@@ -42,6 +43,7 @@ function emptyQcData(): QcData {
   return {
     date: '', points, activePoints: [...QC_POINTS], equipment: [], result: '', remark: '',
     inspector: '', inspector_signature: '', approver: '', approver_signature: '',
+    textColors: {},
   }
 }
 
@@ -128,6 +130,8 @@ export default function QcSheetPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [qc, setQc] = useState<QcData>(emptyQcData())
+  const [selectedTextField, setSelectedTextField] = useState<{ key: string; label: string } | null>(null)
+  const lastSavedQcRef = useRef('')
 
   const fetchData = useCallback(async () => {
     try {
@@ -140,15 +144,19 @@ export default function QcSheetPage() {
       }
       const data = await res.json()
       setFound(true)
+      let nextQc = emptyQcData()
       if (data.qc) {
         const merged = emptyQcData()
-        setQc({
+        nextQc = {
           ...merged,
           ...data.qc,
           points: { ...merged.points, ...(data.qc.points ?? {}) },
           activePoints: data.qc.activePoints ?? [...QC_POINTS],
-        })
+          textColors: data.qc.textColors ?? {},
+        }
       }
+      lastSavedQcRef.current = JSON.stringify(nextQc)
+      setQc(nextQc)
     } catch {
       setFound(false)
     } finally {
@@ -157,6 +165,40 @@ export default function QcSheetPage() {
   }, [id])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Auto-save หลังผู้ใช้หยุดแก้ไขชั่วครู่ และยกเลิก request เก่าถ้ามีการแก้ต่อทันที
+  useEffect(() => {
+    if (loading || !found) return
+    const serialized = JSON.stringify(qc)
+    if (serialized === lastSavedQcRef.current) return
+
+    setSaved(false)
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      setSaving(true)
+      try {
+        const res = await fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ qc }),
+          signal: controller.signal,
+        })
+        if (res.ok) {
+          lastSavedQcRef.current = serialized
+          setSaved(true)
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) setSaved(false)
+      } finally {
+        if (!controller.signal.aborted) setSaving(false)
+      }
+    }, 800)
+
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [qc, loading, found, id])
 
   // ถ้ามีผู้ตรวจตั้งค่าไว้แค่คนเดียว ไม่ต้องให้กดเลือกเอง — ใส่ลายเซ็นให้อัตโนมัติ
   const autoFilledRef = useRef(false)
@@ -199,6 +241,25 @@ export default function QcSheetPage() {
 
   function patchQc(patch: Partial<QcData>) {
     setQc((prev) => ({ ...prev, ...patch }))
+    setSaved(false)
+  }
+
+  function setTextColor(color: string) {
+    if (!selectedTextField) return
+    setQc((prev) => ({
+      ...prev,
+      textColors: { ...prev.textColors, [selectedTextField.key]: color },
+    }))
+    setSaved(false)
+  }
+
+  function clearTextColor() {
+    if (!selectedTextField) return
+    setQc((prev) => {
+      const colors = { ...prev.textColors }
+      delete colors[selectedTextField.key]
+      return { ...prev, textColors: colors }
+    })
     setSaved(false)
   }
 
@@ -251,7 +312,10 @@ export default function QcSheetPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ qc }),
       })
-      if (res.ok) setSaved(true)
+      if (res.ok) {
+        lastSavedQcRef.current = JSON.stringify(qc)
+        setSaved(true)
+      }
     } finally {
       setSaving(false)
     }
@@ -372,6 +436,28 @@ export default function QcSheetPage() {
           ใบกรอก QC — JOB {jobId}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: '7px', borderRight: '1px solid #4b5563', paddingRight: '10px' }}>
+            <span style={{ fontSize: '11px', color: selectedTextField ? '#fff' : '#9ca3af', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedTextField ? `สี: ${selectedTextField.label}` : 'คลิกช่องข้อความก่อน'}
+            </span>
+            <input
+              type="color"
+              aria-label="เลือกสีข้อความ"
+              title={selectedTextField ? `เลือกสีข้อความ ${selectedTextField.label}` : 'กรุณาคลิกช่องข้อความก่อน'}
+              value={selectedTextField ? (qc.textColors[selectedTextField.key] ?? '#000000') : '#000000'}
+              onChange={(e) => setTextColor(e.target.value)}
+              disabled={!selectedTextField}
+              style={{ width: '30px', height: '26px', padding: '1px', border: '1px solid #6b7280', borderRadius: '5px', background: '#fff', cursor: selectedTextField ? 'pointer' : 'not-allowed' }}
+            />
+            <button
+              type="button"
+              onClick={clearTextColor}
+              disabled={!selectedTextField || !qc.textColors[selectedTextField.key]}
+              style={{ border: 'none', background: 'transparent', color: '#d1d5db', fontSize: '10px', cursor: selectedTextField ? 'pointer' : 'not-allowed', padding: '3px' }}
+            >
+              คืนสีเดิม
+            </button>
+          </div>
           {saved && (
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#4ade80' }}>
               <CheckCircle2 size={14} /> บันทึกแล้ว
@@ -445,7 +531,8 @@ export default function QcSheetPage() {
                     <input
                       value={qc.points[pt]?.spec ?? ''}
                       onChange={(e) => updatePoint(pt, { spec: e.target.value })}
-                      style={{ ...cellInput, textAlign: 'left' }}
+                      onFocus={() => setSelectedTextField({ key: `spec:${pt}`, label: `SPEC ${pt}` })}
+                      style={{ ...cellInput, textAlign: 'left', color: qc.textColors[`spec:${pt}`] ?? '#000000' }}
                     />
                   </td>
                   {(qc.points[pt]?.values ?? Array(VALUE_COLS).fill('')).map((v, colIdx) => (
@@ -453,7 +540,8 @@ export default function QcSheetPage() {
                       <input
                         value={v}
                         onChange={(e) => updatePointValue(pt, colIdx, e.target.value)}
-                        style={cellInput}
+                        onFocus={() => setSelectedTextField({ key: `value:${pt}:${colIdx}`, label: `${pt}-${colIdx + 1}` })}
+                        style={{ ...cellInput, color: qc.textColors[`value:${pt}:${colIdx}`] ?? '#000000' }}
                       />
                     </td>
                   ))}
@@ -499,7 +587,8 @@ export default function QcSheetPage() {
                   <input
                     value={qc.remark}
                     onChange={(e) => patchQc({ remark: e.target.value })}
-                    style={{ ...cellInput, textAlign: 'left' }}
+                    onFocus={() => setSelectedTextField({ key: 'remark', label: 'REMARK' })}
+                    style={{ ...cellInput, textAlign: 'left', color: qc.textColors.remark ?? '#000000' }}
                   />
                 </td>
                 <td style={tdc({ whiteSpace: 'nowrap', width: '220px', fontSize: '11px' })}>

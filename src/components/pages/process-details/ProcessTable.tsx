@@ -7,6 +7,43 @@ import { useCurrentUser } from '@/lib/useCurrentUser'
 
 type OvertimeUnit = 'min' | 'hour'
 
+export function normalizeTargetTime(raw: string | undefined): string {
+  const value = (raw ?? '').trim()
+  if (!value) return '00:00'
+
+  // รองรับข้อมูลเก่าที่กรอก 00:200 / 00:400 โดยตั้งใจหมายถึง 2 / 4 ชั่วโมง
+  const legacy = value.match(/^0{1,2}:(\d{1,2})00$/)
+  if (legacy) return `${String(Math.min(99, Number(legacy[1]))).padStart(2, '0')}:00`
+
+  let hoursText = ''
+  let minutesText = ''
+  if (value.includes(':')) {
+    const [hours = '', minutes = ''] = value.split(':')
+    hoursText = hours.replace(/\D/g, '')
+    minutesText = minutes.replace(/\D/g, '')
+  } else {
+    const digits = value.replace(/\D/g, '')
+    if (digits.length <= 2) hoursText = digits
+    else {
+      hoursText = digits.slice(0, -2)
+      minutesText = digits.slice(-2)
+    }
+  }
+
+  const hours = Math.min(99, Number(hoursText) || 0)
+  const minutes = Math.min(59, Number(minutesText) || 0)
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+function sanitizeTargetTimeInput(raw: string): string {
+  const cleaned = raw.replace(/[^0-9:]/g, '')
+  const colon = cleaned.indexOf(':')
+  if (colon === -1) return cleaned.slice(0, 4)
+  const hours = cleaned.slice(0, colon).replace(/:/g, '').slice(0, 2)
+  const minutes = cleaned.slice(colon + 1).replace(/:/g, '').slice(0, 2)
+  return `${hours}:${minutes}`
+}
+
 // overtime_grace is always stored as plain minutes — these only convert for display/input
 function formatOvertimeForUnit(raw: string | undefined, unit: OvertimeUnit): string {
   if (!raw?.trim()) return ''
@@ -275,8 +312,10 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                   <td className={`border border-slate-300 p-0 ${isActive ? 'bg-blue-100' : ''}`}>
                     <input
                       type="text"
+                      inputMode="numeric"
                       value={row.target_time}
-                      onChange={(e) => onChange(index, 'target_time', e.target.value)}
+                      onChange={(e) => onChange(index, 'target_time', sanitizeTargetTimeInput(e.target.value))}
+                      onBlur={(e) => onChange(index, 'target_time', normalizeTargetTime(e.target.value))}
                       placeholder="00:00"
                       className={`w-full h-9 text-center border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 text-slate-700 ${isActive ? 'bg-blue-100' : 'bg-white'}`}
                       style={{ fontSize: '12px' }}

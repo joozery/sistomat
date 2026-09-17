@@ -20,6 +20,7 @@ interface ProcessRow {
   skill?: string
   elapsed_time?: string
   workers?: WorkerLog[]
+  next_confirmed_at?: string | Date | null
 }
 
 interface ProjectDoc {
@@ -48,6 +49,7 @@ export interface ExportRow {
   skill: string
   elapsed_time: string
   workers: string
+  completed: boolean
 }
 
 export async function GET(req: NextRequest) {
@@ -109,6 +111,7 @@ export async function GET(req: NextRequest) {
           skill: row.skill ?? '',
           elapsed_time: row.elapsed_time ?? '',
           workers: workerNames.join(', '),
+          completed: Boolean(row.next_confirmed_at),
         })
       })
     }

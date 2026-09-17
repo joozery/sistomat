@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown, PauseCircle, Info, X } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
-import { ProcessTable, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
+import { ProcessTable, normalizeTargetTime, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
 import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess, isRowCompleted, type WorkerData } from '@/lib/workers'
 import { useWorkersList } from '@/lib/useWorkersList'
@@ -712,11 +712,24 @@ export default function ProcessDetailsPage() {
           }
           return {
             ...p,
+            target_time: normalizeTargetTime(p.target_time),
             skill: p.skill || '0',
             workers: workers.slice(0, 4)
           }
         })
         setProcessList(mappedProcesses)
+
+        // ปรับข้อมูล target_time รูปแบบเก่าให้เป็น HH:MM และบันทึกกลับเมื่อเปิดใบงาน
+        const targetTimeWasNormalized = mappedProcesses.some(
+          (process, index) => process.target_time !== (data.processes?.[index]?.target_time || '00:00')
+        )
+        if (targetTimeWasNormalized) {
+          fetch(`/api/projects/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ processes: mappedProcesses }),
+          }).catch(() => {})
+        }
       } catch {
         if (!cancelled) setError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
       } finally {
@@ -992,6 +1005,10 @@ export default function ProcessDetailsPage() {
         const currentProcess = currentIdx !== -1 ? list[currentIdx]?.process : list[list.length - 1]?.process
         if (currentProcess !== 'QC') {
           showToast('warning', 'ต้องอยู่ในกระบวนการ QC เท่านั้น', 'FN Good ใช้ยืนยันตรวจสอบงานในขั้นตอน QC เท่านั้น')
+          return
+        }
+        if (currentIdx !== -1) {
+          showToast('warning', 'กรุณายืนยันจบกระบวนการก่อน', 'สแกน CMD_NEXT เพื่อยืนยันจบ QC แล้วจึงสแกน FN_GOOD')
           return
         }
         const newFlags = { ...projectRef.current?.flags, awaiting_finish_decision: true }
@@ -1271,18 +1288,19 @@ export default function ProcessDetailsPage() {
   })
 
   const handleAddRow = () => {
-    setProcessList((prev) => [...prev, blankProcessRow()])
-    setEditVersion((v) => v + 1)
+    const next = [...processListRef.current, blankProcessRow()]
+    processListRef.current = next
+    setProcessList(next)
+    void handleSave(next)
   }
 
   // แทรกแถวใหม่ต่อจากแถวที่ index (ไว้ใช้เพิ่มกระบวนการ rework คั่นกลางระหว่างแถวเดิม)
   const handleInsertRow = (index: number) => {
-    setProcessList((prev) => {
-      const next = [...prev]
-      next.splice(index + 1, 0, blankProcessRow())
-      return next
-    })
-    setEditVersion((v) => v + 1)
+    const next = [...processListRef.current]
+    next.splice(index + 1, 0, blankProcessRow())
+    processListRef.current = next
+    setProcessList(next)
+    void handleSave(next)
   }
 
   const handleDeleteRow = (index: number) => {
@@ -1390,7 +1408,7 @@ export default function ProcessDetailsPage() {
     }
   }
 
-  // Auto-save: debounce 1.5s after user edits (editVersion increments in handleChange/handleAddRow/handleDeleteRow only, NOT from elapsed timer)
+  // Auto-save: debounce 1.5s after field edits/deletion. Add/insert rows save immediately in their handlers.
   useEffect(() => {
     if (editVersion === 0) return
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
@@ -1629,16 +1647,31 @@ export default function ProcessDetailsPage() {
           ปริ้นใบงาน
         </Button>
 
-        <Button
-          onClick={() => handleSave()}
-          disabled={saveState === 'saving'}
-          className="gap-2 rounded-full h-11 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20 transition-all disabled:opacity-70"
-        >
-          {saveState === 'saving'
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : <Save className="h-4 w-4" />}
-          {saveState === 'saving' ? 'กำลังบันทึก...' : 'บันทึกข้อมูลใบงาน'}
-        </Button>
+        <div className="flex items-center gap-3">
+          {role === 'superadmin' && !isJobFinished && (
+            <Button
+              onClick={() => document.dispatchEvent(new CustomEvent('onBarcodeScan', {
+                detail: { barcode: 'CMD_NEXT' },
+                cancelable: true,
+              }))}
+              className="gap-2 rounded-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white px-6 text-sm font-bold shadow-md shadow-emerald-500/20 transition-all"
+            >
+              <ArrowRight className="h-4 w-4" />
+              ยืนยันจบกระบวนการ
+            </Button>
+          )}
+
+          <Button
+            onClick={() => handleSave()}
+            disabled={saveState === 'saving'}
+            className="gap-2 rounded-full h-11 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-8 text-sm font-bold shadow-md shadow-red-500/20 transition-all disabled:opacity-70"
+          >
+            {saveState === 'saving'
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <Save className="h-4 w-4" />}
+            {saveState === 'saving' ? 'กำลังบันทึก...' : 'บันทึกข้อมูลใบงาน'}
+          </Button>
+        </div>
       </div>
       )}
     </div>

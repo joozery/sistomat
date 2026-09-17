@@ -51,10 +51,12 @@ export function JobApplicationSection() {
         const res = await fetch('/api/realtime', { headers: { Authorization: `Bearer ${token}` } })
         if (res.ok) {
           const data = await res.json()
-          // show running first, then idle — max 8 cards
-          const running: RealtimeEvent[] = (data.events ?? []).filter((e: RealtimeEvent) => e.status === 'running')
-          const idle: RealtimeEvent[] = (data.events ?? []).filter((e: RealtimeEvent) => e.status === 'idle')
-          setEvents([...running, ...idle].slice(0, 8))
+          // ส่วนนี้แสดงเฉพาะ session ที่กำลังทำงานจริงเท่านั้น
+          // ไม่แสดง idle project ที่ยังไม่มี process/worker เช่น project shell ระดับ L1
+          const running: RealtimeEvent[] = (data.events ?? []).filter(
+            (e: RealtimeEvent) => e.status === 'running' && !!e.process && !!e.worker_id
+          )
+          setEvents(running.slice(0, 8))
         }
       } catch { /* ignore */ }
       finally { setLoading(false) }

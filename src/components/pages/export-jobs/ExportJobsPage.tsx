@@ -14,6 +14,7 @@ import {
 import { useProcessOptions } from '@/lib/useProcessOptions'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 import { useWorkersList } from '@/lib/useWorkersList'
+import { normalizeTargetTime } from '@/components/pages/process-details/ProcessTable'
 
 const STATUS_OPTIONS = ['กำลังดำเนินการ', 'รับงาน', 'จบงาน', 'ไม่รับงาน', 'ยกเลิก']
 
@@ -34,6 +35,46 @@ interface ExportRow {
   skill: string
   elapsed_time: string
   workers: string
+  completed: boolean
+}
+
+interface TimeComparison {
+  kind: 'overtime' | 'within' | 'none'
+  label: string
+  difference: string
+}
+
+function timeToSeconds(value: string, includeSeconds: boolean): number {
+  const parts = value.split(':').map((part) => Number(part) || 0)
+  return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (includeSeconds ? (parts[2] || 0) : 0)
+}
+
+function formatDuration(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(safe / 3600)
+  const m = Math.floor((safe % 3600) / 60)
+  const s = safe % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+function compareTime(targetTime: string, elapsedTime: string, completed: boolean): TimeComparison {
+  const normalizedTarget = normalizeTargetTime(targetTime)
+  const targetSeconds = timeToSeconds(normalizedTarget, false)
+  if (targetSeconds <= 0) return { kind: 'none', label: 'ไม่กำหนดเป้าหมาย', difference: '—' }
+
+  const elapsedSeconds = timeToSeconds(elapsedTime || '00:00:00', true)
+  const difference = elapsedSeconds - targetSeconds
+  if (difference > 0) {
+    return { kind: 'overtime', label: 'เกินเป้าหมาย', difference: `+${formatDuration(difference)}` }
+  }
+  if (difference === 0) {
+    return { kind: 'within', label: completed ? 'พอดีเป้าหมาย' : 'ถึงเวลาเป้าหมาย', difference: '00:00:00' }
+  }
+  return {
+    kind: 'within',
+    label: completed ? 'เสร็จก่อนเป้าหมาย' : 'ยังอยู่ในเป้าหมาย',
+    difference: `-${formatDuration(Math.abs(difference))}`,
+  }
 }
 
 export function ExportJobsPage() {
@@ -111,15 +152,18 @@ export function ExportJobsPage() {
     if (rows.length === 0) return
     const XLSX = await import('xlsx')
     const data = rows.map((r) => {
+      const comparison = compareTime(r.target_time, r.elapsed_time, r.completed)
       const base: Record<string, string | number> = {
         'Job': r.job_code,
         'DWG': r.dwg_name,
         'ลำดับ': r.index,
         'กระบวนการ': r.process,
-        'เป้าหมาย (นาที)': r.target_time,
+        'เป้าหมาย (HH:MM)': normalizeTargetTime(r.target_time),
       }
       if (canSeeSkill) base['SKILL'] = r.skill
       base['รวมเวลา'] = r.elapsed_time
+      base['ส่วนต่างเวลา'] = comparison.difference
+      base['ผลเทียบเป้าหมาย'] = comparison.label
       base['พนักงาน'] = r.workers
       base['สถานะ'] = r.status
       return base
@@ -261,32 +305,46 @@ export function ExportJobsPage() {
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-10">ลำดับ</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-25">กระบวนการ</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16 leading-snug">
-                    เป้าหมาย<br /><span className="font-normal text-[10px]">(นาที)</span>
+                    เป้าหมาย<br /><span className="font-normal text-[10px]">(HH:MM)</span>
                   </th>
                   {canSeeSkill && (
                     <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">SKILL</th>
                   )}
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-20">รวมเวลา</th>
+                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-32">ส่วนต่างเวลา</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-40">พนักงาน</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-24">สถานะ</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {rows.map((r, i) => {
+                  const comparison = compareTime(r.target_time, r.elapsed_time, r.completed)
+                  return (
                   <tr key={`${r.job_code}-${r.index}`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
                     <td className="border border-slate-300 px-2 py-1.5 font-semibold text-slate-700">{r.job_code}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-slate-600">{r.dwg_name || '—'}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.index}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-slate-700">{r.process || '—'}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.target_time || '—'}</td>
+                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{normalizeTargetTime(r.target_time)}</td>
                     {canSeeSkill && (
                       <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.skill || '—'}</td>
                     )}
                     <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.elapsed_time || '00:00:00'}</td>
+                    <td className={`border border-slate-300 px-2 py-1.5 text-center font-semibold ${
+                      comparison.kind === 'overtime'
+                        ? 'bg-red-100 text-red-700'
+                        : comparison.kind === 'within'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      <div>{comparison.difference}</div>
+                      <div className="text-[10px] font-medium">{comparison.label}</div>
+                    </td>
                     <td className="border border-slate-300 px-2 py-1.5 text-slate-700">{r.workers || '—'}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.status || '—'}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
