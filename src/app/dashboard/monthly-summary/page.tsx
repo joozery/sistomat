@@ -19,6 +19,8 @@ export interface MonthData {
   qc_failed: number
   qc_pct: number | null
   on_time_pct: number | null
+  overtime_hours: number
+  overtime_jobs: number
 }
 
 export interface Totals {
@@ -30,6 +32,8 @@ export interface Totals {
   qc_failed: number
   qc_pct: number | null
   completion_rate: number
+  overtime_hours: number
+  overtime_jobs: number
 }
 
 function getToken() {

@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { FileSpreadsheet, Loader2, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -82,9 +83,10 @@ export function ExportJobsPage() {
   const canSeeSkill = role !== 'User'
   const { options: processOptions } = useProcessOptions()
   const { workers } = useWorkersList()
+  const searchParams = useSearchParams()
 
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [from, setFrom] = useState(() => searchParams.get('from') ?? '')
+  const [to, setTo] = useState(() => searchParams.get('to') ?? '')
   const [status, setStatus] = useState('all')
   const [process, setProcess] = useState('all')
   const [worker, setWorker] = useState('all')
@@ -118,6 +120,12 @@ export function ExportJobsPage() {
       setSearched(true)
     }
   }, [from, to, status, process, worker])
+
+  // เข้ามาจาก deep-link ที่มี from/to (เช่นจากหน้าสรุปรายเดือน) → ค้นหาให้เลยโดยไม่ต้องกดปุ่มเอง
+  useEffect(() => {
+    if (searchParams.get('from') || searchParams.get('to')) fetchRows()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const clearFilters = () => {
     setFrom('')

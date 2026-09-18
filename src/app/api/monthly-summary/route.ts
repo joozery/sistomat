@@ -18,6 +18,26 @@ function parseElapsed(str: string): number {
   return 0
 }
 
+// แปลง target_time ของกระบวนการ (รองรับรูปแบบดิบเช่น "130" = 1:30 เหมือนหน้าใบงาน) → วินาที
+function parseTargetSeconds(raw: string | undefined): number {
+  const value = (raw ?? '').trim()
+  if (!value) return 0
+  let hoursText = ''
+  let minutesText = ''
+  if (value.includes(':')) {
+    const [h = '', m = ''] = value.split(':')
+    hoursText = h.replace(/\D/g, '')
+    minutesText = m.replace(/\D/g, '')
+  } else {
+    const digits = value.replace(/\D/g, '')
+    if (digits.length <= 2) hoursText = digits
+    else { hoursText = digits.slice(0, -2); minutesText = digits.slice(-2) }
+  }
+  const hours = Math.min(99, Number(hoursText) || 0)
+  const minutes = Math.min(59, Number(minutesText) || 0)
+  return hours * 3600 + minutes * 60
+}
+
 // normalize due_date → "YYYY-MM" string
 function toYearMonth(val: unknown): string | null {
   if (!val) return null
@@ -42,6 +62,10 @@ export async function GET(req: NextRequest) {
     const client = await getClientPromise()
     const db = client.db('sistomat')
 
+    // ค่าเกณฑ์ OVERTIME เริ่มต้นของระบบ (ตั้งได้ที่หน้า Settings) — แต่ละกระบวนการ override เองได้ผ่าน overtime_grace
+    const overtimeSettingDoc = await db.collection('settings').findOne({ key: 'overtime_threshold' })
+    const defaultGraceMinutes = Number(overtimeSettingDoc?.grace_minutes ?? 0)
+
     // นับเฉพาะใบงานย่อยจริง (type: job) ไม่รวม project หลัก/shell เช่น E-0741
     const projects = await db.collection('projects').find(
       { type: 'job' },
@@ -58,6 +82,8 @@ export async function GET(req: NextRequest) {
       qc_passed: number
       qc_failed: number
       on_time: number
+      overtime_secs: number
+      overtime_process_count: number
     }> = {}
 
     const MONTH_NAMES: Record<string, string> = {
@@ -78,6 +104,7 @@ export async function GET(req: NextRequest) {
         total: 0, completed: 0,
         quantity_total: 0, quantity_completed: 0,
         elapsed_secs: 0, qc_passed: 0, qc_failed: 0, on_time: 0,
+        overtime_secs: 0, overtime_process_count: 0,
       }
 
       const bucket = byMonth[ym]
@@ -96,7 +123,8 @@ export async function GET(req: NextRequest) {
 
       // รวม elapsed_time จากทุก process
       for (const proc of (p.processes ?? [])) {
-        bucket.elapsed_secs += parseElapsed(proc.elapsed_time ?? '')
+        const procElapsedSecs = parseElapsed(proc.elapsed_time ?? '')
+        bucket.elapsed_secs += procElapsedSecs
         // นับจาก worker logs ด้วย (กรณี elapsed ยังไม่บันทึก)
         for (const w of (proc.workers ?? [])) {
           if (w.start_time && w.stop_time) {
@@ -107,14 +135,28 @@ export async function GET(req: NextRequest) {
             if (!isNaN(s) && !isNaN(e) && e > s) bucket.elapsed_secs += Math.floor((e - s) / 1000)
           }
         }
+
+        // OVERTIME = ใช้เวลาจริงเกินเป้าหมาย (target_time) + ช่วงผ่อนผัน (grace) ที่ตั้งไว้
+        // ใช้สูตรเดียวกับหน้า realtime — grace เฉพาะกระบวนการ override ค่า default ของระบบได้
+        const targetSecs = parseTargetSeconds(proc.target_time)
+        if (targetSecs > 0) {
+          const graceMinutes = String(proc.overtime_grace ?? '').trim()
+            ? Number(proc.overtime_grace) || 0
+            : defaultGraceMinutes
+          const overtimeSecs = Math.max(0, procElapsedSecs - (targetSecs + graceMinutes * 60))
+          if (overtimeSecs > 0) {
+            bucket.overtime_secs += overtimeSecs
+            bucket.overtime_process_count++
+          }
+        }
       }
 
-      // QC
-      if (p.qc) {
-        const passed = Number(p.qc.passed ?? p.qc.pass ?? p.qc.qty_pass ?? 0)
-        const failed = Number(p.qc.failed ?? p.qc.fail ?? p.qc.qty_fail ?? 0)
-        bucket.qc_passed += passed
-        bucket.qc_failed += failed
+      // QC — หน้าใบตรวจ QC (process-details/[id]/qc) บันทึกผลเป็น qc.result: 'accept' | 'reject'
+      // (ไม่ได้เก็บจำนวนชิ้นแยก) เลยนับจำนวนชิ้นจาก quantity ของ job ตามผลตรวจนั้น
+      if (p.qc?.result === 'accept') {
+        bucket.qc_passed += qty
+      } else if (p.qc?.result === 'reject') {
+        bucket.qc_failed += qty
       }
     }
 
@@ -125,6 +167,7 @@ export async function GET(req: NextRequest) {
       const b = byMonth[ym] ?? {
         total: 0, completed: 0, quantity_total: 0, quantity_completed: 0,
         elapsed_secs: 0, qc_passed: 0, qc_failed: 0, on_time: 0,
+        overtime_secs: 0, overtime_process_count: 0,
       }
       const hours = Math.round(b.elapsed_secs / 3600 * 10) / 10
       const onTimePct = b.completed > 0 ? Math.round((b.on_time / b.completed) * 100) : null
@@ -144,6 +187,8 @@ export async function GET(req: NextRequest) {
         qc_failed: b.qc_failed,
         qc_pct: qcPct,
         on_time_pct: onTimePct,
+        overtime_hours: Math.round(b.overtime_secs / 3600 * 10) / 10,
+        overtime_jobs: b.overtime_process_count,
       }
     })
 
@@ -155,7 +200,9 @@ export async function GET(req: NextRequest) {
       elapsed_hours: Math.round((acc.elapsed_hours + m.elapsed_hours) * 10) / 10,
       qc_passed: acc.qc_passed + m.qc_passed,
       qc_failed: acc.qc_failed + m.qc_failed,
-    }), { total_jobs: 0, completed_jobs: 0, quantity_completed: 0, elapsed_hours: 0, qc_passed: 0, qc_failed: 0 })
+      overtime_hours: Math.round((acc.overtime_hours + m.overtime_hours) * 10) / 10,
+      overtime_jobs: acc.overtime_jobs + m.overtime_jobs,
+    }), { total_jobs: 0, completed_jobs: 0, quantity_completed: 0, elapsed_hours: 0, qc_passed: 0, qc_failed: 0, overtime_hours: 0, overtime_jobs: 0 })
 
     const qcTotalAll = totals.qc_passed + totals.qc_failed
     const completionRate = totals.total_jobs > 0

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  CheckCircle2, Clock, AlertCircle, LayoutGrid, CalendarDays, TrendingUp,
+  CheckCircle2, Clock, AlertCircle, AlertTriangle, LayoutGrid, CalendarDays, TrendingUp, Timer,
   Search, Calendar, X, ExternalLink, Loader2, ChevronLeft, ChevronRight, ArrowLeft, Box,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,10 @@ interface ProcessSummary {
   total_qty: number
   completed_count: number
   min_due: string
+  target_hours: number
+  elapsed_hours: number
+  overtime_hours: number
+  overtime_jobs: number
 }
 
 interface Job {
@@ -28,6 +32,14 @@ interface Job {
   status: string
   due_date: string
   processes: { process: string; person: string; time_hours: number }[]
+  target_time: string
+  elapsed_time: string
+  overtime_seconds: number
+  is_overtime: boolean
+}
+
+function secondsToHours(secs: number) {
+  return Math.round(secs / 3600 * 10) / 10
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,6 +130,8 @@ export default function AllPlansPage() {
 
   // Filters (for cards view)
   const [statusFilter, setStatusFilter] = useState<'all' | 'on-track' | 'at-risk' | 'completed'>('all')
+  const [summaryDateFrom, setSummaryDateFrom] = useState('')
+  const [summaryDateTo, setSummaryDateTo] = useState('')
 
   // Jobs view state
   const [search, setSearch] = useState('')
@@ -131,12 +145,16 @@ export default function AllPlansPage() {
   // Load summary
   useEffect(() => {
     setSummaryLoading(true)
-    fetch('/api/jobs/process-summary', { headers: { Authorization: `Bearer ${getToken()}` } })
+    const params = new URLSearchParams()
+    if (summaryDateFrom) params.set('dateFrom', summaryDateFrom)
+    if (summaryDateTo) params.set('dateTo', summaryDateTo)
+    const qs = params.toString()
+    fetch(`/api/jobs/process-summary${qs ? `?${qs}` : ''}`, { headers: { Authorization: `Bearer ${getToken()}` } })
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d)) setSummary(d) })
       .catch(() => {})
       .finally(() => setSummaryLoading(false))
-  }, [])
+  }, [summaryDateFrom, summaryDateTo])
 
   // Load jobs (when in detail view) — queries projects collection for accuracy
   const loadJobs = useCallback(async (proc: string, q: string, from: string, to: string, pg: number) => {
@@ -259,9 +277,9 @@ export default function AllPlansPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-[2fr_3fr_auto_auto_auto_auto] gap-4 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 bg-gray-50/40">
+              <div className="grid grid-cols-[2fr_3fr_auto_auto_auto_auto_auto] gap-4 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 bg-gray-50/40">
                 <span>JOB Code</span><span>ชื่อแบบ (DWG)</span>
-                <span className="text-center">จำนวน</span><span>กำหนดส่ง</span><span>สถานะ</span><span></span>
+                <span className="text-center">จำนวน</span><span>เวลา (ตั้ง/ใช้จริง)</span><span>กำหนดส่ง</span><span>สถานะ</span><span></span>
               </div>
               <div className="divide-y divide-gray-50">
                 {jobs.map((job, idx) => {
@@ -269,13 +287,27 @@ export default function AllPlansPage() {
                   const late = isOverdue(job.due_date) && !done
                   return (
                     <div key={`${job.job_code}-${idx}`}
-                      className="grid grid-cols-[2fr_3fr_auto_auto_auto_auto] gap-4 px-5 py-3 items-center hover:bg-gray-50/60 transition-colors group">
+                      className="grid grid-cols-[2fr_3fr_auto_auto_auto_auto_auto] gap-4 px-5 py-3 items-center hover:bg-gray-50/60 transition-colors group">
                       <span className="font-mono text-xs font-bold text-gray-800 group-hover:text-[#7B1A1A] transition-colors truncate">
                         {job.job_code}
                       </span>
                       <span className="text-xs text-gray-500 truncate">{job.drawing_name || '-'}</span>
                       <span className="text-xs font-bold text-gray-700 text-center whitespace-nowrap">
                         {job.quantity} <span className="font-normal text-gray-400">ชิ้น</span>
+                      </span>
+                      <span className="text-[11px] whitespace-nowrap">
+                        {job.target_time ? (
+                          <span className="text-gray-500">
+                            {job.target_time.slice(0, 5)} / {(job.elapsed_time || '00:00:00').slice(0, 5)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                        {job.is_overtime && (
+                          <span className="ml-1.5 inline-flex items-center gap-0.5 text-red-600 font-semibold">
+                            <AlertTriangle className="h-3 w-3" /> +{secondsToHours(job.overtime_seconds)} ชม.
+                          </span>
+                        )}
                       </span>
                       <span className={`text-[11px] font-medium whitespace-nowrap ${late ? 'text-red-500' : 'text-gray-500'}`}>
                         {formatDateShort(job.due_date)}
@@ -362,6 +394,29 @@ export default function AllPlansPage() {
               {v === 'all' ? 'ทุกสถานะ' : STATUS_CONFIG[v].label}
             </button>
           ))}
+
+          <div className="mx-1 h-4 w-px bg-gray-200" />
+
+          <span className="text-xs font-semibold text-gray-400 mr-1">กำหนดส่ง</span>
+          <div className="relative shrink-0">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+            <input type="date" value={summaryDateFrom}
+              onChange={(e) => setSummaryDateFrom(e.target.value)}
+              className="pl-8 pr-2 h-7 rounded-full border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
+          </div>
+          <span className="text-gray-300 text-xs">—</span>
+          <div className="relative shrink-0">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+            <input type="date" value={summaryDateTo}
+              onChange={(e) => setSummaryDateTo(e.target.value)}
+              className="pl-8 pr-2 h-7 rounded-full border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
+          </div>
+          {(summaryDateFrom || summaryDateTo) && (
+            <button onClick={() => { setSummaryDateFrom(''); setSummaryDateTo('') }}
+              className="flex items-center gap-1 h-7 rounded-full px-2 text-[11px] font-semibold text-gray-500 hover:text-[#7B1A1A] hover:bg-red-50 transition-colors">
+              <X className="h-3 w-3" /> ล้าง
+            </button>
+          )}
         </div>
         <span className="text-xs text-gray-400 shrink-0">
           แสดง <span className="font-bold text-gray-700">{filteredSummary.length}</span> / {summary.length} กระบวนการ
@@ -438,6 +493,20 @@ export default function AllPlansPage() {
                           <div className="flex items-center gap-1 text-[11px] text-gray-400">
                             <CalendarDays className="h-3 w-3" />
                             <span>กำหนดส่งใกล้สุด {formatDate(s.min_due)}</span>
+                          </div>
+                        )}
+                        {s.target_hours > 0 && (
+                          <div className="flex items-center gap-1 text-[11px] text-gray-400">
+                            <Timer className="h-3 w-3" />
+                            <span>ตั้งเวลารวม {s.target_hours.toLocaleString()} ชม.</span>
+                            <span className="text-gray-300">·</span>
+                            <span>ใช้จริง {s.elapsed_hours.toLocaleString()} ชม.</span>
+                          </div>
+                        )}
+                        {s.overtime_hours > 0 && (
+                          <div className="flex items-center gap-1 text-[11px] text-red-600 font-semibold">
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>เกินเวลา +{s.overtime_hours.toLocaleString()} ชม. ({s.overtime_jobs} งาน)</span>
                           </div>
                         )}
                         <p className="text-[11px] text-[#7B1A1A] font-semibold">คลิกเพื่อดูรายการ →</p>

@@ -1,3 +1,4 @@
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -8,8 +9,17 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle2, FileText, MinusCircle } from 'lucide-react'
+import { CheckCircle2, FileText, MinusCircle, AlertTriangle } from 'lucide-react'
 import type { MonthData } from '@/app/dashboard/monthly-summary/page'
+
+// วันแรก/วันสุดท้ายของเดือน "YYYY-MM" → "YYYY-MM-DD" ใช้ deep-link ไปหน้า export-jobs
+function monthRange(ym: string): { from: string; to: string } {
+  const [y, m] = ym.split('-').map(Number)
+  const from = `${ym}-01`
+  const lastDay = new Date(y, m, 0).getDate()
+  const to = `${ym}-${String(lastDay).padStart(2, '0')}`
+  return { from, to }
+}
 
 interface Props {
   months: MonthData[]
@@ -32,10 +42,12 @@ const MONTH_TH: Record<string, string> = {
 }
 
 export function MonthlyTable({ months, year }: Props) {
+  const router = useRouter()
   const totalCompleted = months.reduce((s, m) => s + m.completed_jobs, 0)
   const totalAll = months.reduce((s, m) => s + m.total_jobs, 0)
   const totalQcPassed = months.reduce((s, m) => s + m.qc_passed, 0)
   const totalHours = months.reduce((s, m) => s + m.elapsed_hours, 0)
+  const totalOvertimeHours = months.reduce((s, m) => s + m.overtime_hours, 0)
 
   const latestMonth = [...months].reverse().find((m) => m.total_jobs > 0)
   const latestLabel = latestMonth
@@ -67,13 +79,14 @@ export function MonthlyTable({ months, year }: Props) {
               <TableHead className="text-xs font-bold text-gray-500 uppercase text-center">งานเสร็จ</TableHead>
               <TableHead className="text-xs font-bold text-gray-500 uppercase text-center">QC ผ่าน</TableHead>
               <TableHead className="text-xs font-bold text-gray-500 uppercase text-center">ชั่วโมงทำงาน</TableHead>
+              <TableHead className="text-xs font-bold text-gray-500 uppercase text-center">เกินเวลา (OT)</TableHead>
               <TableHead className="text-xs font-bold text-gray-500 uppercase text-center px-6">สถานะ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-gray-100">
             {activeMonths.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-gray-400 py-10">
+                <TableCell colSpan={7} className="text-center text-sm text-gray-400 py-10">
                   ไม่มีข้อมูลในปี {year + 543}
                 </TableCell>
               </TableRow>
@@ -104,6 +117,24 @@ export function MonthlyTable({ months, year }: Props) {
                     </TableCell>
                     <TableCell className="text-center text-xs font-mono text-gray-600">
                       {row.elapsed_hours > 0 ? `${row.elapsed_hours.toLocaleString()} ชม.` : '—'}
+                    </TableCell>
+                    <TableCell className="text-center text-xs">
+                      {row.overtime_hours > 0 ? (
+                        <button
+                          onClick={() => {
+                            const { from, to } = monthRange(row.ym)
+                            router.push(`/dashboard/export-jobs?from=${from}&to=${to}`)
+                          }}
+                          title="ดูรายละเอียดว่างานไหนเกินเวลาบ้าง"
+                          className="inline-flex items-center gap-1 font-bold text-red-600 hover:text-red-700 hover:underline"
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          +{row.overtime_hours.toLocaleString()} ชม.
+                          <span className="text-[10px] font-normal text-gray-400">({row.overtime_jobs} งาน)</span>
+                        </button>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-center px-6">
                       {row.total_jobs === 0 ? (
@@ -143,6 +174,9 @@ export function MonthlyTable({ months, year }: Props) {
             )}
             {totalHours > 0 && (
               <> · <span className="font-bold text-purple-700">{totalHours.toLocaleString()} ชม.</span></>
+            )}
+            {totalOvertimeHours > 0 && (
+              <> · เกินเวลารวม <span className="font-bold text-red-600">{totalOvertimeHours.toLocaleString()} ชม.</span></>
             )}
           </p>
           <span className="text-xs font-medium text-gray-400">

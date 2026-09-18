@@ -239,7 +239,7 @@ export default function QuotationPage() {
 
   // Signatures
   const [salesPerson, setSalesPerson] = useState('Rungtip Buasa-ard')
-  const [approverPerson, setApproverPerson] = useState('Mr. Sakda Phumchaai')
+  const [approverPerson, setApproverPerson] = useState('Mr. prasert senachai')
   const [salesDate, setSalesDate] = useState(todayISO())
   const [approvalDate, setApprovalDate] = useState(todayISO())
   const [buyerDate, setBuyerDate] = useState('')
@@ -577,7 +577,11 @@ export default function QuotationPage() {
                 setRows((prev) => prev.map((r) => {
                   const extra_price = calcWcPricePerPiece(jobProcesses[r.job_code] ?? [], machineRates, r.quantity)
                   const c = calcRow({ ...r, extra_price })
-                  const next = c.netPer > 0 ? { ...r, unit_price: Math.round(c.netPer * 100) / 100 } : r
+                  // เก็บราคาแบบเต็มความละเอียดไว้ (ไม่ปัดตรงนี้) แล้วค่อยปัดตอนแสดงผล/รวมยอด —
+                  // ถ้าปัดทศนิยม 2 ตำแหน่งให้ unit_price ก่อนคูณจำนวน จะสะสมคลาดเคลื่อนจนยอดรวมไม่ลงตัว
+                  // (เช่น ราคาที่แท้จริงคือ 213.3333... คูณ 4 ชิ้น ควรได้ 853.33 พอดี แต่ถ้าปัดราคาก่อนเป็น 213.33
+                  // จะได้ 853.32 แทน)
+                  const next = c.netPer > 0 ? { ...r, unit_price: c.netPer } : r
                   return r.mat_type?.trim() ? { ...next, material: r.mat_type.trim() } : next
                 }))
                 setActiveTab('quote')
@@ -815,7 +819,7 @@ export default function QuotationPage() {
                         <input
                           type="number"
                           step="0.01"
-                          value={r.unit_price}
+                          value={Math.round(r.unit_price * 100) / 100}
                           onChange={(e) => updateRow(i, { unit_price: Number(e.target.value) || 0 })}
                           className="q-input"
                           style={{ width: '100%', textAlign: 'right', fontSize: '10px' }}
