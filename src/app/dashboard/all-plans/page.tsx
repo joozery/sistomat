@@ -61,15 +61,11 @@ function formatDateShort(d: string) {
   catch { return d }
 }
 
-function isOverdue(due: string) {
-  if (!due) return false
-  return new Date(due) < new Date(new Date().toDateString())
-}
-
 function planStatus(s: ProcessSummary): 'completed' | 'at-risk' | 'on-track' {
   const pct = s.job_count > 0 ? s.completed_count / s.job_count : 0
+  // ให้ overtime มีลำดับก่อนสถานะเสร็จ เพื่อค้นหางานที่เคยผลิตล่าช้าได้
+  if (s.overtime_jobs > 0) return 'at-risk'
   if (pct >= 1) return 'completed'
-  if (isOverdue(s.min_due)) return 'at-risk'
   return 'on-track'
 }
 
@@ -284,7 +280,8 @@ export default function AllPlansPage() {
               <div className="divide-y divide-gray-50">
                 {jobs.map((job, idx) => {
                   const done = job.status === 'ครบ' || job.status === 'รับแล้ว'
-                  const late = isOverdue(job.due_date) && !done
+                  // สถานะล่าช้าอิง overtime โดยไม่อิงวันที่กำหนดส่ง
+                  const late = job.is_overtime
                   return (
                     <div key={`${job.job_code}-${idx}`}
                       className="grid grid-cols-[2fr_3fr_auto_auto_auto_auto_auto] gap-4 px-5 py-3 items-center hover:bg-gray-50/60 transition-colors group">

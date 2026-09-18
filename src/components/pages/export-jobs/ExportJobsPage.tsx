@@ -35,6 +35,8 @@ interface ExportRow {
   target_time: string
   skill: string
   elapsed_time: string
+  damage_cost?: number | string | null
+  remark?: string | null
   workers: string
   completed: boolean
 }
@@ -56,6 +58,11 @@ function formatDuration(seconds: number): string {
   const m = Math.floor((safe % 3600) / 60)
   const s = safe % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+function normalizeDamageCost(value: number | string | null | undefined): number {
+  const amount = Number(value)
+  return Number.isFinite(amount) && amount >= 0 ? amount : 0
 }
 
 function compareTime(targetTime: string, elapsedTime: string, completed: boolean): TimeComparison {
@@ -170,6 +177,8 @@ export function ExportJobsPage() {
       }
       if (canSeeSkill) base['SKILL'] = r.skill
       base['รวมเวลา'] = r.elapsed_time
+      base['ค่าความเสียหาย (บาท)'] = normalizeDamageCost(r.damage_cost)
+      base['หมายเหตุ'] = r.remark ?? ''
       base['ส่วนต่างเวลา'] = comparison.difference
       base['ผลเทียบเป้าหมาย'] = comparison.label
       base['พนักงาน'] = r.workers
@@ -319,6 +328,10 @@ export function ExportJobsPage() {
                     <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">SKILL</th>
                   )}
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-20">รวมเวลา</th>
+                  <th className="border border-slate-300 text-center font-bold text-red-700 px-2 py-1.5 min-w-28 leading-snug">
+                    ค่าความเสียหาย<br /><span className="font-normal text-[10px]">(บาท)</span>
+                  </th>
+                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-40">หมายเหตุ</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-32">ส่วนต่างเวลา</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-40">พนักงาน</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-24">สถานะ</th>
@@ -338,6 +351,10 @@ export function ExportJobsPage() {
                       <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.skill || '—'}</td>
                     )}
                     <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.elapsed_time || '00:00:00'}</td>
+                    <td className="border border-slate-300 bg-red-50/30 px-2 py-1.5 text-right font-medium text-slate-700">
+                      {normalizeDamageCost(r.damage_cost).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="border border-slate-300 px-2 py-1.5 text-slate-600">{r.remark?.trim() || '—'}</td>
                     <td className={`border border-slate-300 px-2 py-1.5 text-center font-semibold ${
                       comparison.kind === 'overtime'
                         ? 'bg-red-100 text-red-700'

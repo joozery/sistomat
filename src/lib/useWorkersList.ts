@@ -16,6 +16,7 @@ export function useWorkersList() {
     try {
       const res = await fetch('/api/workers', {
         headers: { Authorization: `Bearer ${getToken()}` },
+        cache: 'no-store',
       })
       if (res.ok) setWorkers(await res.json())
     } catch {
@@ -25,7 +26,21 @@ export function useWorkersList() {
     }
   }, [])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    const initialRefresh = setTimeout(() => { void refresh() }, 0)
+
+    // สิทธิ์เครื่องจักรอาจถูก Admin เปลี่ยนขณะที่หน้าใบงานเปิดค้างอยู่
+    // จึงต้องดึงรายการใหม่เป็นระยะ และทันทีเมื่อผู้ใช้กลับมาที่หน้าต่างนี้
+    const interval = setInterval(() => { void refresh() }, 5_000)
+    const handleFocus = () => { void refresh() }
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearTimeout(initialRefresh)
+      clearInterval(interval)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [refresh])
 
   return { workers, loading, refresh }
 }

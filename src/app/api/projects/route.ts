@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
+import { getEffectiveElapsedSeconds } from '@/lib/process-time'
 import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET!
@@ -10,16 +11,6 @@ function getTokenFromRequest(request: NextRequest): string | null {
     return authHeader.slice(7)
   }
   return request.cookies.get('auth_token')?.value ?? null
-}
-
-// แปลง "HH:MM:SS" หรือ "HH:MM" → วินาที
-function parseElapsed(str: string | undefined): number {
-  const value = str ?? ''
-  if (!value || value === '00:00:00' || value === '00:00') return 0
-  const parts = value.split(':').map(Number)
-  if (parts.length === 3) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0)
-  if (parts.length === 2) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60
-  return 0
 }
 
 // แปลง target_time ของกระบวนการ (รองรับรูปแบบดิบเช่น "130" = 1:30 เหมือนหน้าใบงาน) → วินาที
@@ -109,7 +100,7 @@ export async function GET(request: NextRequest) {
           (pr.process ?? '').trim().toLowerCase() === process.trim().toLowerCase()
         )
         const targetSecs = parseTargetSeconds(proc?.target_time)
-        const elapsedSecs = parseElapsed(proc?.elapsed_time)
+        const elapsedSecs = proc ? getEffectiveElapsedSeconds(proc) : 0
         let overtimeSeconds = 0
         if (proc && targetSecs > 0) {
           const graceMinutes = String(proc.overtime_grace ?? '').trim()
@@ -126,7 +117,7 @@ export async function GET(request: NextRequest) {
           status:       p.status     ?? '',
           due_date:     typeof p.due_date === 'string' ? p.due_date : (p.due_date ? new Date(p.due_date).toISOString() : ''),
           target_time:  proc?.target_time ? secondsToHMS(targetSecs) : '',
-          elapsed_time: proc?.elapsed_time ?? '',
+          elapsed_time: proc ? secondsToHMS(elapsedSecs) : '',
           overtime_seconds: overtimeSeconds,
           is_overtime: overtimeSeconds > 0,
         }

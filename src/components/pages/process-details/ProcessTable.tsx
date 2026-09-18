@@ -115,6 +115,7 @@ export interface ProcessRow {
   overtime_grace?: string
   workers: WorkerLog[]
   elapsed_time: string
+  damage_cost?: string
   remark: string
   next_confirmed_at?: string
   on_hold?: boolean
@@ -152,6 +153,9 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
   // ช่างต้องใช้ flow เดียวกับ Admin ได้ — คลิกช่องรหัสพนักงานเพื่อเข้าโหมดสแกน, สแกนบาร์โค้ดกรอกรหัส,
   // กด "+ เริ่ม/+ หยุด" (ซึ่งเปิด modal บังคับสแกนยืนยันตัวตนอยู่แล้ว) — จำกัดเฉพาะ role User เท่านั้นที่กดอะไรไม่ได้เลย
   const canSelectRow = role !== 'User'
+  // ช่างต้องยืนยันการหยุดงานด้วยการสแกนบาร์โค้ดพนักงานเดิมเท่านั้น
+  // ปุ่มหยุดบนหน้าจอสงวนไว้สำหรับ Admin/Superadmin
+  const canClickStop = role !== 'User' && role !== 'ช่าง'
   const [overtimeUnits, setOvertimeUnits] = useState<Record<number, OvertimeUnit>>({})
 
   return (
@@ -215,6 +219,10 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
               <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-24 leading-snug">
                 รวมเวลา<br />
                 <span className="font-normal text-[10px]">(ชม.)</span>
+              </th>
+              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-red-700 px-2 py-1.5 w-28 leading-snug">
+                ค่าความเสียหาย<br />
+                <span className="font-normal text-[10px]">(บาท)</span>
               </th>
               <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[100px]">
                 หมายเหตุ
@@ -446,8 +454,10 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                       <TimeCell
                         value={worker.stop_time}
                         bgColor={isActive ? '#dbeafe' : workerColors[wIndex].cell}
-                        onClick={canSelectRow && worker.start_time && !worker.stop_time ? () => onStopClick?.(index, wIndex) : undefined}
-                        hint={worker.start_time && !worker.stop_time ? { label: '+ หยุด', color: 'text-red-400' } : undefined}
+                        onClick={canClickStop && worker.start_time && !worker.stop_time ? () => onStopClick?.(index, wIndex) : undefined}
+                        hint={worker.start_time && !worker.stop_time
+                          ? { label: canClickStop ? '+ หยุด' : 'สแกนหยุด', color: 'text-red-400' }
+                          : undefined}
                         title={worker.stop_reason ? `เหตุผลหยุดงาน: ${worker.stop_reason}` : undefined}
                         subLabel={worker.stop_reason}
                       />
@@ -464,6 +474,27 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                     }}
                   >
                     {row.elapsed_time || '--:--:--'}
+                  </td>
+
+                  {/* ค่าความเสียหาย */}
+                  <td className="border border-slate-300 p-0 bg-red-50/30">
+                    {isReadOnly ? (
+                      <div className="flex h-9 w-full items-center justify-end px-2 text-slate-700" style={{ fontSize: '12px' }}>
+                        {row.damage_cost?.trim() ? Number(row.damage_cost).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                      </div>
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={row.damage_cost ?? ''}
+                        onChange={(e) => onChange(index, 'damage_cost', e.target.value)}
+                        placeholder="0.00"
+                        className="h-9 w-full border-0 bg-transparent px-2 text-right text-slate-700 outline-none focus:ring-2 focus:ring-inset focus:ring-red-300"
+                        style={{ fontSize: '12px' }}
+                      />
+                    )}
                   </td>
 
                   {/* หมายเหตุ */}

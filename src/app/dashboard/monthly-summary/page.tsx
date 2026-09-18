@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Calendar, Download, BarChart2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { Calendar, Printer, BarChart2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { SummaryStats } from '@/components/pages/monthly-summary/SummaryStats'
 import { MonthlyBarChart } from '@/components/pages/monthly-summary/MonthlyBarChart'
 import { MonthlyTable } from '@/components/pages/monthly-summary/MonthlyTable'
@@ -64,7 +64,26 @@ export default function MonthlySummaryPage() {
   useEffect(() => { fetchData(year) }, [year, fetchData])
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="monthly-summary-report space-y-6 font-sans">
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 10mm; }
+          html, body, main, .SidebarInset {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+          main { padding: 0 !important; }
+          .monthly-summary-report {
+            width: 100% !important;
+            color: #111827 !important;
+          }
+          .monthly-summary-report > * { break-inside: avoid; }
+          .monthly-summary-report table tr { break-inside: avoid; }
+          .monthly-summary-report canvas { max-height: 240px !important; }
+        }
+      `}</style>
       {/* Header */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 shadow-sm/50">
         <div>
@@ -79,7 +98,7 @@ export default function MonthlySummaryPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 print:hidden">
           {/* Year picker */}
           <div className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-gray-50 border border-gray-200">
             <button onClick={() => setYear((y) => y - 1)}
@@ -97,9 +116,13 @@ export default function MonthlySummaryPage() {
             </button>
           </div>
 
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white text-xs font-bold shadow-sm transition-all">
-            <Download className="h-4 w-4" />
-            ออกรายงาน PDF
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white text-xs font-bold shadow-sm transition-all"
+          >
+            <Printer className="h-4 w-4" />
+            พิมพ์ / บันทึก PDF
           </button>
         </div>
       </div>

@@ -30,6 +30,7 @@ import {
   Trash2,
   AlertTriangle,
   Printer,
+  LockKeyhole,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
@@ -71,6 +72,7 @@ interface Job {
   attachments?: Attachment[]
   current_process_name?: string | null
   current_process_active?: boolean
+  sale_closed_at?: string | null
 }
 
 interface PrintableJob {
@@ -208,6 +210,8 @@ export default function JobListPage() {
   const { role } = useCurrentUser()
   // role "User" และ "ช่าง" ดูรายการนี้ได้อย่างเดียว — ซ่อนปุ่มใบเสนอราคา, QC, เพิ่ม Job ย่อย
   const isReadOnly = role === 'User' || role === 'ช่าง'
+  const normalizedRole = role.trim().toLowerCase()
+  const canCloseSale = normalizedRole === 'superadmin'
   // ช่างต้องเปิดดูไฟล์ PDF/3D ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
   const canViewFile = role !== 'User'
   const [jobs, setJobs] = useState<Job[]>([])
@@ -218,6 +222,10 @@ export default function JobListPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [closeSaleTarget, setCloseSaleTarget] = useState<string | null>(null)
+  const [closeSaleMode, setCloseSaleMode] = useState<'close' | 'reopen'>('close')
+  const [closingSale, setClosingSale] = useState(false)
+  const [closeSaleError, setCloseSaleError] = useState('')
   const [printingGroup, setPrintingGroup] = useState<string | null>(null)
   const [printError, setPrintError] = useState('')
   const [printJobs, setPrintJobs] = useState<PrintableJob[]>([])
@@ -247,6 +255,28 @@ export default function JobListPage() {
       setDeleteError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function handleConfirmCloseSale() {
+    if (!closeSaleTarget) return
+    setClosingSale(true)
+    setCloseSaleError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/jobs/close-group', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ level2: closeSaleTarget, closed: closeSaleMode === 'close' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'ปิดการขายไม่สำเร็จ')
+      setCloseSaleTarget(null)
+      await loadJobs()
+    } catch (error: unknown) {
+      setCloseSaleError(error instanceof Error ? error.message : 'ปิดการขายไม่สำเร็จ')
+    } finally {
+      setClosingSale(false)
     }
   }
 
@@ -394,6 +424,7 @@ export default function JobListPage() {
                 const processes = [...new Set(items.flatMap((j) => j.processes.map((p) => p.process)).filter(Boolean))]
                 const coatings = [...new Set(items.map((j) => j.coating).filter(Boolean))]
                 const minDue = items.map((j) => j.due_date).filter(Boolean).sort()[0]
+                const saleClosed = items.some((job) => Boolean(job.sale_closed_at))
 
                 // If no level3 → single job, link directly to process-details
                 const singleJob = !hasLevel3 && items.length === 1 ? items[0] : null
@@ -484,6 +515,31 @@ export default function JobListPage() {
 
                       {/* Action */}
                       <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                        {saleClosed ? (
+                          canCloseSale ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => { setCloseSaleError(''); setCloseSaleMode('reopen'); setCloseSaleTarget(level2Code) }}
+                              className="h-8 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 gap-1"
+                            >
+                              <LockKeyhole className="h-3.5 w-3.5" /> เปิดการขายอีกครั้ง
+                            </Button>
+                          ) : (
+                            <span className="inline-flex h-8 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700">
+                              <LockKeyhole className="h-3.5 w-3.5" /> ปิดการขายแล้ว
+                            </span>
+                          )
+                        ) : canCloseSale ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setCloseSaleError(''); setCloseSaleMode('close'); setCloseSaleTarget(level2Code) }}
+                            className="h-8 rounded-full text-amber-700 hover:bg-amber-50 hover:text-amber-800 text-xs font-semibold gap-1"
+                          >
+                            <LockKeyhole className="h-3.5 w-3.5" /> ปิดการขาย
+                          </Button>
+                        ) : null}
                         {!isReadOnly && (
                           <Button
                             size="sm"
@@ -763,6 +819,47 @@ export default function JobListPage() {
             >
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               {deleting ? 'กำลังลบ...' : 'ลบ Job'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!closeSaleTarget} onOpenChange={(open) => { if (!open && !closingSale) { setCloseSaleTarget(null); setCloseSaleError('') } }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl border-0 bg-white p-6 font-sans">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+              <LockKeyhole className="h-5 w-5 text-amber-600" />
+              {closeSaleMode === 'close' ? 'ยืนยันปิดการขาย' : 'ยืนยันเปิดการขายอีกครั้ง'}
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-xs text-gray-500">
+              {closeSaleMode === 'close' ? (
+                <>ปิดการขายกลุ่ม <span className="font-mono font-bold text-gray-700">{closeSaleTarget}</span> แล้วจะไม่สามารถเพิ่ม Job ใหม่เข้าเลขกลุ่มนี้ได้ ระบบจะใช้เลขกลุ่มถัดไปโดยอัตโนมัติ</>
+              ) : (
+                <>เปิดการขายกลุ่ม <span className="font-mono font-bold text-gray-700">{closeSaleTarget}</span> อีกครั้ง เพื่อให้สามารถเพิ่ม Job ใหม่เข้าเลขกลุ่มนี้ได้</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {closeSaleError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{closeSaleError}</p>}
+          <DialogFooter className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setCloseSaleTarget(null); setCloseSaleError('') }}
+              disabled={closingSale}
+              className="h-9 rounded-full border-gray-200"
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmCloseSale}
+              disabled={closingSale}
+              className="h-9 rounded-full bg-amber-600 px-5 text-white hover:bg-amber-700"
+            >
+              {closingSale ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <LockKeyhole className="mr-1 h-3.5 w-3.5" />}
+              {closingSale
+                ? (closeSaleMode === 'close' ? 'กำลังปิด...' : 'กำลังเปิด...')
+                : (closeSaleMode === 'close' ? 'ปิดการขาย' : 'เปิดการขายอีกครั้ง')}
             </Button>
           </DialogFooter>
         </DialogContent>

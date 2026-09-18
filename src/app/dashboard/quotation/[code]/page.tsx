@@ -418,6 +418,50 @@ export default function QuotationPage() {
     setRows((prev) => [...prev, { job_code: `CUSTOM-${prev.length + 1}`, drawing_name: '', material: '', unit: 'pc.', quantity: 1, unit_price: 0 }])
   }
 
+  function handleTableArrowNavigation(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+
+    const current = event.target as HTMLElement
+    if (!current.matches('input, select, textarea')) return
+
+    const cell = current.closest('td') as HTMLTableCellElement | null
+    const row = cell?.closest('tr') as HTMLTableRowElement | null
+    const table = row?.closest('table')
+    if (!cell || !row || !table) return
+
+    const isEditable = (element: Element): element is HTMLElement => {
+      if (!(element instanceof HTMLElement)) return false
+      if (element.matches(':disabled, [type="hidden"]')) return false
+      return element.matches('input, select, textarea')
+    }
+
+    let next: HTMLElement | undefined
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const fields = Array.from(row.querySelectorAll('input, select, textarea')).filter(isEditable)
+      const index = fields.indexOf(current)
+      const offset = event.key === 'ArrowLeft' ? -1 : 1
+      next = fields[index + offset]
+    } else {
+      const rows = Array.from(table.rows)
+      const rowIndex = rows.indexOf(row)
+      const offset = event.key === 'ArrowUp' ? -1 : 1
+
+      for (let i = rowIndex + offset; i >= 0 && i < rows.length; i += offset) {
+        const targetCell = Array.from(rows[i].cells).find((candidate) => candidate.cellIndex === cell.cellIndex)
+        const field = targetCell?.querySelector('input, select, textarea')
+        if (field && isEditable(field)) {
+          next = field
+          break
+        }
+      }
+    }
+
+    if (!next) return
+    event.preventDefault()
+    next.focus()
+    if (next instanceof HTMLInputElement && next.type !== 'date') next.select()
+  }
+
   const totalQuantity = rows.reduce((s, r) => s + (r.quantity || 0), 0)
   const subtotal = rows.reduce((s, r) => s + (r.quantity || 0) * (r.unit_price || 0), 0)
   const discountAmount = discountType === 'percent' ? (subtotal * discountValue) / 100 : discountValue
@@ -445,7 +489,7 @@ export default function QuotationPage() {
   const boxBorder = '1px solid #334155'
 
   return (
-    <div id="print-overlay" style={{
+    <div id="print-overlay" onKeyDown={handleTableArrowNavigation} style={{
       position: 'fixed',
       inset: 0,
       zIndex: 9999,

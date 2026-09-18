@@ -19,6 +19,8 @@ interface ProcessRow {
   target_time?: string
   skill?: string
   elapsed_time?: string
+  damage_cost?: string | number
+  remark?: string
   workers?: WorkerLog[]
   next_confirmed_at?: string | Date | null
 }
@@ -48,6 +50,8 @@ export interface ExportRow {
   target_time: string
   skill: string
   elapsed_time: string
+  damage_cost: number
+  remark: string
   workers: string
   completed: boolean
 }
@@ -110,6 +114,8 @@ export async function GET(req: NextRequest) {
           target_time: row.target_time ?? '',
           skill: row.skill ?? '',
           elapsed_time: row.elapsed_time ?? '',
+          damage_cost: Number.isFinite(Number(row.damage_cost)) ? Math.max(0, Number(row.damage_cost)) : 0,
+          remark: row.remark ?? '',
           workers: workerNames.join(', '),
           completed: Boolean(row.next_confirmed_at),
         })

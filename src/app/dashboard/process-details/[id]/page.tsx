@@ -1284,6 +1284,7 @@ export default function ProcessDetailsPage() {
       { worker_id: '', start_time: '', stop_time: '' },
     ],
     elapsed_time: '00:00:00',
+    damage_cost: '',
     remark: '',
   })
 

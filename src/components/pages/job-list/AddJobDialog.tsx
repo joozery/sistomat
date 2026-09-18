@@ -60,11 +60,16 @@ function normalizeJobCode(code: string) {
   return upper
 }
 
-function suggestLevel2(parentId: string, existingCodes: string[]): string {
+function suggestLevel2(parentId: string, existingCodes: string[], closedLevel2Codes: Set<string>): string {
+  const escapedParent = parentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const level2Pattern = new RegExp(`^${escapedParent}-(\\d{3})(?:-\\d{2})?$`)
   const nums = existingCodes
-    .map((c) => c.match(/^J[A-Z]-\d{3,4}-(\d{3})$/)?.[1])
-    .filter(Boolean).map(Number)
-  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
+    .map((code) => code.match(level2Pattern)?.[1])
+    .filter((value): value is string => Boolean(value))
+    .map(Number)
+  const latest = nums.length > 0 ? Math.max(...nums) : 1
+  const latestCode = `${parentId}-${String(latest).padStart(3, '0')}`
+  const next = closedLevel2Codes.has(latestCode) ? latest + 1 : latest
   return `${parentId}-${String(next).padStart(3, '0')}`
 }
 
@@ -151,9 +156,13 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
           .catch(() => [])
       )
     ).then((lists) => {
-      const codes = Array.from(new Set(lists.flat().map((j: { job_code: string }) => j.job_code)))
+      const allJobs = lists.flat() as Array<{ job_code: string; level2?: string | null; sale_closed_at?: string | null }>
+      const codes = Array.from(new Set(allJobs.map((job) => job.job_code)))
+      const closedLevel2Codes = new Set(
+        allJobs.filter((job) => job.sale_closed_at).map((job) => job.level2).filter((code): code is string => Boolean(code))
+      )
       setExistingCodes(codes)
-      setJobCode(suggestLevel2(normalizedParent, codes))
+      setJobCode(suggestLevel2(normalizedParent, codes, closedLevel2Codes))
     })
   }, [open, parentId])
 

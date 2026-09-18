@@ -65,20 +65,21 @@ export function findEligibleRowIndex(
   return { index: -1, blockedByRow: null }
 }
 
-function getRequiredMachine(processName: string): string | null {
-  const p = processName.toUpperCase()
-  if (p.includes('MAT'))              return 'MAT'
-  if (p.includes('QC'))               return 'QC'
-  if (p.includes('CAM'))              return 'CAM'
-  if (p.includes('CNC') || p.includes('SPAR')) return 'CNC'
-  if (p === 'ML')                     return 'ML'
-  if (p.includes('LATHE'))            return 'LATHE'
-  return null // ไม่มี constraint — ทุกคนทำได้
+function normalizeProcessName(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/MATERIAL/g, 'MATERAIL')
+    .replace(/[\s_-]+/g, ' ')
 }
 
 export function canWorkerDoProcess(machines: string[], processName: string): boolean {
-  const required = getRequiredMachine(processName)
-  if (!required) return true
   if (machines.some((m) => m.toUpperCase().includes('ADMIN'))) return true
-  return machines.some((m) => m.toUpperCase().includes(required))
+
+  const required = normalizeProcessName(processName)
+  if (!required) return false
+
+  // สิทธิ์ต้องตรงกับชื่อ Process ที่ Admin เลือกให้พนักงานเท่านั้น
+  // ห้าม fallback ให้ทุกคนทำ Process ที่ระบบไม่รู้จัก และไม่รวมสิทธิ์แบบกลุ่มกว้าง
+  return machines.some((machine) => normalizeProcessName(machine) === required)
 }

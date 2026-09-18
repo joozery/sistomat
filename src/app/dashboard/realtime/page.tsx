@@ -6,6 +6,7 @@ import { io as socketIO, Socket } from 'socket.io-client'
 import {
   Activity, RefreshCw, Wifi, WifiOff, Clock, User, CheckCircle2,
   Play, Search, Filter, ChevronDown, Layers, Zap, ExternalLink,
+  AlertTriangle, Megaphone, Pencil, Save, Plus, Trash2,
 } from 'lucide-react'
 import { findWorker, type WorkerData } from '@/lib/workers'
 import { useWorkersList } from '@/lib/useWorkersList'
@@ -38,6 +39,12 @@ interface RealtimeData {
   completed: number
   idle: number
   timestamp: string
+}
+
+interface RealtimeAnnouncement {
+  id: string
+  message: string
+  enabled: boolean
 }
 
 function hasActualProcess(process?: string | null) {
@@ -99,6 +106,16 @@ function calcProgress(start: string, target: string, stop?: string | null, now?:
   return Math.min(100, Math.round((elapsed / targetSecs) * 100))
 }
 
+function isRealtimeOvertime(ev: RealtimeEvent, now: number, defaultGraceMinutes: number): boolean {
+  if (ev.status !== 'running') return false
+  const targetSecs = getTargetSeconds(ev.target_time)
+  if (targetSecs <= 0) return false
+  const graceMinutes = ev.overtime_grace?.trim()
+    ? Number(ev.overtime_grace) || 0
+    : defaultGraceMinutes
+  return getElapsedSeconds(ev.start_time, null, now) >= targetSecs + graceMinutes * 60
+}
+
 const PROCESS_COLORS: Record<string, string> = {
   CAM:      'bg-violet-100 text-violet-700 border-violet-200',
   CNC:      'bg-blue-100 text-blue-700 border-blue-200',
@@ -133,10 +150,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
 
   // OVERTIME = เลยเวลาเป้าหมายมาแล้วเกินกว่าเกณฑ์ที่ตั้งไว้
   // ใช้ค่าเฉพาะกระบวนการนี้ก่อน (ตั้งที่หน้า process-details) ถ้าไม่ได้ตั้งไว้ค่อย fallback เป็นค่าเริ่มต้นของระบบ (หน้าตั้งค่าระบบ)
-  const targetSecs = getTargetSeconds(ev.target_time)
-  const graceMinutes = ev.overtime_grace?.trim() ? Number(ev.overtime_grace) || 0 : overtimeGraceMinutes
-  const isOvertime =
-    isRunning && targetSecs > 0 && getElapsedSeconds(ev.start_time, null, now) >= targetSecs + graceMinutes * 60
+  const isOvertime = isRealtimeOvertime(ev, now, overtimeGraceMinutes)
 
   return (
     <tr
@@ -391,12 +405,14 @@ export default function RealtimePage() {
   const { role } = useCurrentUser()
   const normalizedRole = role.trim().toLowerCase()
   const hideOperationalMetrics = normalizedRole !== 'admin' && normalizedRole !== 'superadmin'
+  const canEditAnnouncement = normalizedRole === 'admin' || normalizedRole === 'superadmin'
   const [data, setData] = useState<RealtimeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [search, setSearch] = useState('')
   const [filterProcess, setFilterProcess] = useState('ทั้งหมด')
+  const [overtimeOnly, setOvertimeOnly] = useState(false)
   const [showFilter, setShowFilter] = useState(false)
   const [page, setPage] = useState(1)
   const [idlePage, setIdlePage] = useState(1)
@@ -405,9 +421,54 @@ export default function RealtimePage() {
   const [idleSearch, setIdleSearch] = useState('')
   const [completedSearch, setCompletedSearch] = useState('')
   const [now, setNow] = useState(() => Date.now())
+  const [announcements, setAnnouncements] = useState<RealtimeAnnouncement[]>([])
+  const [announcementDrafts, setAnnouncementDrafts] = useState<RealtimeAnnouncement[]>([])
+  const [editingAnnouncement, setEditingAnnouncement] = useState(false)
+  const [savingAnnouncement, setSavingAnnouncement] = useState(false)
+  const [announcementError, setAnnouncementError] = useState('')
   const PAGE_SIZE = 50
 
-  useEffect(() => { setPage(1) }, [search, filterProcess])
+  const fetchAnnouncement = useCallback(async () => {
+    try {
+      const res = await fetch('/api/settings/realtime-announcement', {
+        headers: { Authorization: `Bearer ${getToken()}` },
+        cache: 'no-store',
+      })
+      if (!res.ok) return
+      const value: { announcements?: RealtimeAnnouncement[] } = await res.json()
+      const items = Array.isArray(value.announcements) ? value.announcements : []
+      setAnnouncements(items)
+      if (!editingAnnouncement) {
+        setAnnouncementDrafts(items)
+      }
+    } catch {
+      // Keep the last announcement visible if a refresh fails.
+    }
+  }, [editingAnnouncement])
+
+  const saveAnnouncement = async () => {
+    setSavingAnnouncement(true)
+    setAnnouncementError('')
+    try {
+      const res = await fetch('/api/settings/realtime-announcement', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ announcements: announcementDrafts }),
+      })
+      const value = await res.json()
+      if (!res.ok) throw new Error(value.error || 'บันทึกประกาศไม่สำเร็จ')
+      const items = Array.isArray(value.announcements) ? value.announcements : []
+      setAnnouncements(items)
+      setAnnouncementDrafts(items)
+      setEditingAnnouncement(false)
+    } catch (error: unknown) {
+      setAnnouncementError(error instanceof Error ? error.message : 'บันทึกประกาศไม่สำเร็จ')
+    } finally {
+      setSavingAnnouncement(false)
+    }
+  }
+
+  useEffect(() => { setPage(1) }, [search, filterProcess, overtimeOnly])
   useEffect(() => { setIdlePage(1) }, [idleSearch])
   useEffect(() => { setCompletedPage(1) }, [completedSearch])
 
@@ -439,6 +500,13 @@ export default function RealtimePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAnnouncement()
+    const timer = setInterval(fetchAnnouncement, 30000)
+    return () => clearInterval(timer)
+  }, [fetchAnnouncement])
+
   // socket.io — server broadcasts the computed payload directly (debounced),
   // so we just apply it here instead of triggering a re-fetch per client
   useEffect(() => {
@@ -468,8 +536,15 @@ export default function RealtimePage() {
       ev.worker_id.toLowerCase().includes(search.toLowerCase()) ||
       ev.process.toLowerCase().includes(search.toLowerCase())
     const matchProcess = filterProcess === 'ทั้งหมด' || ev.process.toUpperCase().includes(filterProcess)
-    return matchSearch && matchProcess
+    const matchOvertime = !overtimeOnly || isRealtimeOvertime(ev, now, overtimeGraceMinutes)
+    return matchSearch && matchProcess && matchOvertime
   })
+
+  const overtimeJobCount = new Set(
+    (data?.events ?? [])
+      .filter((ev) => isRealtimeOvertime(ev, now, overtimeGraceMinutes))
+      .map((ev) => ev.project_id)
+  ).size
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -532,6 +607,8 @@ export default function RealtimePage() {
     }
   }, [data])
 
+  const activeAnnouncements = announcements.filter((item) => item.enabled && item.message.trim())
+
   return (
     <div className="space-y-5 font-sans">
       {/* Hero Header */}
@@ -569,6 +646,119 @@ export default function RealtimePage() {
           </div>
         </div>
       </div>
+
+      {activeAnnouncements.length > 0 && (
+        <style>{`
+          @keyframes realtime-announcement-scroll {
+            from { transform: translateX(100%); }
+            to { transform: translateX(-100%); }
+          }
+          .realtime-announcement-scroll {
+            animation: realtime-announcement-scroll 30s linear infinite;
+            will-change: transform;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .realtime-announcement-scroll { animation: none; transform: none; }
+          }
+        `}</style>
+      )}
+
+      {activeAnnouncements.map((item, index) => (
+        <div key={item.id} className="flex min-h-11 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 shadow-sm">
+          <div className="flex shrink-0 items-center gap-2 bg-amber-500 px-4 text-xs font-bold text-white shadow-sm">
+            <Megaphone className="h-4 w-4" />
+            ประกาศ {activeAnnouncements.length > 1 ? index + 1 : ''}
+          </div>
+          <div className="min-w-0 flex-1 overflow-hidden py-3">
+            <p className="realtime-announcement-scroll w-max min-w-full whitespace-nowrap px-5 text-lg font-bold leading-relaxed text-red-600">
+              {item.message}
+            </p>
+          </div>
+        </div>
+      ))}
+
+      {canEditAnnouncement && (
+        <div className="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={() => setEditingAnnouncement((current) => !current)}
+            className="flex min-h-11 w-full items-center justify-center gap-2 bg-amber-50 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            จัดการป้ายประกาศ ({announcements.length})
+          </button>
+
+          {editingAnnouncement && (
+            <div className="space-y-3 border-t border-amber-200 p-4">
+              {announcementDrafts.map((item, index) => (
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-end">
+                  <label className="flex-1">
+                    <span className="mb-1 block text-xs font-semibold text-gray-600">
+                      ประกาศที่ {index + 1} ({item.message.length}/500)
+                    </span>
+                    <input
+                      type="text"
+                      maxLength={500}
+                      value={item.message}
+                      onChange={(event) => setAnnouncementDrafts((current) => current.map((draft) => (
+                        draft.id === item.id ? { ...draft, message: event.target.value } : draft
+                      )))}
+                      placeholder="พิมพ์ข้อความที่ต้องการประกาศ..."
+                      className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAnnouncementDrafts((current) => current.map((draft) => (
+                      draft.id === item.id ? { ...draft, enabled: !draft.enabled } : draft
+                    )))}
+                    aria-pressed={item.enabled}
+                    className={`h-10 rounded-full border px-4 text-xs font-semibold ${
+                      item.enabled
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-gray-200 bg-white text-gray-500'
+                    }`}
+                  >
+                    {item.enabled ? 'กำลังแสดง' : 'กำลังซ่อน'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAnnouncementDrafts((current) => current.filter((draft) => draft.id !== item.id))}
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-red-200 bg-white px-3 text-red-600 hover:bg-red-50"
+                    aria-label={`ลบประกาศที่ ${index + 1}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAnnouncementDrafts((current) => [
+                    ...current,
+                    { id: `announcement-${Date.now()}`, message: '', enabled: true },
+                  ])}
+                  disabled={announcementDrafts.length >= 20}
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" /> เพิ่มประกาศ
+                </button>
+                <button
+                  type="button"
+                  onClick={saveAnnouncement}
+                  disabled={savingAnnouncement}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-gray-900 px-5 text-xs font-bold text-white hover:bg-gray-800 disabled:opacity-60"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {savingAnnouncement ? 'กำลังบันทึก...' : 'บันทึกประกาศทั้งหมด'}
+                </button>
+              </div>
+              {announcementError && <p className="text-xs font-medium text-red-600">{announcementError}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
@@ -623,6 +813,25 @@ export default function RealtimePage() {
             </div>
           )}
         </div>
+
+        {/* Overtime filter */}
+        <button
+          onClick={() => { setOvertimeOnly((current) => !current); setTableTab('active') }}
+          aria-pressed={overtimeOnly}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-semibold transition-all shrink-0 ${
+            overtimeOnly
+              ? 'bg-red-600 border-red-600 text-white shadow-sm'
+              : 'bg-white border-red-200 text-red-600 hover:bg-red-50'
+          }`}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          งานล่าช้า
+          <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+            overtimeOnly ? 'bg-white/20 text-white' : 'bg-red-50 text-red-600'
+          }`}>
+            {overtimeJobCount}
+          </span>
+        </button>
 
         {/* Refresh */}
         <button onClick={fetchData}

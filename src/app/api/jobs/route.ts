@@ -140,6 +140,19 @@ export async function POST(req: NextRequest) {
     const existing = await db.collection('jobs').findOne({ job_code: job_code.trim() })
     if (existing) return NextResponse.json({ message: `Job Code "${job_code}" มีอยู่แล้ว` }, { status: 409 })
 
+    if (levels.level2) {
+      const closedGroup = await db.collection('jobs').findOne({
+        level2: levels.level2,
+        sale_closed_at: { $exists: true, $ne: null },
+      })
+      if (closedGroup) {
+        return NextResponse.json(
+          { message: `กลุ่ม ${levels.level2} ปิดการขายแล้ว กรุณาใช้เลขกลุ่มใหม่` },
+          { status: 409 }
+        )
+      }
+    }
+
     // สร้าง process rows
     const processRows = (processes ?? []).filter((p: { process: string }) => p.process?.trim()).map((p: {
       process: string; person?: string; target_time?: string

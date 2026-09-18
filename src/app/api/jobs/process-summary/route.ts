@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
+import { getEffectiveElapsedSeconds } from '@/lib/process-time'
 import jwt from 'jsonwebtoken'
 
 function getToken(req: NextRequest): string | null {
   const auth = req.headers.get('authorization')
   if (auth?.startsWith('Bearer ')) return auth.slice(7)
   return req.cookies.get('auth_token')?.value ?? null
-}
-
-// แปลง "HH:MM:SS" หรือ "HH:MM" → วินาที
-function parseElapsed(str: string): number {
-  if (!str || str === '00:00:00' || str === '00:00') return 0
-  const parts = str.split(':').map(Number)
-  if (parts.length === 3) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0)
-  if (parts.length === 2) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60
-  return 0
 }
 
 // แปลง target_time ของกระบวนการ (รองรับรูปแบบดิบเช่น "130" = 1:30 เหมือนหน้าใบงาน) → วินาที
@@ -109,7 +101,7 @@ export async function GET(req: NextRequest) {
         }
 
         const targetSecs = parseTargetSeconds(proc.target_time)
-        const elapsedSecs = parseElapsed(proc.elapsed_time ?? '')
+        const elapsedSecs = getEffectiveElapsedSeconds(proc)
         bucket.target_secs += targetSecs
         bucket.elapsed_secs += elapsedSecs
 

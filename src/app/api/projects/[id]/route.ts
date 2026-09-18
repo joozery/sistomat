@@ -6,6 +6,11 @@ import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
+type ProcessSnapshot = {
+  process?: string
+  next_confirmed_at?: string | Date | null
+}
+
 function getToken(req: NextRequest): string | null {
   const auth = req.headers.get('Authorization')
   if (auth?.startsWith('Bearer ')) return auth.slice(7)
@@ -55,7 +60,10 @@ export async function PUT(
 
     const before = await db
       .collection('projects')
-      .findOne({ project_id: id }, { projection: { status: 1, 'qc.result': 1, dwg_name: 1 } })
+      .findOne(
+        { project_id: id },
+        { projection: { dwg_name: 1, processes: 1 } }
+      )
 
     const update: Record<string, unknown> = { updated_at: new Date() }
     if (processes !== undefined) update.processes = processes
@@ -82,32 +90,33 @@ export async function PUT(
     // real notification triggers (fire-and-forget)
     const dwgName = before?.dwg_name ? ` (${before.dwg_name})` : ''
 
-    if (qc?.result === 'reject' && before?.qc?.result !== 'reject') {
-      createNotification(db, {
-        type: 'error',
-        category: 'qc',
-        title: `พบชิ้นงานไม่ผ่านเกณฑ์ QC — ${id}`,
-        description: `ใบงาน ${id}${dwgName} ถูกบันทึกผล QC เป็น "ไม่ผ่าน" กรุณาตรวจสอบ`,
-        link: `/dashboard/process-details/${id}/qc`,
-      }).catch(() => {})
-    } else if (qc?.result === 'accept' && before?.qc?.result !== 'accept') {
-      createNotification(db, {
-        type: 'success',
-        category: 'qc',
-        title: `ชิ้นงานผ่านเกณฑ์ QC — ${id}`,
-        description: `ใบงาน ${id}${dwgName} ผ่านการตรวจสอบคุณภาพเรียบร้อยแล้ว`,
-        link: `/dashboard/process-details/${id}/qc`,
-      }).catch(() => {})
-    }
+    // Notify only when the process immediately before QC has just been completed.
+    // Comparing the stored and submitted timestamps prevents duplicate notifications
+    // when the same project data is saved again.
+    if (Array.isArray(processes)) {
+      const previousProcesses = Array.isArray(before?.processes)
+        ? (before.processes as ProcessSnapshot[])
+        : []
+      const submittedProcesses = processes as ProcessSnapshot[]
 
-    if (status !== undefined && status !== before?.status && status === 'จบงาน') {
-      createNotification(db, {
-        type: 'success',
-        category: 'system',
-        title: `ใบงาน ${id}${dwgName} จบงานแล้ว`,
-        description: `บันทึกสถานะ "จบงาน" เรียบร้อยแล้ว`,
-        link: `/dashboard/process-details/${id}`,
-      }).catch(() => {})
+      for (const [index, process] of submittedProcesses.entries()) {
+        const nextProcessName = submittedProcesses[index + 1]?.process?.trim() ?? ''
+        const wasCompleted = Boolean(previousProcesses[index]?.next_confirmed_at)
+        const isNowCompleted = Boolean(process.next_confirmed_at)
+        const isImmediatelyBeforeQc = /QC/i.test(nextProcessName)
+
+        if (!wasCompleted && isNowCompleted && isImmediatelyBeforeQc) {
+          const completedProcessName = process.process?.trim() || `Process ${index + 1}`
+
+          await createNotification(db, {
+            type: 'info',
+            category: 'qc',
+            title: `งานพร้อมตรวจ QC — ${id}`,
+            description: `ใบงาน ${id}${dwgName} จบ Process ${completedProcessName} แล้ว และพร้อมเข้าสู่ ${nextProcessName}`,
+            link: `/dashboard/process-details/${id}/qc`,
+          }).catch(() => {})
+        }
+      }
     }
 
     return NextResponse.json({ message: 'บันทึกสำเร็จ' })
