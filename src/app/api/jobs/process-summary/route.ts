@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { getEffectiveElapsedSeconds } from '@/lib/process-time'
+import { isRowCompleted } from '@/lib/workers'
 import jwt from 'jsonwebtoken'
 
 function getToken(req: NextRequest): string | null {
@@ -95,7 +96,9 @@ export async function GET(req: NextRequest) {
 
         bucket.job_count++
         bucket.total_qty += qty
-        if (proc.next_confirmed_at) bucket.completed_count++
+        // นับเสร็จเมื่อกด CMD_NEXT แล้วและมีคนทำจริง (เริ่ม+หยุด) — CMD_REJECT ประทับ next_confirmed_at
+        // ให้ทุกแถวแม้ไม่เคยเริ่ม จึงดู next_confirmed_at อย่างเดียวไม่ได้
+        if (isRowCompleted({ workers: proc.workers ?? [], next_confirmed_at: proc.next_confirmed_at })) bucket.completed_count++
         if (p.due_date && (!bucket.min_due || new Date(p.due_date) < new Date(bucket.min_due))) {
           bucket.min_due = p.due_date
         }

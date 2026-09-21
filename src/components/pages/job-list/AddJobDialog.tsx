@@ -320,7 +320,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl rounded-2xl p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-2xl rounded-2xl p-4 sm:p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Layers className="h-5 w-5 text-[#7B1A1A]" />

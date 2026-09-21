@@ -85,20 +85,20 @@ export default function MonthlySummaryPage() {
         }
       `}</style>
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 shadow-sm/50">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm/50">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#7B1A1A] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
               <BarChart2 className="h-3 w-3" /> MONTHLY REPORT & ANALYTICS
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">สรุปผลการดำเนินงานรายเดือน</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">สรุปผลการดำเนินงานรายเดือน</h1>
           <p className="mt-1 text-xs text-gray-500">
             สรุปภาพรวมจำนวนออเดอร์ ยอดการผลิต ชั่วโมงการทำงาน และ QC รวมประจำปี
           </p>
         </div>
 
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
           {/* Year picker */}
           <div className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-gray-50 border border-gray-200">
             <button onClick={() => setYear((y) => y - 1)}

@@ -69,7 +69,7 @@ export function JobApplicationSection() {
 
   return (
     <Card className="rounded-xl border border-gray-100 bg-white p-2 shadow-none font-sans">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
         <div>
           <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
             <Cpu className="h-5 w-5 text-[#7B1A1A]" />
@@ -77,7 +77,7 @@ export function JobApplicationSection() {
           </CardTitle>
           <p className="text-xs text-gray-400 mt-0.5">อัปเดตทุก 30 วินาที</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
           <Link
             href="/dashboard/process-qrcode"

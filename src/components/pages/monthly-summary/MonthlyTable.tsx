@@ -56,9 +56,52 @@ export function MonthlyTable({ months, year }: Props) {
 
   const activeMonths = months.filter((m) => m.total_jobs > 0)
 
+  const renderOvertime = (row: (typeof months)[number]) =>
+    row.overtime_hours > 0 ? (
+      <button
+        onClick={() => {
+          const { from, to } = monthRange(row.ym)
+          router.push(`/dashboard/export-jobs?from=${from}&to=${to}`)
+        }}
+        title="ดูรายละเอียดว่างานไหนเกินเวลาบ้าง"
+        className="inline-flex items-center gap-1 font-bold text-red-600 hover:text-red-700 hover:underline"
+      >
+        <AlertTriangle className="h-3 w-3" />
+        +{row.overtime_hours.toLocaleString()} ชม.
+        <span className="text-[10px] font-normal text-gray-400">({row.overtime_jobs} งาน)</span>
+      </button>
+    ) : (
+      <span className="text-gray-300">—</span>
+    )
+
+  const renderStatus = (row: (typeof months)[number]) => {
+    if (row.total_jobs === 0) {
+      return (
+        <Badge variant="outline" className="rounded-full bg-gray-50 text-gray-400 border-gray-200 text-[11px] font-semibold">
+          <MinusCircle className="h-3 w-3 mr-1" />
+          ไม่มีข้อมูล
+        </Badge>
+      )
+    }
+    const label = completionLabel(row.completed_jobs, row.total_jobs)
+    return (
+      <Badge
+        variant="outline"
+        className={`rounded-full gap-1 text-[11px] font-semibold ${
+          label.ok
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-amber-50 text-amber-700 border-amber-200'
+        }`}
+      >
+        <CheckCircle2 className="h-3 w-3" />
+        {label.text}
+      </Badge>
+    )
+  }
+
   return (
     <Card className="rounded-xl border border-gray-100 bg-white shadow-none font-sans overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100 px-6 py-4 bg-gray-50/40">
+      <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100 px-4 py-3 sm:px-6 sm:py-4 bg-gray-50/40">
         <div>
           <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
             <FileText className="h-5 w-5 text-[#7B1A1A]" />
@@ -71,6 +114,54 @@ export function MonthlyTable({ months, year }: Props) {
       </CardHeader>
 
       <CardContent className="p-0">
+        {/* มือถือ: การ์ดต่อเดือน (ตอนพิมพ์ใช้ตารางเสมอ) */}
+        <div className="md:hidden print:hidden divide-y divide-gray-100">
+          {activeMonths.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-10">ไม่มีข้อมูลในปี {year + 543}</p>
+          ) : (
+            activeMonths.map((row) => (
+              <div key={row.ym} className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-sm text-gray-800">{MONTH_TH[row.ym.slice(5)]} {year + 543}</span>
+                  {renderStatus(row)}
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <p className="text-[10px] text-gray-400">งานทั้งหมด</p>
+                    <p className="font-medium text-gray-600">{row.total_jobs.toLocaleString()} รายการ</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400">งานเสร็จ</p>
+                    <p className="font-bold text-gray-700">{row.completed_jobs.toLocaleString()} รายการ</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400">QC ผ่าน</p>
+                    <p className="font-bold text-emerald-700">
+                      {row.qc_passed > 0 ? (
+                        <>
+                          {row.qc_passed.toLocaleString()} ชิ้น
+                          {row.qc_pct != null && <span className="ml-1 text-[11px] font-normal text-gray-400">({row.qc_pct}%)</span>}
+                        </>
+                      ) : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400">ชั่วโมงทำงาน</p>
+                    <p className="font-mono text-gray-600">{row.elapsed_hours > 0 ? `${row.elapsed_hours.toLocaleString()} ชม.` : '—'}</p>
+                  </div>
+                </div>
+                {row.overtime_hours > 0 && (
+                  <div className="text-xs">
+                    <span className="text-[10px] text-gray-400 mr-1.5">เกินเวลา (OT)</span>
+                    {renderOvertime(row)}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden md:block print:block">
         <Table>
           <TableHeader className="bg-gray-50/80">
             <TableRow className="hover:bg-transparent border-gray-100">
@@ -93,7 +184,6 @@ export function MonthlyTable({ months, year }: Props) {
             ) : (
               activeMonths.map((row) => {
                 const monthKey = row.ym.slice(5)
-                const label = completionLabel(row.completed_jobs, row.total_jobs)
                 return (
                   <TableRow key={row.ym} className="hover:bg-red-50/20 transition-colors group">
                     <TableCell className="font-semibold text-sm text-gray-800 px-6 group-hover:text-[#7B1A1A] transition-colors">
@@ -119,42 +209,10 @@ export function MonthlyTable({ months, year }: Props) {
                       {row.elapsed_hours > 0 ? `${row.elapsed_hours.toLocaleString()} ชม.` : '—'}
                     </TableCell>
                     <TableCell className="text-center text-xs">
-                      {row.overtime_hours > 0 ? (
-                        <button
-                          onClick={() => {
-                            const { from, to } = monthRange(row.ym)
-                            router.push(`/dashboard/export-jobs?from=${from}&to=${to}`)
-                          }}
-                          title="ดูรายละเอียดว่างานไหนเกินเวลาบ้าง"
-                          className="inline-flex items-center gap-1 font-bold text-red-600 hover:text-red-700 hover:underline"
-                        >
-                          <AlertTriangle className="h-3 w-3" />
-                          +{row.overtime_hours.toLocaleString()} ชม.
-                          <span className="text-[10px] font-normal text-gray-400">({row.overtime_jobs} งาน)</span>
-                        </button>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
+                      {renderOvertime(row)}
                     </TableCell>
                     <TableCell className="text-center px-6">
-                      {row.total_jobs === 0 ? (
-                        <Badge variant="outline" className="rounded-full bg-gray-50 text-gray-400 border-gray-200 text-[11px] font-semibold">
-                          <MinusCircle className="h-3 w-3 mr-1" />
-                          ไม่มีข้อมูล
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className={`rounded-full gap-1 text-[11px] font-semibold ${
-                            label.ok
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          <CheckCircle2 className="h-3 w-3" />
-                          {label.text}
-                        </Badge>
-                      )}
+                      {renderStatus(row)}
                     </TableCell>
                   </TableRow>
                 )
@@ -162,8 +220,9 @@ export function MonthlyTable({ months, year }: Props) {
             )}
           </TableBody>
         </Table>
+        </div>
 
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/40 px-6 py-3.5">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center justify-between border-t border-gray-100 bg-gray-50/40 px-4 py-3 sm:px-6 sm:py-3.5">
           <p className="text-xs text-gray-500">
             รวมทั้งสิ้น{' '}
             <span className="font-bold text-gray-800">{totalAll.toLocaleString()} รายการ</span>

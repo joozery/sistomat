@@ -154,7 +154,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
 
   return (
     <tr
-      className={`group border-b border-gray-100 transition-colors cursor-pointer ${
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 md:table-row md:p-0 group border-b border-gray-100 transition-colors cursor-pointer ${
         isRunning
           ? isOvertime ? 'bg-red-50/40 hover:bg-red-50/60' : 'bg-white hover:bg-blue-50/30'
           : isIdle ? 'bg-gray-50/20 hover:bg-gray-50/50'
@@ -163,12 +163,12 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(ev.project_id)}`)}
     >
       {/* # */}
-      <td className="pl-5 pr-2 py-3 text-xs font-bold text-gray-300 text-center w-8">
+      <td className="hidden md:table-cell pl-5 pr-2 py-3 text-xs font-bold text-gray-300 text-center w-8">
         {String(idx + 1).padStart(2, '0')}
       </td>
 
       {/* สถานะ */}
-      {!hideOperationalMetrics && <td className="px-3 py-3 w-28">
+      {!hideOperationalMetrics && <td className="md:px-3 md:py-3 md:w-28">
         {isRunning ? (
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
             isOvertime ? 'bg-red-100 text-red-600' : 'bg-emerald-50 text-emerald-700'
@@ -193,7 +193,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       </td>}
 
       {/* JOB / DWG */}
-      <td className="px-3 py-3 min-w-[160px]">
+      <td className="order-first w-full md:order-none md:w-auto md:px-3 md:py-3 md:min-w-[160px]">
         <p className="font-mono text-xs font-bold text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
           {ev.project_id}
         </p>
@@ -206,7 +206,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       </td>
 
       {/* Process */}
-      <td className="px-3 py-3 w-40">
+      <td className="md:px-3 md:py-3 md:w-40">
         {isIdle ? (
           <span className="text-[11px] text-gray-400 truncate block max-w-[150px]">{ev.process}</span>
         ) : (
@@ -218,7 +218,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       </td>
 
       {/* พนักงาน */}
-      <td className="px-3 py-3 w-36">
+      <td className="md:px-3 md:py-3 md:w-36">
         {ev.worker_id ? (() => {
           const worker = findWorker(ev.worker_id, workers)
           return (
@@ -248,7 +248,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       </td>
 
       {/* เวลาเริ่ม / จบ */}
-      <td className="px-3 py-3 w-28 text-xs text-gray-500 whitespace-nowrap">
+      <td className="md:px-3 md:py-3 md:w-28 text-xs text-gray-500 whitespace-nowrap">
         {ev.start_time ? (
           <>
             <div className="flex items-center gap-1">
@@ -265,7 +265,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       </td>
 
       {/* Elapsed */}
-      {!hideOperationalMetrics && <td className="px-3 py-3 w-28">
+      {!hideOperationalMetrics && <td className="md:px-3 md:py-3 md:w-28">
         {elapsed ? (
           <span className={`font-mono text-sm font-bold ${isOvertime ? 'text-red-500' : isRunning ? 'text-gray-800' : 'text-gray-400'}`}>
             {elapsed}
@@ -276,7 +276,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       </td>}
 
       {/* Progress */}
-      {!hideOperationalMetrics && <td className="px-3 py-3 w-40">
+      {!hideOperationalMetrics && <td className="w-full md:w-40 md:px-3 md:py-3">
         {progress !== null ? (
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] text-gray-400">
@@ -298,7 +298,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
       </td>}
 
       {/* Link */}
-      <td className="pr-4 py-3 w-10 text-right">
+      <td className="hidden md:table-cell pr-4 py-3 w-10 text-right">
         <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-[#7B1A1A] transition-colors" />
       </td>
     </tr>
@@ -309,23 +309,23 @@ function CompletedRow({ ev, idx, workers, hideElapsed }: { ev: RealtimeEvent; id
   const router = useRouter()
   return (
     <tr
-      className="group border-b border-gray-100 bg-white hover:bg-blue-50/20 transition-colors cursor-pointer"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 md:table-row md:p-0 group border-b border-gray-100 bg-white hover:bg-blue-50/20 transition-colors cursor-pointer"
       onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(ev.project_id)}`)}
     >
-      <td className="pl-5 pr-2 py-3 text-xs font-bold text-gray-300 text-center w-8">
+      <td className="hidden md:table-cell pl-5 pr-2 py-3 text-xs font-bold text-gray-300 text-center w-8">
         {String(idx + 1).padStart(2, '0')}
       </td>
-      <td className="px-3 py-3 min-w-[160px]">
+      <td className="order-first w-full md:order-none md:w-auto md:px-3 md:py-3 md:min-w-[160px]">
         <p className="font-mono text-xs font-bold text-gray-700 group-hover:text-blue-700 transition-colors">{ev.project_id}</p>
         {ev.dwg_name && <p className="text-[11px] text-gray-400 truncate max-w-[220px] mt-0.5">{ev.dwg_name}</p>}
         {ev.level1 && <p className="text-[10px] text-gray-300 mt-0.5">{[ev.level1, ev.level2].filter(Boolean).join(' › ')}</p>}
       </td>
-      <td className="px-3 py-3 w-36">
+      <td className="md:px-3 md:py-3 md:w-36">
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getProcessColor(ev.process)}`}>
           <Layers className="h-3 w-3" />{ev.process}
         </span>
       </td>
-      <td className="px-3 py-3 w-36">
+      <td className="md:px-3 md:py-3 md:w-36">
         {ev.worker_id ? (() => {
           const worker = findWorker(ev.worker_id, workers)
           return (
@@ -342,7 +342,7 @@ function CompletedRow({ ev, idx, workers, hideElapsed }: { ev: RealtimeEvent; id
           )
         })() : <span className="text-gray-300 text-xs">—</span>}
       </td>
-      <td className="px-3 py-3 w-28 text-xs text-gray-500 whitespace-nowrap">
+      <td className="md:px-3 md:py-3 md:w-28 text-xs text-gray-500 whitespace-nowrap">
         {ev.start_time && (
           <>
             <div className="flex items-center gap-1"><Clock className="h-3 w-3 text-gray-300" />{ev.start_time}</div>
@@ -350,10 +350,10 @@ function CompletedRow({ ev, idx, workers, hideElapsed }: { ev: RealtimeEvent; id
           </>
         )}
       </td>
-      {!hideElapsed && <td className="px-3 py-3 w-28">
+      {!hideElapsed && <td className="md:px-3 md:py-3 md:w-28">
         <span className="font-mono text-sm font-bold text-gray-400">{calcElapsed(ev.start_time, ev.stop_time)}</span>
       </td>}
-      <td className="pr-4 py-3 w-10 text-right">
+      <td className="hidden md:table-cell pr-4 py-3 w-10 text-right">
         <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />
       </td>
     </tr>
@@ -364,13 +364,13 @@ function IdleRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
   const router = useRouter()
   return (
     <tr
-      className="group border-b border-gray-100 bg-white hover:bg-amber-50/30 transition-colors cursor-pointer"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 md:table-row md:p-0 group border-b border-gray-100 bg-white hover:bg-amber-50/30 transition-colors cursor-pointer"
       onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(ev.project_id)}`)}
     >
-      <td className="pl-5 pr-2 py-3 text-xs font-bold text-gray-300 text-center w-8">
+      <td className="hidden md:table-cell pl-5 pr-2 py-3 text-xs font-bold text-gray-300 text-center w-8">
         {String(idx + 1).padStart(2, '0')}
       </td>
-      <td className="px-3 py-3 min-w-[160px]">
+      <td className="order-first w-full md:order-none md:w-auto md:px-3 md:py-3 md:min-w-[160px]">
         <p className="font-mono text-xs font-bold text-gray-800 group-hover:text-amber-700 transition-colors">
           {ev.project_id}
         </p>
@@ -381,16 +381,16 @@ function IdleRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
           <p className="text-[10px] text-gray-300 mt-0.5">{[ev.level1, ev.level2].filter(Boolean).join(' › ')}</p>
         )}
       </td>
-      <td className="px-3 py-3">
+      <td className="md:px-3 md:py-3">
         <span className="text-[11px] text-gray-400 truncate block max-w-[200px]">{ev.process || '—'}</span>
       </td>
-      <td className="px-3 py-3 w-36 text-xs text-gray-500 whitespace-nowrap">
-        {ev.due_date ? new Date(ev.due_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+      <td className="md:px-3 md:py-3 md:w-36 text-xs text-gray-500 whitespace-nowrap">
+        <span className="md:hidden text-gray-400">กำหนดส่ง </span>{ev.due_date ? new Date(ev.due_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
       </td>
-      <td className="px-3 py-3 w-36 text-xs text-gray-500 whitespace-nowrap">
-        {ev.received_date ? new Date(ev.received_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+      <td className="md:px-3 md:py-3 md:w-36 text-xs text-gray-500 whitespace-nowrap">
+        <span className="md:hidden text-gray-400">รับงาน </span>{ev.received_date ? new Date(ev.received_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
       </td>
-      <td className="pr-4 py-3 w-10 text-right">
+      <td className="hidden md:table-cell pr-4 py-3 w-10 text-right">
         <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-amber-500 transition-colors" />
       </td>
     </tr>
@@ -612,7 +612,7 @@ export default function RealtimePage() {
   return (
     <div className="space-y-5 font-sans">
       {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gray-900 bg-[url('/bg/bg2.png')] bg-cover bg-center p-6 text-white shadow-sm">
+      <div className="relative overflow-hidden rounded-2xl bg-gray-900 bg-[url('/bg/bg2.png')] bg-cover bg-center p-4 sm:p-6 text-white shadow-sm">
         <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -623,24 +623,24 @@ export default function RealtimePage() {
               </span>
               Real-time Monitor
             </div>
-            <h1 className="text-2xl font-extrabold tracking-tight">ติดตามสถานะการผลิตแบบสด</h1>
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">ติดตามสถานะการผลิตแบบสด</h1>
             <p className="text-xs text-gray-300">อัปเดตทุก 5 วินาที — แสดงทุกกระบวนการที่กำลังทำงานอยู่</p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-emerald-400">{jobCounts.running}</p>
+          <div className="grid grid-cols-4 sm:flex sm:items-center gap-2 sm:gap-3 sm:shrink-0">
+            <div className="text-center px-1.5 sm:px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <p className="text-xl sm:text-2xl font-extrabold text-emerald-400">{jobCounts.running}</p>
               <p className="text-[10px] text-gray-300 font-medium">กำลังทำงาน</p>
             </div>
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-amber-300">{jobCounts.idle}</p>
+            <div className="text-center px-1.5 sm:px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <p className="text-xl sm:text-2xl font-extrabold text-amber-300">{jobCounts.idle}</p>
               <p className="text-[10px] text-gray-300 font-medium">รอดำเนินการ</p>
             </div>
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-blue-300">{jobCounts.completed}</p>
+            <div className="text-center px-1.5 sm:px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <p className="text-xl sm:text-2xl font-extrabold text-blue-300">{jobCounts.completed}</p>
               <p className="text-[10px] text-gray-300 font-medium">เสร็จแล้ว</p>
             </div>
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-              <p className="text-2xl font-extrabold text-white">{jobCounts.total}</p>
+            <div className="text-center px-1.5 sm:px-4 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <p className="text-xl sm:text-2xl font-extrabold text-white">{jobCounts.total}</p>
               <p className="text-[10px] text-gray-300 font-medium">รายการทั้งหมด</p>
             </div>
           </div>
@@ -665,12 +665,12 @@ export default function RealtimePage() {
 
       {activeAnnouncements.map((item, index) => (
         <div key={item.id} className="flex min-h-11 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 shadow-sm">
-          <div className="flex shrink-0 items-center gap-2 bg-amber-500 px-4 text-xs font-bold text-white shadow-sm">
+          <div className="flex shrink-0 items-center gap-2 bg-amber-500 px-3 sm:px-4 text-xs font-bold text-white shadow-sm">
             <Megaphone className="h-4 w-4" />
             ประกาศ {activeAnnouncements.length > 1 ? index + 1 : ''}
           </div>
           <div className="min-w-0 flex-1 overflow-hidden py-3">
-            <p className="realtime-announcement-scroll w-max min-w-full whitespace-nowrap px-5 text-lg font-bold leading-relaxed text-red-600">
+            <p className="realtime-announcement-scroll w-max min-w-full whitespace-nowrap px-5 text-base sm:text-lg font-bold leading-relaxed text-red-600">
               {item.message}
             </p>
           </div>
@@ -845,10 +845,10 @@ export default function RealtimePage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
         {/* Tab bar */}
-        <div className="flex items-center border-b border-gray-100 bg-gray-50/60 px-5 gap-0">
+        <div className="flex items-center overflow-x-auto border-b border-gray-100 bg-gray-50/60 px-2 sm:px-5 gap-0">
           <button
             onClick={() => setTableTab('active')}
-            className={`flex items-center gap-2 px-4 py-3.5 text-xs font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-3.5 text-xs font-semibold border-b-2 transition-all -mb-px whitespace-nowrap shrink-0 ${
               tableTab === 'active'
                 ? 'border-gray-900 text-gray-900'
                 : 'border-transparent text-gray-400 hover:text-gray-600'
@@ -865,7 +865,7 @@ export default function RealtimePage() {
           </button>
           <button
             onClick={() => setTableTab('idle')}
-            className={`flex items-center gap-2 px-4 py-3.5 text-xs font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-3.5 text-xs font-semibold border-b-2 transition-all -mb-px whitespace-nowrap shrink-0 ${
               tableTab === 'idle'
                 ? 'border-amber-500 text-amber-700'
                 : 'border-transparent text-gray-400 hover:text-gray-600'
@@ -879,7 +879,7 @@ export default function RealtimePage() {
           </button>
           <button
             onClick={() => setTableTab('completed')}
-            className={`flex items-center gap-2 px-4 py-3.5 text-xs font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-3.5 text-xs font-semibold border-b-2 transition-all -mb-px whitespace-nowrap shrink-0 ${
               tableTab === 'completed'
                 ? 'border-blue-500 text-blue-700'
                 : 'border-transparent text-gray-400 hover:text-gray-600'
@@ -897,7 +897,7 @@ export default function RealtimePage() {
         {tableTab === 'active' && (
           <>
             {/* Summary row */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-100">
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -927,8 +927,8 @@ export default function RealtimePage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
+                <table className="block md:table w-full text-sm">
+                  <thead className="hidden md:table-header-group">
                     <tr className="border-b border-gray-100 bg-gray-50/80">
                       <th className="pl-5 pr-2 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-center w-8">#</th>
                       {!hideOperationalMetrics && <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left w-28">สถานะ</th>}
@@ -941,7 +941,7 @@ export default function RealtimePage() {
                       <th className="pr-4 py-2.5 w-10" />
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="block md:table-row-group">
                     {paginated.map((ev, i) => (
                       <TableRow
                         key={`${ev.project_id}-${ev.process}-${ev.worker_id}`}
@@ -960,11 +960,11 @@ export default function RealtimePage() {
 
             {/* Pagination */}
             {!loading && totalPages > 1 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 sm:px-5 py-3 border-t border-gray-100 bg-gray-50/40">
                 <span className="text-xs text-gray-400">
                   แสดง {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} จาก {filtered.length} รายการ
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                     ‹ ก่อนหน้า
@@ -1023,8 +1023,8 @@ export default function RealtimePage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
+                <table className="block md:table w-full text-sm">
+                  <thead className="hidden md:table-header-group">
                     <tr className="border-b border-gray-100 bg-amber-50/40">
                       <th className="pl-5 pr-2 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-center w-8">#</th>
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left">JOB / DWG</th>
@@ -1034,7 +1034,7 @@ export default function RealtimePage() {
                       <th className="pr-4 py-2.5 w-10" />
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="block md:table-row-group">
                     {paginatedIdle.map((ev, i) => (
                       <IdleRow
                         key={`idle-${ev.project_id}-${i}`}
@@ -1049,11 +1049,11 @@ export default function RealtimePage() {
 
             {/* Idle Pagination */}
             {!loading && idleTotalPages > 1 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 sm:px-5 py-3 border-t border-gray-100 bg-gray-50/40">
                 <span className="text-xs text-gray-400">
                   แสดง {(idlePage - 1) * PAGE_SIZE + 1}–{Math.min(idlePage * PAGE_SIZE, filteredIdle.length)} จาก {filteredIdle.length} รายการ
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <button onClick={() => setIdlePage((p) => Math.max(1, p - 1))} disabled={idlePage === 1}
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                     ‹ ก่อนหน้า
@@ -1111,8 +1111,8 @@ export default function RealtimePage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
+                <table className="block md:table w-full text-sm">
+                  <thead className="hidden md:table-header-group">
                     <tr className="border-b border-gray-100 bg-blue-50/30">
                       <th className="pl-5 pr-2 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-center w-8">#</th>
                       <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left">JOB / DWG</th>
@@ -1123,7 +1123,7 @@ export default function RealtimePage() {
                       <th className="pr-4 py-2.5 w-10" />
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="block md:table-row-group">
                     {paginatedCompleted.map((ev, i) => (
                       <CompletedRow
                         key={`done-${ev.project_id}-${ev.process}-${ev.worker_id}-${i}`}
@@ -1139,11 +1139,11 @@ export default function RealtimePage() {
             )}
 
             {!loading && completedTotalPages > 1 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 sm:px-5 py-3 border-t border-gray-100 bg-gray-50/40">
                 <span className="text-xs text-gray-400">
                   แสดง {(completedPage - 1) * PAGE_SIZE + 1}–{Math.min(completedPage * PAGE_SIZE, filteredCompleted.length)} จาก {filteredCompleted.length} รายการ
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <button onClick={() => setCompletedPage((p) => Math.max(1, p - 1))} disabled={completedPage === 1}
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                     ‹ ก่อนหน้า

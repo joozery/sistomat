@@ -212,7 +212,7 @@ export function UserTable() {
   return (
     <div className="rounded-2xl border border-gray-200/70 bg-white overflow-hidden font-sans">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 bg-gray-50/40">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-6 sm:py-4 bg-gray-50/40">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="ค้นหาชื่อ หรือ username..." value={search}
@@ -220,7 +220,7 @@ export function UserTable() {
             className="pl-10 h-10 rounded-full border-gray-200 bg-white text-sm focus:border-[#7B1A1A] transition-all" />
         </div>
         <Button onClick={() => { setIsAddOpen(true); setError('') }}
-          className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 shadow-sm">
+          className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 shadow-sm w-full sm:w-auto">
           <UserPlus className="h-4 w-4" />
           เพิ่มผู้ใช้งาน
         </Button>
@@ -230,10 +230,10 @@ export function UserTable() {
       <Table>
         <TableHeader className="bg-gray-50/80">
           <TableRow className="hover:bg-transparent border-gray-100">
-            <TableHead className="w-12 text-center text-xs font-bold text-gray-400 uppercase">#</TableHead>
+            <TableHead className="hidden sm:table-cell w-12 text-center text-xs font-bold text-gray-400 uppercase">#</TableHead>
             <TableHead className="text-xs font-bold text-gray-500 uppercase">ข้อมูลผู้ใช้งาน</TableHead>
-            <TableHead className="text-xs font-bold text-gray-500 uppercase">บทบาท</TableHead>
-            <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-24">จัดการ</TableHead>
+            <TableHead className="hidden sm:table-cell text-xs font-bold text-gray-500 uppercase">บทบาท</TableHead>
+            <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-16 sm:w-24">จัดการ</TableHead>
           </TableRow>
         </TableHeader>
 
@@ -257,9 +257,23 @@ export function UserTable() {
             filtered.map((u, i) => {
               const gradient = avatarGradients[i % avatarGradients.length]
               const initials = getInitials(u.name || u.username)
+              const roleBadges = (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${getRoleBadge(u.role)}`}>
+                    <CheckCircle2 className="h-3 w-3" />
+                    {u.role}
+                  </span>
+                  {u.locked && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600">
+                      <Lock className="h-2.5 w-2.5" />
+                      ถูกล็อก
+                    </span>
+                  )}
+                </div>
+              )
               return (
                 <TableRow key={u._id} className="hover:bg-red-50/20 transition-colors group">
-                  <TableCell className="text-xs font-bold text-gray-400 text-center">
+                  <TableCell className="hidden sm:table-cell text-xs font-bold text-gray-400 text-center">
                     {String(i + 1).padStart(2, '0')}
                   </TableCell>
 
@@ -276,10 +290,10 @@ export function UserTable() {
                           @{u.username}{u.code ? ` · รหัส #${u.code}` : ''}
                         </p>
                         {(u.email || u.phone) && (
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                             {u.email && (
-                              <span className="flex items-center gap-1 text-[10px] text-gray-400">
-                                <Mail className="h-2.5 w-2.5" />{u.email}
+                              <span className="flex items-center gap-1 text-[10px] text-gray-400 break-all">
+                                <Mail className="h-2.5 w-2.5 shrink-0" />{u.email}
                               </span>
                             )}
                             {u.phone && (
@@ -289,23 +303,13 @@ export function UserTable() {
                             )}
                           </div>
                         )}
+                        <div className="sm:hidden mt-1.5">{roleBadges}</div>
                       </div>
                     </div>
                   </TableCell>
 
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${getRoleBadge(u.role)}`}>
-                        <CheckCircle2 className="h-3 w-3" />
-                        {u.role}
-                      </span>
-                      {u.locked && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600">
-                          <Lock className="h-2.5 w-2.5" />
-                          ถูกล็อก
-                        </span>
-                      )}
-                    </div>
+                  <TableCell className="hidden sm:table-cell">
+                    {roleBadges}
                   </TableCell>
 
                   <TableCell className="text-center">
@@ -353,7 +357,7 @@ export function UserTable() {
       </Table>
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/40 px-6 py-3.5">
+      <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/40 px-4 py-3 sm:px-6 sm:py-3.5">
         <p className="text-xs text-gray-500">
           แสดง <span className="font-bold text-gray-800">{filtered.length}</span> / <span className="font-bold text-gray-800">{users.length}</span> รายการ
         </p>
@@ -361,7 +365,7 @@ export function UserTable() {
 
       {/* ── Add Dialog ── */}
       <Dialog open={isAddOpen} onOpenChange={(o) => { if (!o) setIsAddOpen(false) }}>
-        <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-white border-0">
+        <DialogContent className="sm:max-w-md rounded-3xl p-4 sm:p-6 bg-white border-0 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-[#7B1A1A]" /> เพิ่มผู้ใช้งานใหม่
@@ -372,8 +376,8 @@ export function UserTable() {
           </DialogHeader>
           {error && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <form onSubmit={handleAdd} className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2 space-y-1.5">
                 <Label className="text-xs font-semibold text-gray-700">ชื่อ-นามสกุล</Label>
                 <Input placeholder="เช่น นายสมชาย ใจดี" value={addForm.name}
                   onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
@@ -428,7 +432,7 @@ export function UserTable() {
 
       {/* ── Edit Dialog ── */}
       <Dialog open={!!editingUser} onOpenChange={(o) => { if (!o) setEditingUser(null) }}>
-        <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-white border-0">
+        <DialogContent className="sm:max-w-md rounded-3xl p-4 sm:p-6 bg-white border-0 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
               <Pencil className="h-5 w-5 text-blue-600" /> แก้ไขข้อมูลผู้ใช้งาน
@@ -439,8 +443,8 @@ export function UserTable() {
           </DialogHeader>
           {error && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <form onSubmit={handleEdit} className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2 space-y-1.5">
                 <Label className="text-xs font-semibold text-gray-700">ชื่อ-นามสกุล</Label>
                 <Input value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}

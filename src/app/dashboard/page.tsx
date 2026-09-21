@@ -8,7 +8,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 font-sans">
       {/* Top Banner / Welcome Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gray-900 bg-[url('/bg/bg2.png')] bg-cover bg-center p-6 lg:p-8 text-white shadow-sm">
+      <div className="relative overflow-hidden rounded-2xl bg-gray-900 bg-[url('/bg/bg2.png')] bg-cover bg-center p-4 sm:p-6 lg:p-8 text-white shadow-sm">
         <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -17,7 +17,7 @@ export default function DashboardPage() {
               <Activity className="h-3.5 w-3.5 text-red-400" />
               SISTOMAT ERP Control Center
             </div>
-            <h1 className="text-2xl lg:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
               ภาพรวมระบบบริหารจัดการคลังและการผลิต
             </h1>
             <p className="text-xs lg:text-sm text-gray-300 leading-relaxed">
@@ -25,17 +25,17 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="grid grid-cols-1 sm:flex sm:items-center gap-3 sm:shrink-0">
             <Link
               href="/dashboard/process-qrcode"
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white text-xs font-bold shadow-lg shadow-red-900/40 transition-all"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white text-xs font-bold shadow-lg shadow-red-900/40 transition-all"
             >
               <QrCode className="h-4 w-4" />
               สแกน QR Code งาน
             </Link>
             <Link
               href="/dashboard/all-plans"
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-semibold backdrop-blur-sm transition-all"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-semibold backdrop-blur-sm transition-all"
             >
               ดูแพลนงานทั้งหมด
               <ArrowRight className="h-4 w-4" />

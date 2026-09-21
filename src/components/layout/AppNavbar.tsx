@@ -228,8 +228,8 @@ export function AppNavbar() {
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm text-gray-500 font-normal">ยินดีต้อนรับ,</span>
-            <span className="text-sm font-bold text-gray-800 tracking-tight capitalize">
+            <span className="hidden min-[400px]:inline text-sm text-gray-500 font-normal">ยินดีต้อนรับ,</span>
+            <span className="text-sm font-bold text-gray-800 tracking-tight capitalize truncate max-w-[9rem] sm:max-w-none">
               {user.username}
             </span>
           </div>

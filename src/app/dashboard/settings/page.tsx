@@ -144,10 +144,10 @@ function OptionsListSection({
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${iconBg}`}>
+    <div className="bg-white rounded-3xl border border-gray-100 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-5 sm:mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${iconBg}`}>
             <Icon className={`h-5 w-5 ${iconColor}`} />
           </div>
           <div>
@@ -199,14 +199,14 @@ function OptionsListSection({
                   </button>
                   <button
                     onClick={() => startEdit(index)}
-                    className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 transition-colors"
+                    className="flex h-6 w-6 sm:h-4 sm:w-4 items-center justify-center rounded-full hover:bg-black/10 transition-colors"
                     title="แก้ไข"
                   >
                     <Pencil className="h-2.5 w-2.5" />
                   </button>
                   <button
                     onClick={() => removeOption(opt)}
-                    className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 transition-colors"
+                    className="flex h-6 w-6 sm:h-4 sm:w-4 items-center justify-center rounded-full hover:bg-black/10 transition-colors"
                     title="ลบ"
                   >
                     <X className="h-3 w-3" />
@@ -295,10 +295,10 @@ function OvertimeThresholdSection() {
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-amber-50 border-amber-100">
+    <div className="bg-white rounded-3xl border border-gray-100 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-5 sm:mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-amber-50 border-amber-100">
             <Timer className="h-5 w-5 text-amber-600" />
           </div>
           <div>
@@ -323,7 +323,7 @@ function OvertimeThresholdSection() {
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Input
               type="number"
               min={0}
@@ -426,10 +426,10 @@ function QuotationHeaderSection() {
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-amber-50 border-amber-100">
+    <div className="bg-white rounded-3xl border border-gray-100 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-5 sm:mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-amber-50 border-amber-100">
             <Building2 className="h-5 w-5 text-amber-600" />
           </div>
           <div>
@@ -452,7 +452,7 @@ function QuotationHeaderSection() {
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-4">
             <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-lg bg-gray-50 border border-gray-200 overflow-hidden p-2">
               {draft.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -498,7 +498,7 @@ function QuotationHeaderSection() {
                 className="rounded-xl h-10 text-sm border-gray-200"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-gray-700">เบอร์โทร</Label>
                 <Input
@@ -591,10 +591,10 @@ function MachineRatesSection() {
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-cyan-50 border-cyan-100">
+    <div className="bg-white rounded-3xl border border-gray-100 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-5 sm:mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-cyan-50 border-cyan-100">
             <Gauge className="h-5 w-5 text-cyan-600" />
           </div>
           <div>
@@ -625,9 +625,9 @@ function MachineRatesSection() {
                 ? [r.process, ...processOptions]
                 : processOptions
               return (
-              <div key={index} className="flex items-center gap-2">
+              <div key={index} className="flex flex-wrap items-center gap-2">
                 <Select value={r.process} onValueChange={(v) => updateRow(index, { process: v })}>
-                  <SelectTrigger className="rounded-xl h-10 text-sm border-gray-200 flex-1">
+                  <SelectTrigger className="rounded-xl h-10 text-sm border-gray-200 w-full min-w-0 sm:w-auto sm:flex-1">
                     <SelectValue placeholder="เลือกกระบวนการ / เครื่องจักร" />
                   </SelectTrigger>
                   <SelectContent>
@@ -647,7 +647,7 @@ function MachineRatesSection() {
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  className="ml-auto sm:ml-0 flex h-9 w-9 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                   title="ลบ"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -793,10 +793,10 @@ function InspectorsSection() {
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-rose-50 border-rose-100">
+    <div className="bg-white rounded-3xl border border-gray-100 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-5 sm:mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-rose-50 border-rose-100">
             <Signature className="h-5 w-5 text-rose-600" />
           </div>
           <div>
@@ -831,14 +831,14 @@ function InspectorsSection() {
               <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5">
                 <button
                   onClick={() => openEditForm(insp)}
-                  className="flex h-5 w-5 items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-white transition-colors"
+                  className="flex h-7 w-7 sm:h-5 sm:w-5 items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-white transition-colors"
                   title="แก้ไข"
                 >
                   <Pencil className="h-3 w-3" />
                 </button>
                 <button
                   onClick={() => setDeleting(insp)}
-                  className="flex h-5 w-5 items-center justify-center rounded-md text-gray-400 hover:text-red-600 hover:bg-white transition-colors"
+                  className="flex h-7 w-7 sm:h-5 sm:w-5 items-center justify-center rounded-md text-gray-400 hover:text-red-600 hover:bg-white transition-colors"
                   title="ลบ"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -962,7 +962,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">System</p>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
           ตั้งค่าระบบ
           <Settings className="h-5 w-5 text-[#7B1A1A]" />
         </h1>

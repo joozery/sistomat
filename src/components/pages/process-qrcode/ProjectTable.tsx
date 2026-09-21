@@ -28,6 +28,14 @@ interface Project {
   project_id: string
   received_date: string
   due_date: string
+  progress?: {
+    status: 'none' | 'not_started' | 'in_progress' | 'done'
+    current_step: string
+    extra_steps: number
+    elapsed_seconds: number
+    jobs_total: number
+    jobs_done: number
+  }
 }
 
 interface MatchedJob {
@@ -67,13 +75,19 @@ function formatDate(dateString: string) {
   }
 }
 
-const processSteps = [
-  { step: 'QC & Inspection', bg: 'bg-[#7B1A1A] text-white' },
-  { step: 'LATHE 1 - กลึงชิ้นงาน', bg: 'bg-amber-600 text-white' },
-  { step: 'CNC 2 - กัดชิ้นงาน', bg: 'bg-purple-600 text-white' },
-  { step: 'CAM - ออกแบบทางเดิน Tool', bg: 'bg-blue-600 text-white' },
-  { step: 'MAT - เบิกวัตถุดิบ', bg: 'bg-emerald-600 text-white' },
-]
+function formatDuration(totalSeconds: number) {
+  if (!totalSeconds || totalSeconds < 1) return '-'
+  const minutes = Math.floor(totalSeconds / 60)
+  if (minutes < 1) return '< 1 นาที'
+  const hours = Math.floor(minutes / 60)
+  return hours > 0 ? `${hours} ชม. ${minutes % 60} นาที` : `${minutes} นาที`
+}
+
+const statusBadge = {
+  not_started: { label: 'ยังไม่เริ่ม', className: 'bg-gray-50 text-gray-600 border-gray-200', iconClass: 'text-gray-400' },
+  in_progress: { label: 'กำลังดำเนินการ', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', iconClass: 'text-emerald-600' },
+  done: { label: 'เสร็จสิ้น', className: 'bg-blue-50 text-blue-700 border-blue-200', iconClass: 'text-blue-600' },
+} as const
 
 export function ProjectTable({
   projects,
@@ -178,10 +192,83 @@ export function ProjectTable({
     }
   }
 
+  const openProject = (projectId: string) => {
+    // job-list/[parentId] itself retries with a "J" prefix if this
+    // level1 has no jobs, so just link verbatim — no need to guess here
+    const looksLikeLevel1 = /^J?[A-Z]-\d{3,4}$/.test(projectId)
+    router.push(looksLikeLevel1 ? `/dashboard/job-list/${projectId}` : `/dashboard/process-details/${projectId}`)
+  }
+
+  const matchedJobsFor = (projectId: string) =>
+    search
+      ? matchedJobs.filter((j) => j.level1 === projectId || j.level1 === `J${projectId}`)
+      : []
+
+  const renderStepBadge = (progress: Project['progress']) =>
+    progress?.current_step ? (
+      <Badge className="rounded-full px-3 py-0.5 text-xs font-semibold bg-[#7B1A1A] text-white max-w-full">
+        <span className="truncate">{progress.current_step}</span>
+        {progress.extra_steps > 0 && <span className="ml-1 opacity-75 shrink-0">+{progress.extra_steps}</span>}
+      </Badge>
+    ) : (
+      <span className="text-xs text-gray-400">-</span>
+    )
+
+  const renderStatusBadge = (progress: Project['progress']) => {
+    const badge = progress && progress.status !== 'none' ? statusBadge[progress.status] : null
+    if (!badge || !progress) return <span className="text-xs text-gray-400">-</span>
+    return (
+      <Badge variant="outline" className={`rounded-full gap-1 ${badge.className}`}>
+        <CheckCircle2 className={`h-3 w-3 ${badge.iconClass}`} />
+        {badge.label}
+        {progress.jobs_total > 1 && (
+          <span className="opacity-75">{progress.jobs_done}/{progress.jobs_total}</span>
+        )}
+      </Badge>
+    )
+  }
+
+  const renderMatchedJobs = (jobs: MatchedJob[], className: string) => (
+    <div className={className}>
+      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+        Job ที่ตรงกับคำค้นหา ({jobs.length})
+      </p>
+      <div className="space-y-1">
+        {jobs.map((job) => (
+          <div
+            key={job.job_code}
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs bg-white rounded-lg border border-amber-100 px-3 py-1.5"
+          >
+            <span className="font-mono font-semibold text-gray-800">{job.job_code}</span>
+            {job.drawing_name && (
+              <span className="text-gray-500 truncate flex-1 min-w-[6rem]">{job.drawing_name}</span>
+            )}
+            {job.quantity != null && (
+              <span className="text-gray-400 shrink-0">{job.quantity} ชิ้น</span>
+            )}
+            {job.status && (
+              <Badge variant="outline" className="rounded-full text-[10px] px-2 py-0 shrink-0">
+                {job.status}
+              </Badge>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2 shrink-0 ml-auto"
+              onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
+            >
+              ใบงาน <ExternalLink className="h-3 w-3" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
   return (
     <div className="rounded-xl border border-gray-200/70 bg-white overflow-hidden font-sans">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 bg-gray-50/40">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-6 sm:py-4 bg-gray-50/40">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
@@ -192,7 +279,7 @@ export function ProjectTable({
           />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           {!isReadOnly && selected.size > 0 && (
             <Button
               onClick={() => { setBulkDeleteError(''); setBulkDeleteOpen(true) }}
@@ -232,6 +319,87 @@ export function ProjectTable({
         </div>
       ) : (
         <>
+          {/* มือถือ: แสดงเป็นการ์ดแทนตาราง */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {projects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 h-32 text-gray-400">
+                <QrCode className="h-6 w-6 opacity-30" />
+                <p className="text-sm">ไม่พบโปรเจคที่ค้นหา</p>
+              </div>
+            ) : (
+              projects.map((project, index) => {
+                const jobsForProject = matchedJobsFor(project.project_id)
+                return (
+                  <div key={project.project_id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {!isReadOnly && (
+                          <input
+                            type="checkbox"
+                            checked={selected.has(project.project_id)}
+                            onChange={() => toggleSelectOne(project.project_id)}
+                            className="h-4 w-4 shrink-0 rounded border-gray-300 accent-[#7B1A1A] cursor-pointer"
+                          />
+                        )}
+                        <span className="text-xs font-bold text-gray-400 shrink-0">
+                          {String((currentPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}
+                        </span>
+                        <span className="font-mono font-bold text-sm text-gray-800 truncate">{project.project_id}</span>
+                      </div>
+                      <div className="shrink-0">{renderStatusBadge(project.progress)}</div>
+                    </div>
+
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[11px] text-gray-400 shrink-0">ขั้นตอนปัจจุบัน</span>
+                      {renderStepBadge(project.progress)}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-[10px] text-gray-400 mb-0.5">วันที่รับงาน</p>
+                        <p className="font-medium text-gray-700">{formatDate(project.received_date)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 mb-0.5">กำหนดส่งมอบ</p>
+                        <p className="font-medium text-gray-700">{formatDate(project.due_date)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-400 mb-0.5">ระยะเวลาใช้งาน</p>
+                        <p className="font-medium text-gray-700">{formatDuration(project.progress?.elapsed_seconds ?? 0)}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-9 rounded-full border-[#7B1A1A]/30 text-[#7B1A1A] hover:bg-red-50 hover:text-[#5C1212] text-xs font-semibold gap-1"
+                        onClick={() => openProject(project.project_id)}
+                      >
+                        <span>ดูรายละเอียด</span>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                      {!isReadOnly && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          onClick={() => setDeleteTarget(project.project_id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {jobsForProject.length > 0 &&
+                      renderMatchedJobs(jobsForProject, 'bg-amber-50/40 border-l-2 border-amber-300 rounded-r-lg px-3 py-2.5')}
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <div className="hidden md:block">
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow className="hover:bg-transparent border-gray-100">
@@ -267,12 +435,8 @@ export function ProjectTable({
                 </TableRow>
               ) : (
                 projects.map((project, index) => {
-                  const stepObj = processSteps[index % processSteps.length]
-                  const jobsForProject = search
-                    ? matchedJobs.filter(
-                        (j) => j.level1 === project.project_id || j.level1 === `J${project.project_id}`
-                      )
-                    : []
+                  const progress = project.progress
+                  const jobsForProject = matchedJobsFor(project.project_id)
 
                   return (
                   <Fragment key={project.project_id}>
@@ -300,9 +464,7 @@ export function ProjectTable({
                       </TableCell>
 
                       <TableCell>
-                        <Badge className={`rounded-full px-3 py-0.5 text-xs font-semibold ${stepObj.bg}`}>
-                          {stepObj.step}
-                        </Badge>
+                        {renderStepBadge(progress)}
                       </TableCell>
 
                       <TableCell className="text-xs text-gray-600 font-medium">
@@ -315,7 +477,7 @@ export function ProjectTable({
                       <TableCell className="text-xs text-gray-500">
                         <span className="inline-flex items-center gap-1 bg-gray-100 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium text-gray-700">
                           <Clock className="h-3 w-3 text-gray-400" />
-                          40 นาที
+                          {formatDuration(progress?.elapsed_seconds ?? 0)}
                         </span>
                       </TableCell>
 
@@ -324,10 +486,7 @@ export function ProjectTable({
                       </TableCell>
 
                       <TableCell>
-                        <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                          กำลังดำเนินการ
-                        </Badge>
+                        {renderStatusBadge(progress)}
                       </TableCell>
 
                       <TableCell className="text-center">
@@ -336,15 +495,7 @@ export function ProjectTable({
                             variant="ghost"
                             size="sm"
                             className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 hover:text-[#5C1212] text-xs font-semibold gap-1"
-                            onClick={() => {
-                              // job-list/[parentId] itself retries with a "J" prefix if this
-                              // level1 has no jobs, so just link verbatim — no need to guess here
-                              const looksLikeLevel1 = /^J?[A-Z]-\d{3,4}$/.test(project.project_id)
-                              const href = looksLikeLevel1
-                                ? `/dashboard/job-list/${project.project_id}`
-                                : `/dashboard/process-details/${project.project_id}`
-                              router.push(href)
-                            }}
+                            onClick={() => openProject(project.project_id)}
                           >
                             <span>ดูรายละเอียด</span>
                             <ExternalLink className="h-3.5 w-3.5" />
@@ -366,38 +517,7 @@ export function ProjectTable({
                     {jobsForProject.length > 0 && (
                       <TableRow className="hover:bg-transparent">
                         <TableCell colSpan={9} className="bg-amber-50/40 border-l-2 border-amber-300 px-6 py-2.5">
-                          <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
-                            Job ที่ตรงกับคำค้นหา ({jobsForProject.length})
-                          </p>
-                          <div className="space-y-1">
-                            {jobsForProject.map((job) => (
-                              <div
-                                key={job.job_code}
-                                className="flex items-center gap-3 text-xs bg-white rounded-lg border border-amber-100 px-3 py-1.5"
-                              >
-                                <span className="font-mono font-semibold text-gray-800">{job.job_code}</span>
-                                {job.drawing_name && (
-                                  <span className="text-gray-500 truncate flex-1">{job.drawing_name}</span>
-                                )}
-                                {job.quantity != null && (
-                                  <span className="text-gray-400 shrink-0">{job.quantity} ชิ้น</span>
-                                )}
-                                {job.status && (
-                                  <Badge variant="outline" className="rounded-full text-[10px] px-2 py-0 shrink-0">
-                                    {job.status}
-                                  </Badge>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-6 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2 shrink-0"
-                                  onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
-                                >
-                                  ใบงาน <ExternalLink className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
+                          {renderMatchedJobs(jobsForProject, '')}
                         </TableCell>
                       </TableRow>
                     )}
@@ -407,9 +527,10 @@ export function ProjectTable({
               )}
             </TableBody>
           </Table>
+          </div>
 
           {/* Pagination */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-gray-100 bg-gray-50/40 px-6 py-3.5 gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-gray-100 bg-gray-50/40 px-4 py-3 sm:px-6 sm:py-3.5 gap-3">
             <p className="text-xs text-gray-500">
               แสดงรายการที่ <span className="font-bold text-gray-800">{(currentPage - 1) * itemsPerPage + 1}</span>–
               <span className="font-bold text-gray-800">{Math.min(currentPage * itemsPerPage, filteredCount)}</span> จากทั้งหมด{' '}
@@ -427,12 +548,13 @@ export function ProjectTable({
                 >
                   ก่อนหน้า
                 </Button>
+                <span className="sm:hidden px-2 text-xs text-gray-500">หน้า {currentPage}/{totalPages}</span>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                   <Button
                     key={p}
                     variant={currentPage === p ? 'default' : 'outline'}
                     size="sm"
-                    className={`w-8 h-8 rounded-xl text-xs ${
+                    className={`hidden sm:inline-flex w-8 h-8 rounded-xl text-xs ${
                       currentPage === p ? 'bg-[#7B1A1A] hover:bg-[#5C1212] text-white border-none' : ''
                     }`}
                     onClick={() => onPageChange(p)}

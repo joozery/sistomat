@@ -364,7 +364,7 @@ export default function JobListPage() {
       </div>
 
       {/* Header */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm/50 p-6">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm/50 p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -372,11 +372,11 @@ export default function JobListPage() {
                 <Layers className="h-3 w-3" /> JOB HIERARCHY
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-800 font-mono">{parentId}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800 font-mono break-all">{parentId}</h1>
             <p className="text-xs text-gray-400 mt-1">รายการงานทั้งหมดภายใต้โปรเจคหลักนี้</p>
           </div>
 
-          <div className="flex flex-wrap gap-2.5">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2.5">
             <div className="flex items-center gap-2 rounded-xl px-3.5 py-2 bg-gray-50 border border-gray-100">
               <Layers className="h-4 w-4 text-blue-500" />
               <div>
@@ -391,7 +391,7 @@ export default function JobListPage() {
                 <p className="text-xs font-bold text-gray-800">{jobs.length} รายการ · {totalQty} ชิ้น</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-xl px-3.5 py-2 bg-emerald-50/60 border border-emerald-100">
+            <div className="col-span-2 sm:col-auto flex items-center gap-2 rounded-xl px-3.5 py-2 bg-emerald-50/60 border border-emerald-100">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <div>
                 <p className="text-[10px] text-emerald-600/70 font-medium">เสร็จแล้ว</p>
@@ -432,7 +432,7 @@ export default function JobListPage() {
                 return (
                   <div key={level2Code}>
                     {/* Level 2 row */}
-                    <div className="flex items-center gap-4 px-6 py-3 hover:bg-gray-50/70 transition-colors group">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4 px-3 py-3 sm:px-6 hover:bg-gray-50/70 transition-colors group">
                       {/* Expand toggle */}
                       <button
                         onClick={() => toggle(level2Code)}
@@ -444,12 +444,12 @@ export default function JobListPage() {
                       </button>
 
                       {/* Code */}
-                      <div className="w-48 shrink-0">
-                        <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
+                      <div className="min-w-0 flex-1 sm:flex-none sm:w-48 sm:shrink-0">
+                        <span className="font-mono font-bold text-sm break-all text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                           {level2Code}
                         </span>
                         {singleJob?.drawing_name && (
-                          <p className="text-[11px] text-gray-400 truncate mt-0.5 max-w-[180px]">{singleJob.drawing_name}</p>
+                          <p className="text-[11px] text-gray-400 truncate mt-0.5 sm:max-w-[180px]">{singleJob.drawing_name}</p>
                         )}
                       </div>
 
@@ -514,7 +514,7 @@ export default function JobListPage() {
                       </div>
 
                       {/* Action */}
-                      <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                      <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0">
                         {saleClosed ? (
                           canCloseSale ? (
                             <Button
@@ -611,7 +611,7 @@ export default function JobListPage() {
                     {isOpen && hasLevel3 && (
                       <div className="bg-gray-50/40 border-t border-gray-100">
                         {/* Sub-header */}
-                        <div className="grid grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                        <div className="hidden md:grid grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                           <span></span>
                           <span>BU Code</span>
                           <span>ชื่อแบบ</span>
@@ -624,44 +624,50 @@ export default function JobListPage() {
                         {items.map((job, idx) => (
                           <div
                             key={job.job_code}
-                            className={`grid grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 items-center ${
+                            className={`flex flex-col gap-2.5 px-4 py-3 md:grid md:grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] md:gap-4 md:px-12 md:py-2 md:items-center ${
                               idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                             } hover:bg-red-50/20 transition-colors`}
                           >
-                            {/* Thumbnail */}
-                            <JobThumbnail
-                              job={job}
-                              size={48}
-                              isReadOnly={!canViewFile}
-                              onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
-                            />
-                            <span className="font-mono text-xs font-semibold text-gray-700">
-                              {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
-                            </span>
-                            <span className="text-xs text-gray-500 truncate">{job.drawing_name}</span>
-                            <div className="text-center">
-                              <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
-                              <span className="text-[10px] text-gray-400"> ชิ้น</span>
-                            </div>
-                            <div className="flex gap-1 flex-wrap">
-                              {job.processes.slice(0, 2).map((p, i) => (
-                                <span key={i} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                  {p.process}
-                                </span>
-                              ))}
-                              {job.coating && (
-                                <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded-full">
-                                  {job.coating}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] text-gray-500">{formatDate(job.due_date)}</span>
-                              <StatusChip
-                                status={job.status}
-                                currentProcessName={job.current_process_name}
-                                currentProcessActive={job.current_process_active}
+                            <div className="flex items-center gap-3 md:contents">
+                              {/* Thumbnail */}
+                              <JobThumbnail
+                                job={job}
+                                size={48}
+                                isReadOnly={!canViewFile}
+                                onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                               />
+                              <div className="min-w-0 flex-1 md:contents">
+                                <span className="block font-mono text-xs font-semibold text-gray-700 break-all md:break-normal">
+                                  {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
+                                </span>
+                                <span className="block text-xs text-gray-500 truncate">{job.drawing_name}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 md:contents">
+                              <div className="md:text-center">
+                                <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
+                                <span className="text-[10px] text-gray-400"> ชิ้น</span>
+                              </div>
+                              <div className="flex gap-1 flex-wrap">
+                                {job.processes.slice(0, 2).map((p, i) => (
+                                  <span key={i} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    {p.process}
+                                  </span>
+                                ))}
+                                {job.coating && (
+                                  <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded-full">
+                                    {job.coating}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[11px] text-gray-500">{formatDate(job.due_date)}</span>
+                                <StatusChip
+                                  status={job.status}
+                                  currentProcessName={job.current_process_name}
+                                  currentProcessActive={job.current_process_active}
+                                />
+                              </div>
                             </div>
                             <div className="flex items-center gap-1.5 justify-end">
                               {!isReadOnly && (
@@ -704,7 +710,7 @@ export default function JobListPage() {
                         {items.map((job, idx) => (
                           <div
                             key={job.job_code}
-                            className={`flex items-center gap-4 px-12 py-2 ${
+                            className={`flex flex-wrap items-center gap-x-3 gap-y-2 md:gap-4 px-4 py-3 md:px-12 md:py-2 ${
                               idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                             } hover:bg-red-50/20 transition-colors`}
                           >
@@ -714,10 +720,10 @@ export default function JobListPage() {
                               isReadOnly={!canViewFile}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
-                            <span className="font-mono text-xs font-semibold text-gray-700 w-40 shrink-0">
+                            <span className="font-mono text-xs font-semibold text-gray-700 md:w-40 md:shrink-0 break-all md:break-normal">
                               {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
                             </span>
-                            <span className="text-xs text-gray-500 flex-1 truncate">{job.drawing_name}</span>
+                            <span className="text-xs text-gray-500 flex-1 min-w-[8rem] truncate">{job.drawing_name}</span>
                             <StatusChip
                               status={job.status}
                               currentProcessName={job.current_process_name}
@@ -951,7 +957,7 @@ export default function JobListPage() {
             }
           }
         `}</style>
-        <div id="group-print-toolbar" className="sticky top-0 z-10 mb-5 flex items-center justify-between bg-[#1a1a2e] px-6 py-2.5 text-white">
+        <div id="group-print-toolbar" className="sticky top-0 z-10 mb-5 flex items-center justify-between gap-2 bg-[#1a1a2e] px-3 sm:px-6 py-2.5 text-white">
           <button
             type="button"
             onClick={() => setPrintPreviewGroup(null)}
@@ -959,7 +965,7 @@ export default function JobListPage() {
           >
             <ArrowLeft className="h-4 w-4" /> กลับ
           </button>
-          <div className="flex items-center gap-2.5">
+          <div className="hidden sm:flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo2.png" alt="Sistomat" className="h-8 w-auto" />
             <div className="font-bold text-indigo-100">ตัวอย่างก่อนปริ้น — {printPreviewGroup}</div>

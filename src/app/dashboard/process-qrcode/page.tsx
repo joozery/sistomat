@@ -14,6 +14,14 @@ interface Project {
   project_id: string
   received_date: string
   due_date: string
+  progress?: {
+    status: 'none' | 'not_started' | 'in_progress' | 'done'
+    current_step: string
+    extra_steps: number
+    elapsed_seconds: number
+    jobs_total: number
+    jobs_done: number
+  }
 }
 
 interface MatchedJob {
@@ -120,20 +128,20 @@ export default function ProcessQRCodePage() {
   return (
     <div className="space-y-6 font-sans">
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 shadow-sm/50">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm/50">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#7B1A1A] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
               <QrCode className="h-3 w-3" /> QR CODE PROCESS TRACKING
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">ติดตามกระบวนการด้วย QR Code</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">ติดตามกระบวนการด้วย QR Code</h1>
           <p className="mt-1 text-xs text-gray-500">
             สแกนและตรวจสอบสถานะการผลิต ระยะเวลาที่ใช้ และกำหนดส่งมอบแต่ละโปรเจค
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2.5">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2.5">
           <div className="flex items-center gap-2 rounded-xl px-3.5 py-2 bg-gray-50 border border-gray-100">
             <Activity className="h-4 w-4 text-purple-600" />
             <div>
@@ -160,8 +168,8 @@ export default function ProcessQRCodePage() {
         }`}
         onClick={() => scanInputRef.current?.focus()}
       >
-        <div className="flex items-center gap-5 px-6 py-5">
-          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${
+        <div className="flex items-center gap-3 sm:gap-5 px-4 py-4 sm:px-6 sm:py-5">
+          <div className={`flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${
             scanFlash ? 'bg-emerald-100' : 'bg-red-50'
           }`}>
             <ScanBarcode className={`h-7 w-7 transition-colors ${scanFlash ? 'text-emerald-600' : 'text-[#7B1A1A]'}`} />

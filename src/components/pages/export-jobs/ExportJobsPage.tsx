@@ -195,7 +195,7 @@ export function ExportJobsPage() {
   return (
     <div className="space-y-6 font-sans">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Export ตารางงาน</h1>
           <p className="text-sm text-gray-500 mt-0.5">เลือกตัวกรองแล้วดูตาราง หรือส่งออกเป็น Excel</p>
@@ -279,7 +279,7 @@ export function ExportJobsPage() {
 
       {/* Table */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 bg-[#fde047]">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 sm:px-5 py-3 bg-[#fde047]">
           <h2 className="text-base font-bold text-gray-900 tracking-wide">ตารางงาน</h2>
           {searched && (
             <span className="text-xs font-semibold text-gray-700">
@@ -291,7 +291,7 @@ export function ExportJobsPage() {
         {error && <p className="px-5 py-4 text-sm text-red-600">{error}</p>}
 
         {!error && rows.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+          <div className="flex flex-wrap gap-2 px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50/60">
             {processSummary.map((s) => (
               <span
                 key={s.process}
@@ -317,7 +317,7 @@ export function ExportJobsPage() {
             <table className="w-full min-w-max border-collapse" style={{ fontSize: '12px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#a5f3fc' }}>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-30">Job</th>
+                  <th className="sticky left-0 z-10 bg-[#a5f3fc] border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-30">Job</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-35">DWG</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-10">ลำดับ</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-25">กระบวนการ</th>
@@ -342,7 +342,7 @@ export function ExportJobsPage() {
                   const comparison = compareTime(r.target_time, r.elapsed_time, r.completed)
                   return (
                   <tr key={`${r.job_code}-${r.index}`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
-                    <td className="border border-slate-300 px-2 py-1.5 font-semibold text-slate-700">{r.job_code}</td>
+                    <td className={`sticky left-0 z-10 border border-slate-300 px-2 py-1.5 font-semibold text-slate-700 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>{r.job_code}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-slate-600">{r.dwg_name || '—'}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.index}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-slate-700">{r.process || '—'}</td>

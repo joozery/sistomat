@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { getEffectiveElapsedSeconds } from '@/lib/process-time'
+import { summarizeProjectProgress, type ProgressJob } from '@/lib/project-progress'
 import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET!
@@ -132,9 +133,31 @@ export async function GET(request: NextRequest) {
       .sort({ received_date: -1 })
       .toArray()
 
+    // รวมความคืบหน้าจากใบงานลูก (type: 'job') ด้วย query เดียว — level1 ของลูกอาจมี/ไม่มี prefix "J" ต่างจาก project_id
+    const idByLevel1 = new Map<string, string>()
+    for (const p of projects) {
+      const id = String(p.project_id ?? '')
+      if (!id) continue
+      idByLevel1.set(id, id)
+      idByLevel1.set(`J${id}`, id)
+    }
+    const children = idByLevel1.size === 0 ? [] : await db.collection('projects').find(
+      { type: 'job', level1: { $in: Array.from(idByLevel1.keys()) } },
+      { projection: { level1: 1, status: 1, processes: 1 } }
+    ).toArray()
+    const jobsByProject = new Map<string, ProgressJob[]>()
+    for (const child of children) {
+      const id = idByLevel1.get(String(child.level1))
+      if (!id) continue
+      const list = jobsByProject.get(id)
+      if (list) list.push(child as ProgressJob)
+      else jobsByProject.set(id, [child as ProgressJob])
+    }
+
     const serialized = projects.map((p) => ({
       ...p,
       _id: p._id.toString(),
+      progress: summarizeProjectProgress(jobsByProject.get(String(p.project_id)) ?? [p as ProgressJob]),
     }))
 
     return NextResponse.json(serialized)

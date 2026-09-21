@@ -99,7 +99,7 @@ export default function ActivityLogPage() {
     <div className="space-y-5 font-sans">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#7B1A1A] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
               <Activity className="h-3 w-3" /> ACTIVITY LOG
@@ -120,8 +120,8 @@ export default function ActivityLogPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm/50 p-4">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[140px]">
+        <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
+          <div className="col-span-2 sm:flex-1 sm:min-w-[140px]">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">ผู้ใช้</label>
             <div className="relative">
               <User className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
@@ -134,7 +134,7 @@ export default function ActivityLogPage() {
             </div>
           </div>
 
-          <div className="min-w-[140px]">
+          <div className="col-span-2 sm:col-auto sm:min-w-[140px]">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">ประเภท</label>
             <select
               value={filterAction}
@@ -148,39 +148,41 @@ export default function ActivityLogPage() {
             </select>
           </div>
 
-          <div className="min-w-[130px]">
+          <div className="min-w-0 sm:min-w-[130px]">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">จากวันที่</label>
             <Input
               type="date"
               value={filterFrom}
               onChange={(e) => setFilterFrom(e.target.value)}
-              className="h-8 text-xs rounded-lg border-gray-200"
+              className="h-8 min-w-0 text-xs rounded-lg border-gray-200"
             />
           </div>
 
-          <div className="min-w-[130px]">
+          <div className="min-w-0 sm:min-w-[130px]">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">ถึงวันที่</label>
             <Input
               type="date"
               value={filterTo}
               onChange={(e) => setFilterTo(e.target.value)}
-              className="h-8 text-xs rounded-lg border-gray-200"
+              className="h-8 min-w-0 text-xs rounded-lg border-gray-200"
             />
           </div>
 
-          <Button
-            onClick={() => loadLogs(1)}
-            className="h-8 gap-1.5 rounded-full text-xs bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 shadow-sm"
-          >
-            <Filter className="h-3.5 w-3.5" /> กรอง
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => { setFilterUser(''); setFilterAction(''); setFilterFrom(''); setFilterTo('') }}
-            className="h-8 gap-1.5 rounded-full text-xs border-gray-200 text-gray-500"
-          >
-            ล้าง
-          </Button>
+          <div className="col-span-2 flex gap-2 sm:contents">
+            <Button
+              onClick={() => loadLogs(1)}
+              className="h-8 flex-1 sm:flex-none gap-1.5 rounded-full text-xs bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 shadow-sm"
+            >
+              <Filter className="h-3.5 w-3.5" /> กรอง
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setFilterUser(''); setFilterAction(''); setFilterFrom(''); setFilterTo('') }}
+              className="h-8 flex-1 sm:flex-none gap-1.5 rounded-full text-xs border-gray-200 text-gray-500"
+            >
+              ล้าง
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -204,7 +206,7 @@ export default function ActivityLogPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm/50 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-gray-400" />
             <span className="text-sm font-semibold text-gray-700">
@@ -225,7 +227,31 @@ export default function ActivityLogPage() {
             <p className="text-sm font-medium">ไม่มีกิจกรรม</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* มือถือ: การ์ดต่อรายการ */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {logs.map((log) => (
+              <div key={log._id} className="px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-gray-500 font-mono">{formatDateTime(log.created_at)}</span>
+                  <ActionBadge action={log.action} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-gradient-to-br from-[#7B1A1A] to-[#9B3333] flex items-center justify-center text-white text-[9px] font-bold shrink-0">
+                    {log.username?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <p className="text-xs font-semibold text-gray-800 truncate">
+                    {log.username}
+                    {log.role && <span className="ml-1.5 text-[10px] font-normal text-gray-400">{log.role}</span>}
+                  </p>
+                </div>
+                {log.target && <p className="text-xs font-mono text-gray-700 break-all">{log.target}</p>}
+                {log.detail && <p className="text-xs text-gray-500 break-words">{log.detail}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50/60 border-b border-gray-100">
@@ -271,11 +297,12 @@ export default function ActivityLogPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/30">
+          <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 border-t border-gray-100 bg-gray-50/30">
             <Button
               variant="outline"
               size="sm"

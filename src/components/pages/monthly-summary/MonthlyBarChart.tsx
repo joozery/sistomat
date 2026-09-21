@@ -60,7 +60,7 @@ export function MonthlyBarChart({ months, year }: Props) {
 
   return (
     <Card className="rounded-xl border border-gray-100 bg-white p-2 shadow-none font-sans">
-      <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-gray-100 px-4">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center justify-between pb-2 border-b border-gray-100 px-4">
         <div>
           <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-[#7B1A1A]" />
@@ -80,7 +80,7 @@ export function MonthlyBarChart({ months, year }: Props) {
 
       <CardContent className="pt-4">
         {hasData ? (
-          <div className="h-72">
+          <div className="h-64 sm:h-72">
             <ChartBar data={barData} options={barOptions} />
           </div>
         ) : (
