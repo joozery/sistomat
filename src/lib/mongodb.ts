@@ -26,13 +26,10 @@ function createClientPromise(): Promise<MongoClient> {
 }
 
 export function getClientPromise(): Promise<MongoClient> {
-  if (process.env.NODE_ENV === 'development') {
-    if (!global._mongoClientPromise) {
-      global._mongoClientPromise = createClientPromise()
-    }
-    return global._mongoClientPromise
+  if (!global._mongoClientPromise) {
+    global._mongoClientPromise = createClientPromise()
   }
-  return createClientPromise()
+  return global._mongoClientPromise
 }
 
 // backward-compat default export
