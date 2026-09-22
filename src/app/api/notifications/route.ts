@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const db = client.db('sistomat')
     const collection = db.collection('notifications')
 
-    const items = await collection.find({}).sort({ created_at: -1 }).limit(50).toArray()
+    const items = await collection.find({ category: 'qc' }).sort({ created_at: -1 }).limit(50).toArray()
 
     const notifications = items.map((doc) => ({
       id: doc._id.toString(),
@@ -57,6 +57,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { type, category, title, description, link } = body
 
+    if (category !== 'qc') {
+      return NextResponse.json({ error: 'Only QC notifications are supported' }, { status: 400 })
+    }
+
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
@@ -66,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     const newDoc = {
       type: type || 'info',
-      category: category || 'system',
+      category: 'qc',
       title,
       description: description || '',
       read: false,
@@ -98,7 +102,7 @@ export async function PATCH(req: NextRequest) {
     const collection = db.collection('notifications')
 
     if (body.markAllRead) {
-      await collection.updateMany({ read: false }, { $set: { read: true } })
+      await collection.updateMany({ category: 'qc', read: false }, { $set: { read: true } })
       return NextResponse.json({ message: 'Marked all as read' })
     }
 
@@ -109,9 +113,9 @@ export async function PATCH(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let filter: Record<string, any> = {}
     if (ObjectId.isValid(body.id)) {
-      filter = { _id: new ObjectId(body.id) }
+      filter = { _id: new ObjectId(body.id), category: 'qc' }
     } else {
-      filter = { _id: body.id }
+      filter = { _id: body.id, category: 'qc' }
     }
 
     await collection.updateOne(filter, { $set: { read: Boolean(body.read) } })
@@ -142,9 +146,9 @@ export async function DELETE(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let filter: Record<string, any> = {}
     if (ObjectId.isValid(id)) {
-      filter = { _id: new ObjectId(id) }
+      filter = { _id: new ObjectId(id), category: 'qc' }
     } else {
-      filter = { _id: id }
+      filter = { _id: id, category: 'qc' }
     }
 
     await collection.deleteOne(filter)

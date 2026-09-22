@@ -11,7 +11,6 @@ import {
   Loader2,
   Pencil,
   Trash2,
-  Signature,
   Upload,
   Timer,
   Gauge,
@@ -22,18 +21,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useProcessOptions } from '@/lib/useProcessOptions'
-import { useInspectors, type Inspector } from '@/lib/useInspectors'
 import { useOvertimeThreshold } from '@/lib/useOvertimeThreshold'
 import { useMachineRates, type MachineRate } from '@/lib/useMachineRates'
 import { useQuotationHeader, type QuotationHeader } from '@/lib/useQuotationHeader'
 import { useStopReasons } from '@/lib/useStopReasons'
+import { QcSignaturesSection } from '@/components/pages/settings/QcSignaturesSection'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -688,273 +683,6 @@ function MachineRatesSection() {
   )
 }
 
-/* ── Inspectors & Signatures Manager ── */
-const emptyInspectorForm = { name: '', signature_url: '' }
-
-function InspectorsSection() {
-  const { inspectors, loading, refresh } = useInspectors()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [editing, setEditing] = useState<Inspector | null>(null)
-  const [form, setForm] = useState(emptyInspectorForm)
-  const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState('')
-
-  const [deleting, setDeleting] = useState<Inspector | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-
-  function openAddForm() {
-    setEditing(null)
-    setForm(emptyInspectorForm)
-    setFormError('')
-    setIsFormOpen(true)
-  }
-
-  function openEditForm(insp: Inspector) {
-    setEditing(insp)
-    setForm({ name: insp.name, signature_url: insp.signature_url ?? '' })
-    setFormError('')
-    setIsFormOpen(true)
-  }
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    setFormError('')
-    try {
-      const body = new FormData()
-      body.append('file', file)
-      const res = await fetch('/api/upload/signature', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
-        body,
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setFormError(data.message || 'อัปโหลดไม่สำเร็จ')
-        return
-      }
-      setForm((f) => ({ ...f, signature_url: data.publicUrl }))
-    } catch {
-      setFormError('เกิดข้อผิดพลาดในการอัปโหลด')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
-
-  async function handleSubmit() {
-    if (!form.name.trim()) {
-      setFormError('กรุณากรอกชื่อผู้ตรวจ')
-      return
-    }
-    setSaving(true)
-    setFormError('')
-    try {
-      const res = await fetch('/api/settings/inspectors', {
-        method: editing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify(
-          editing
-            ? { id: editing.id, name: form.name.trim(), signature_url: form.signature_url || null }
-            : { name: form.name.trim(), signature_url: form.signature_url || null }
-        ),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setFormError(data.error || 'บันทึกไม่สำเร็จ')
-        return
-      }
-      setIsFormOpen(false)
-      refresh()
-    } catch {
-      setFormError('เกิดข้อผิดพลาดในการเชื่อมต่อ')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleDelete() {
-    if (!deleting) return
-    setIsDeleting(true)
-    try {
-      await fetch(`/api/settings/inspectors?id=${deleting.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${getToken()}` },
-      })
-      setDeleting(null)
-      refresh()
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
-  return (
-    <div className="bg-white rounded-3xl border border-gray-100 p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-5 sm:mb-6">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-rose-50 border-rose-100">
-            <Signature className="h-5 w-5 text-rose-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-gray-800">ผู้ตรวจสอบ &amp; ลายเซ็น</h3>
-            <p className="text-xs text-gray-400">ใช้เลือกชื่อผู้ตรวจ/ผู้อนุมัติพร้อมลายเซ็นในใบ QC</p>
-          </div>
-        </div>
-        <Button
-          onClick={openAddForm}
-          size="sm"
-          className="gap-1.5 rounded-full h-8 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-3.5 text-xs font-semibold"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          เพิ่มผู้ตรวจ
-        </Button>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">กำลังโหลด...</span>
-        </div>
-      ) : inspectors.length === 0 ? (
-        <div className="py-8 text-center text-sm text-gray-400">ยังไม่มีผู้ตรวจ — กด &ldquo;เพิ่มผู้ตรวจ&rdquo; เพื่อเริ่มต้น</div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {inspectors.map((insp) => (
-            <div
-              key={insp.id}
-              className="relative flex flex-col items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-3 pt-3 pb-2.5"
-            >
-              <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5">
-                <button
-                  onClick={() => openEditForm(insp)}
-                  className="flex h-7 w-7 sm:h-5 sm:w-5 items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-white transition-colors"
-                  title="แก้ไข"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={() => setDeleting(insp)}
-                  className="flex h-7 w-7 sm:h-5 sm:w-5 items-center justify-center rounded-md text-gray-400 hover:text-red-600 hover:bg-white transition-colors"
-                  title="ลบ"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-
-              <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white border border-gray-100 overflow-hidden">
-                {insp.signature_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={insp.signature_url} alt={insp.name} className="max-h-14 max-w-full object-contain" />
-                ) : (
-                  <Signature className="h-5 w-5 text-gray-300" />
-                )}
-              </div>
-              <p className="text-xs font-semibold text-gray-700 text-center line-clamp-1">{insp.name}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Add / Edit Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'แก้ไขผู้ตรวจ' : 'เพิ่มผู้ตรวจ'}</DialogTitle>
-            <DialogDescription>ชื่อและลายเซ็นจะใช้เลือกในหน้าใบ QC ของทุกใบงาน</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="insp-name" className="text-xs font-semibold text-gray-700">ชื่อผู้ตรวจ</Label>
-              <Input
-                id="insp-name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="rounded-xl h-10 text-sm"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-gray-700">ลายเซ็น (รูปภาพ)</Label>
-              <div className="flex items-center gap-3">
-                <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg bg-gray-50 border border-gray-200 overflow-hidden">
-                  {form.signature_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={form.signature_url} alt="ลายเซ็น" className="max-h-16 max-w-full object-contain" />
-                  ) : (
-                    <Signature className="h-5 w-5 text-gray-300" />
-                  )}
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="insp-signature-file"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-1.5 rounded-xl h-9 text-xs font-semibold"
-                >
-                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {form.signature_url ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
-                </Button>
-              </div>
-            </div>
-
-            {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsFormOpen(false)} className="rounded-xl">
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={saving || uploading}
-              className="rounded-xl bg-[#7B1A1A] hover:bg-[#5C1212] text-white"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? 'บันทึก' : 'เพิ่มผู้ตรวจ'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirm Dialog */}
-      <Dialog open={!!deleting} onOpenChange={(o) => { if (!o) setDeleting(null) }}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>ยืนยันการลบผู้ตรวจ</DialogTitle>
-            <DialogDescription>
-              ต้องการลบ <span className="font-semibold text-gray-700">{deleting?.name}</span> ออกจากระบบ? การดำเนินการนี้ไม่สามารถย้อนกลับได้
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)} className="rounded-xl">
-              ยกเลิก
-            </Button>
-            <Button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="rounded-xl bg-red-600 hover:bg-red-700 text-white"
-            >
-              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'ลบ'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
 export default function SettingsPage() {
   return (
     <div className="space-y-6 font-sans">
@@ -1004,7 +732,7 @@ export default function SettingsPage() {
 
       <MachineRatesSection />
 
-      <InspectorsSection />
+      <QcSignaturesSection />
 
     </div>
   )

@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
+  const job = searchParams.get('job')?.trim()
   const status = searchParams.get('status')
   const processFilter = searchParams.get('process')
   const workerFilter = searchParams.get('worker')
@@ -84,6 +85,7 @@ export async function GET(req: NextRequest) {
       match.received_date = range
     }
     if (status) match.status = status
+    if (job) match.project_id = { $regex: job.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
 
     const projects = await db.collection<ProjectDoc>('projects')
       .find(match)

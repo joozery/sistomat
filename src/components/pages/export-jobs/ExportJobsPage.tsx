@@ -101,6 +101,7 @@ export function ExportJobsPage() {
 
   const [from, setFrom] = useState(() => searchParams.get('from') ?? '')
   const [to, setTo] = useState(() => searchParams.get('to') ?? '')
+  const [job, setJob] = useState('')
   const [status, setStatus] = useState('all')
   const [process, setProcess] = useState('all')
   const [worker, setWorker] = useState('all')
@@ -117,6 +118,7 @@ export function ExportJobsPage() {
       const params = new URLSearchParams()
       if (from) params.set('from', from)
       if (to) params.set('to', to)
+      if (job.trim()) params.set('job', job.trim())
       if (status !== 'all') params.set('status', status)
       if (process !== 'all') params.set('process', process)
       if (worker !== 'all') params.set('worker', worker)
@@ -133,7 +135,7 @@ export function ExportJobsPage() {
       setLoading(false)
       setSearched(true)
     }
-  }, [from, to, status, process, worker])
+  }, [from, to, job, status, process, worker])
 
   // เข้ามาจาก deep-link ที่มี from/to (เช่นจากหน้าสรุปรายเดือน) → ค้นหาให้เลยโดยไม่ต้องกดปุ่มเอง
   useEffect(() => {
@@ -144,6 +146,7 @@ export function ExportJobsPage() {
   const clearFilters = () => {
     setFrom('')
     setTo('')
+    setJob('')
     setStatus('all')
     setProcess('all')
     setWorker('all')
@@ -221,7 +224,18 @@ export function ExportJobsPage() {
 
       {/* Filters */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+          <div>
+            <label htmlFor="export-job-search" className="text-xs font-semibold text-gray-600 mb-1 block">เลข Job</label>
+            <Input
+              id="export-job-search"
+              value={job}
+              onChange={(e) => setJob(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') fetchRows() }}
+              placeholder="ค้นหาเลข Job"
+              className="h-9 text-xs"
+            />
+          </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">วันที่รับงาน (จาก)</label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 text-xs" />

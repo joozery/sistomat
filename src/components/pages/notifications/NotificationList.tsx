@@ -43,7 +43,7 @@ function getToken() {
 export function NotificationList({ onUnreadChange }: { onUnreadChange?: (count: number) => void }) {
   const [list, setList] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'machine'>('all')
+  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all')
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true)
@@ -129,7 +129,6 @@ export function NotificationList({ onUnreadChange }: { onUnreadChange?: (count: 
 
   const filteredList = list.filter((item) => {
     if (activeTab === 'unread') return !item.read
-    if (activeTab === 'machine') return item.category === 'machine' || item.category === 'qc'
     return true
   })
 
@@ -168,16 +167,6 @@ export function NotificationList({ onUnreadChange }: { onUnreadChange?: (count: 
             }`}
           >
             ยังไม่อ่าน ({unreadCount})
-          </button>
-          <button
-            onClick={() => setActiveTab('machine')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'machine'
-                ? 'bg-[#7B1A1A] text-white shadow-sm'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            เครื่องจักร & QC
           </button>
         </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight } from 'lucide-react'
+import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight, RefreshCw } from 'lucide-react'
 import { ProjectTable } from '@/components/pages/process-qrcode/ProjectTable'
 import { AddProjectDialog } from '@/components/pages/process-qrcode/AddProjectDialog'
 import { ImportExcelDialog } from '@/components/pages/process-qrcode/ImportExcelDialog'
@@ -21,6 +21,8 @@ interface Project {
     elapsed_seconds: number
     jobs_total: number
     jobs_done: number
+    active_steps?: { process: string; count: number }[]
+    active_jobs?: { job_code: string; drawing_name: string; job_note: string; process: string }[]
   }
 }
 
@@ -40,6 +42,7 @@ export default function ProcessQRCodePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [processFilter, setProcessFilter] = useState<string | null>(null)
   const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -114,14 +117,30 @@ export default function ProcessQRCodePage() {
 
   const normalize = (s: string) => s.toLowerCase().replace(/[-\s]/g, '')
   const matchedLevel1s = new Set(matchedJobs.map((j) => j.level1).filter((l): l is string => Boolean(l)))
+  const processCounts = new Map<string, number>()
+  for (const project of projects) {
+    for (const step of project.progress?.active_steps ?? []) {
+      processCounts.set(step.process, (processCounts.get(step.process) ?? 0) + step.count)
+    }
+  }
+  const processSummary = Array.from(processCounts, ([process, count]) => ({ process, count }))
+    .sort((a, b) => b.count - a.count || a.process.localeCompare(b.process, 'th'))
+  const maxProcessCount = processSummary[0]?.count ?? 1
 
   const filtered = projects.filter((p) => {
+    if (processFilter && !p.progress?.active_steps?.some((step) => step.process === processFilter)) return false
     if (!search) return true
     const term = normalize(search)
     if (normalize(p.project_id).includes(term)) return true
     // Excel-imported project_id IS the level1 code; dialog-created ones need a "J" prefix to match level1
     return matchedLevel1s.has(p.project_id) || matchedLevel1s.has(`J${p.project_id}`)
   })
+  const processJobs = processFilter
+    ? filtered.flatMap((project) => (project.progress?.active_jobs ?? [])
+      .filter((job) => job.process === processFilter)
+      .map((job) => ({ ...job, projectId: project.project_id })))
+      .sort((a, b) => a.job_code.localeCompare(b.job_code))
+    : []
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE))
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
@@ -153,7 +172,7 @@ export default function ProcessQRCodePage() {
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <div>
               <p className="text-[10px] text-emerald-600/80 font-medium">กำลังดำเนินการ</p>
-              <p className="text-xs font-bold text-emerald-700">{projects.length} รายการ</p>
+              <p className="text-xs font-bold text-emerald-700">{projects.filter((p) => p.progress?.status === 'in_progress').length} รายการ</p>
             </div>
           </div>
         </div>
@@ -214,6 +233,74 @@ export default function ProcessQRCodePage() {
           </div>
         </div>
       </div>
+
+      <section className="rounded-xl border border-gray-100 bg-white p-4 sm:p-6 shadow-sm" aria-label="สรุป Process ปัจจุบัน">
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+          <div>
+            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+              <Activity className="h-4 w-4 text-[#7B1A1A]" /> งานอยู่ที่ Process ไหน
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">นับ Job ย่อยตามขั้นตอนถัดไปที่ยังไม่เสร็จ กดการ์ดเพื่อดูใบงานใน Process นั้น</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {processFilter && (
+              <button type="button" onClick={() => { setProcessFilter(null); setCurrentPage(1) }}
+                className="text-xs font-semibold text-[#7B1A1A] hover:underline">แสดงทุก Process</button>
+            )}
+            <button type="button" onClick={() => { void fetchProjects() }} disabled={loading}
+              className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-[#7B1A1A] disabled:opacity-50">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> อัปเดต
+            </button>
+          </div>
+        </div>
+        {loading ? (
+          <p className="text-xs text-gray-400">กำลังโหลดข้อมูล Process...</p>
+        ) : processSummary.length === 0 ? (
+          <p className="text-xs text-gray-400">ยังไม่มี Job ที่ระบุ Process</p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
+            {processSummary.map(({ process, count }) => (
+              <button key={process} type="button" aria-pressed={processFilter === process}
+                onClick={() => { setProcessFilter(processFilter === process ? null : process); setCurrentPage(1) }}
+                className={`rounded-xl border p-3 text-left transition-colors ${processFilter === process
+                  ? 'border-[#7B1A1A] bg-red-50'
+                  : 'border-gray-100 bg-gray-50/60 hover:border-[#7B1A1A]/40 hover:bg-red-50/30'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs font-semibold text-gray-700 break-words">{process}</span>
+                  <span className="text-sm font-bold text-[#7B1A1A] shrink-0">{count}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-gray-200 mt-3 overflow-hidden">
+                  <div className="h-full rounded-full bg-[#7B1A1A]" style={{ width: `${count / maxProcessCount * 100}%` }} />
+                </div>
+                <span className="text-[10px] text-gray-400 mt-1 block">Job ย่อย</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {processFilter && !loading && (
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <h3 className="text-xs font-bold text-gray-700 mb-2">Job ย่อยใน {processFilter} ({processJobs.length})</h3>
+            {processJobs.length === 0 ? (
+              <p className="text-xs text-gray-400">ไม่พบ Job ย่อยที่ตรงกับตัวกรอง</p>
+            ) : (
+              <div className="max-h-80 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-2 pr-1">
+                {processJobs.map((job) => (
+                  <button key={`${job.projectId}:${job.job_code}`} type="button"
+                    onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2.5 text-left hover:border-[#7B1A1A]/40 hover:bg-red-50/40 transition-colors">
+                    <span className="min-w-0">
+                      <span className="block font-mono text-xs font-bold text-[#7B1A1A] truncate">{job.job_code}{job.job_note ? `-${job.job_note}` : ''}</span>
+                      <span className="block text-xs text-gray-600 truncate">{job.drawing_name || 'ไม่มีชื่อแบบ'}</span>
+                      <span className="block text-[10px] text-gray-400">โปรเจกต์ {job.projectId}</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-gray-400" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       <ProjectTable
         projects={paginated}

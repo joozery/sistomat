@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
     }
     const children = idByLevel1.size === 0 ? [] : await db.collection('projects').find(
       { type: 'job', level1: { $in: Array.from(idByLevel1.keys()) } },
-      { projection: { level1: 1, status: 1, processes: 1 } }
+      { projection: { project_id: 1, dwg_name: 1, job_note: 1, level1: 1, status: 1, processes: 1 } }
     ).toArray()
     const jobsByProject = new Map<string, ProgressJob[]>()
     for (const child of children) {

@@ -30,9 +30,11 @@ import {
   Trash2,
   AlertTriangle,
   Printer,
+  Pencil,
   LockKeyhole,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
+import { EditJobDialog } from '@/components/pages/job-list/EditJobDialog'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
 import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
@@ -218,6 +220,7 @@ export default function JobListPage() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [addOpen, setAddOpen] = useState(false)
+  const [editJob, setEditJob] = useState<Job | null>(null)
   const [preview, setPreview] = useState<{ url: string; name: string; attachments?: Attachment[] } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -568,6 +571,12 @@ export default function JobListPage() {
                           <>
                             {/* No BU → link directly to process-details */}
                             {!isReadOnly && (
+                              <Button size="sm" variant="ghost" onClick={() => setEditJob(singleJob)}
+                                className="h-8 rounded-full text-gray-500 hover:bg-gray-100 text-xs gap-1">
+                                <Pencil className="h-3.5 w-3.5" /> แก้ไข
+                              </Button>
+                            )}
+                            {!isReadOnly && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -671,6 +680,12 @@ export default function JobListPage() {
                             </div>
                             <div className="flex items-center gap-1.5 justify-end">
                               {!isReadOnly && (
+                                <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
+                                  className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2.5">
+                                  <Pencil className="h-3 w-3" /> แก้ไข
+                                </Button>
+                              )}
+                              {!isReadOnly && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -730,6 +745,12 @@ export default function JobListPage() {
                               currentProcessActive={job.current_process_active}
                             />
                             {!isReadOnly && (
+                              <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
+                                className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2.5">
+                                <Pencil className="h-3 w-3" /> แก้ไข
+                              </Button>
+                            )}
+                            {!isReadOnly && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -779,6 +800,10 @@ export default function JobListPage() {
         parentId={parentId}
         onSuccess={loadJobs}
       />
+
+      {editJob && (
+        <EditJobDialog key={editJob.job_code} job={editJob} onClose={() => setEditJob(null)} onSuccess={loadJobs} />
+      )}
 
       {preview && (
         <FilePreviewDialog

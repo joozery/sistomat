@@ -42,6 +42,7 @@ interface JobRowInput {
   jobCode: string
   level3: string
   level3Touched: boolean
+  jobNote: string
   quantity: string
 }
 
@@ -194,6 +195,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         jobCode: '',
         level3: '',
         level3Touched: false,
+        jobNote: '',
         quantity: '1',
       }))
     )
@@ -324,6 +326,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             job_code: fullJobCode,
+            job_note: r.jobNote.trim(),
             drawing_name: r.drawingName.trim(),
             quantity: Number(r.quantity) || 1,
             received_date: form.receivedDate,
@@ -591,7 +594,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                         />
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
                             <Hash className="h-3 w-3" /> หมายเลข JOB
@@ -636,6 +639,15 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                             value={r.level3}
                             onChange={(e) => updateRow(r.id, { level3: e.target.value, level3Touched: true })}
                             className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${!r.level3Touched && r.level3 ? 'text-emerald-700 bg-emerald-50/50' : ''}`}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-semibold text-gray-600">หมายเหตุ</Label>
+                          <Input
+                            placeholder="เช่น ตัดแมท"
+                            value={r.jobNote}
+                            onChange={(e) => updateRow(r.id, { jobNote: e.target.value })}
+                            className="rounded-lg h-9 text-sm border-gray-200"
                           />
                         </div>
                         <div className="space-y-1.5">

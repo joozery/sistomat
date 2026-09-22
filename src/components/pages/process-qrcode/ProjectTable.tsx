@@ -35,6 +35,7 @@ interface Project {
     elapsed_seconds: number
     jobs_total: number
     jobs_done: number
+    active_steps?: { process: string; count: number }[]
   }
 }
 
@@ -204,15 +205,25 @@ export function ProjectTable({
       ? matchedJobs.filter((j) => j.level1 === projectId || j.level1 === `J${projectId}`)
       : []
 
-  const renderStepBadge = (progress: Project['progress']) =>
-    progress?.current_step ? (
-      <Badge className="rounded-full px-3 py-0.5 text-xs font-semibold bg-[#7B1A1A] text-white max-w-full">
-        <span className="truncate">{progress.current_step}</span>
-        {progress.extra_steps > 0 && <span className="ml-1 opacity-75 shrink-0">+{progress.extra_steps}</span>}
-      </Badge>
-    ) : (
-      <span className="text-xs text-gray-400">-</span>
+  const renderStepBadge = (progress: Project['progress']) => {
+    const steps = progress?.active_steps?.length
+      ? progress.active_steps
+      : progress?.current_step ? [{ process: progress.current_step, count: 1 }] : []
+    if (steps.length === 0) return <span className="text-xs text-gray-400">-</span>
+    return (
+      <div className="flex flex-wrap gap-1 max-w-[260px]">
+        {steps.map((step, index) => (
+          <Badge key={step.process} variant="outline"
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold max-w-full ${index === 0
+              ? 'bg-[#7B1A1A] text-white border-[#7B1A1A]'
+              : 'bg-red-50 text-[#7B1A1A] border-red-100'}`}>
+            <span className="truncate">{step.process}</span>
+            {step.count > 1 && <span className="ml-1 shrink-0">×{step.count}</span>}
+          </Badge>
+        ))}
+      </div>
     )
+  }
 
   const renderStatusBadge = (progress: Project['progress']) => {
     const badge = progress && progress.status !== 'none' ? statusBadge[progress.status] : null

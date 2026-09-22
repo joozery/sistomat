@@ -17,6 +17,9 @@ function isProcessDone(proc: ProgressProcess): boolean {
 }
 
 export interface ProgressJob {
+  project_id?: string
+  dwg_name?: string
+  job_note?: string
   status?: string
   processes?: ProgressProcess[]
 }
@@ -28,6 +31,8 @@ export interface ProjectProgress {
   elapsed_seconds: number
   jobs_total: number
   jobs_done: number
+  active_steps: { process: string; count: number }[]
+  active_jobs: { job_code: string; drawing_name: string; job_note: string; process: string }[]
 }
 
 // สรุปความคืบหน้าจากใบงาน (หรือตัวโปรเจกต์เองถ้าไม่มีใบงานลูก)
@@ -41,6 +46,7 @@ export function summarizeProjectProgress(
   let started = 0
   let elapsedSeconds = 0
   const stepCounts = new Map<string, number>()
+  const activeJobs: ProjectProgress['active_jobs'] = []
 
   for (const job of jobs) {
     const processes = job.processes ?? []
@@ -55,10 +61,18 @@ export function summarizeProjectProgress(
       done++
       continue
     }
+    const name = (current.process ?? '').trim() || '-'
+    stepCounts.set(name, (stepCounts.get(name) ?? 0) + 1)
+    if (job.project_id) {
+      activeJobs.push({
+        job_code: job.project_id,
+        drawing_name: job.dwg_name ?? '',
+        job_note: job.job_note ?? '',
+        process: name,
+      })
+    }
     if (processes.some((proc) => proc.workers?.some((w) => w.start_time))) {
       started++
-      const name = (current.process ?? '').trim() || '-'
-      stepCounts.set(name, (stepCounts.get(name) ?? 0) + 1)
     }
   }
 
@@ -84,5 +98,8 @@ export function summarizeProjectProgress(
     elapsed_seconds: elapsedSeconds,
     jobs_total: total,
     jobs_done: done,
+    active_steps: Array.from(stepCounts, ([process, count]) => ({ process, count }))
+      .sort((a, b) => b.count - a.count),
+    active_jobs: activeJobs,
   }
 }

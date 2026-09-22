@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Printer, ArrowLeft, Save, Loader2, CheckCircle2, Copy, Check } from 'lucide-react'
-import { useInspectors } from '@/lib/useInspectors'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -56,83 +55,12 @@ function emptyQcData(): QcData {
   }
 }
 
-function SignaturePickerPopover({
-  inspectors,
-  onPick,
-  onClear,
-  onClose,
-}: {
-  inspectors: { id: string; name: string; signature_url: string | null }[]
-  onPick: (name: string) => void
-  onClear: () => void
-  onClose: () => void
-}) {
-  return (
-    <>
-      <div className="no-print" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
-      <div
-        className="no-print"
-        style={{
-          position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-          zIndex: 201, marginTop: '4px', width: '180px',
-          backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '8px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: '6px',
-        }}
-      >
-        {inspectors.length === 0 ? (
-          <p style={{ fontSize: '10px', color: '#999', padding: '8px', textAlign: 'center' }}>
-            ยังไม่มีลายเซ็น — ไปเพิ่มที่หน้าตั้งค่าระบบ
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '220px', overflowY: 'auto' }}>
-            {inspectors.map((i) => (
-              <button
-                key={i.id}
-                onClick={() => onPick(i.name)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 6px',
-                  border: 'none', borderRadius: '6px', background: 'transparent',
-                  cursor: 'pointer', textAlign: 'left', fontFamily: 'Arial, sans-serif',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <div style={{ width: '48px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', border: '1px solid #eee', borderRadius: '4px', flexShrink: 0 }}>
-                  {i.signature_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={i.signature_url} alt={i.name} style={{ maxHeight: '20px', maxWidth: '44px', objectFit: 'contain' }} />
-                  ) : (
-                    <span style={{ fontSize: '8px', color: '#ccc' }}>ไม่มีรูป</span>
-                  )}
-                </div>
-                <span style={{ fontSize: '10px', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <div style={{ borderTop: '1px solid #eee', marginTop: '4px', paddingTop: '4px' }}>
-          <button
-            onClick={onClear}
-            style={{
-              width: '100%', border: 'none', background: 'transparent', cursor: 'pointer',
-              fontSize: '10px', color: '#c00', padding: '5px 6px', textAlign: 'center', fontFamily: 'Arial, sans-serif',
-            }}
-          >
-            ล้างลายเซ็น
-          </button>
-        </div>
-      </div>
-    </>
-  )
-}
-
 export default function QcSheetPage() {
   const params = useParams()
   const router = useRouter()
   const id = params?.id as string
 
-  const { inspectors } = useInspectors()
-  const [signaturePicker, setSignaturePicker] = useState<'inspector' | 'approver' | null>(null)
+  const [fixedSignatures, setFixedSignatures] = useState({ qc_signature_url: '', approve_signature_url: '' })
 
   const [loading, setLoading] = useState(true)
   const [found, setFound] = useState(false)
@@ -186,6 +114,13 @@ export default function QcSheetPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  useEffect(() => {
+    fetch('/api/settings/qc-signatures', { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data) setFixedSignatures(data) })
+      .catch(() => {})
+  }, [])
+
   // Auto-save หลังผู้ใช้หยุดแก้ไขชั่วครู่ และยกเลิก request เก่าถ้ามีการแก้ต่อทันที
   useEffect(() => {
     if (loading || !found) return
@@ -220,21 +155,6 @@ export default function QcSheetPage() {
     }
   }, [qc, loading, found, id])
 
-  // ถ้ามีผู้ตรวจตั้งค่าไว้แค่คนเดียว ไม่ต้องให้กดเลือกเอง — ใส่ลายเซ็นให้อัตโนมัติ
-  const autoFilledRef = useRef(false)
-  useEffect(() => {
-    if (loading || autoFilledRef.current || inspectors.length !== 1) return
-    autoFilledRef.current = true
-    const only = inspectors[0]
-    setQc((prev) => ({
-      ...prev,
-      inspector: prev.inspector || only.name,
-      inspector_signature: prev.inspector_signature || (only.signature_url ?? ''),
-      approver: prev.approver || only.name,
-      approver_signature: prev.approver_signature || (only.signature_url ?? ''),
-    }))
-  }, [loading, inspectors])
-
   function updatePoint(pt: string, patch: Partial<PointRow>) {
     setQc((prev) => ({ ...prev, points: { ...prev.points, [pt]: { ...prev.points[pt], ...patch } } }))
     setSaved(false)
@@ -243,7 +163,6 @@ export default function QcSheetPage() {
   // กริดตาราง QC — เก็บ ref ของ input แต่ละช่องเทียบตำแหน่ง [แถว, คอลัมน์]
   // เพื่อให้กดลูกศรเลื่อนโฟกัสไปช่องข้างเคียงได้ (คอลัมน์: 0=SPEC, 1-10=ค่าที่วัด, 11=EQUIPMENT SYMBOL)
   const gridRefs = useRef<Map<string, HTMLInputElement>>(new Map())
-  const TOTAL_COLS = VALUE_COLS + 2 // 0 = SPEC, 1..10 = values, 11 = EQUIPMENT SYMBOL
 
   function setGridRef(rowIdx: number, colIdx: number) {
     return (el: HTMLInputElement | null) => {
@@ -253,51 +172,51 @@ export default function QcSheetPage() {
     }
   }
 
-  function focusGridCell(rowIdx: number, colIdx: number) {
+  function focusGridCell(rowIdx: number, colIdx: number, caret?: 'start' | 'end' | number) {
     // ค้นหาช่อง input ผ่าน data-qc-cell ใน DOM ตรงๆ (ชัวร์ที่สุด ไม่หลุดตาม lifecycle ของ React)
     const el = document.querySelector<HTMLInputElement>(`input[data-qc-cell="${rowIdx}:${colIdx}"]`)
       ?? gridRefs.current.get(`${rowIdx}:${colIdx}`)
     if (el) {
       el.focus()
-      try { el.select() } catch {}
+      if (caret !== undefined) {
+        const position = caret === 'start' ? 0 : caret === 'end' ? el.value.length : Math.min(caret, el.value.length)
+        el.setSelectionRange(position, position)
+      }
       el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
     }
+    return Boolean(el)
   }
 
   function handleGridKeyDown(e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number) {
-    const isDown = e.key === 'ArrowDown' || e.code === 'ArrowDown' || e.keyCode === 40
-    const isUp = e.key === 'ArrowUp' || e.code === 'ArrowUp' || e.keyCode === 38
-    const isRight = e.key === 'ArrowRight' || e.code === 'ArrowRight' || e.keyCode === 39
-    const isLeft = e.key === 'ArrowLeft' || e.code === 'ArrowLeft' || e.keyCode === 37
+    if (e.nativeEvent.isComposing || e.ctrlKey || e.metaKey || e.altKey) return
+
+    const input = e.currentTarget
+    const start = input.selectionStart ?? 0
+    const end = input.selectionEnd ?? 0
+    if (e.key.startsWith('Arrow') && !e.shiftKey && start === end) {
+      let moved = false
+      if (e.key === 'ArrowLeft' && start === 0) {
+        moved = colIdx > 0
+          ? focusGridCell(rowIdx, colIdx - 1, 'end')
+          : focusGridCell(rowIdx - 1, VALUE_COLS + 1, 'end')
+      } else if (e.key === 'ArrowRight' && end === input.value.length) {
+        moved = focusGridCell(rowIdx, colIdx + 1, 'start') || focusGridCell(rowIdx + 1, 0, 'start')
+      } else if (e.key === 'ArrowUp') {
+        moved = focusGridCell(rowIdx - 1, colIdx, start)
+      } else if (e.key === 'ArrowDown') {
+        moved = focusGridCell(rowIdx + 1, colIdx, start)
+      }
+      if (moved) {
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+    }
+
     const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13
     const isTab = e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9
 
-    if (isDown) {
-      e.preventDefault()
-      e.stopPropagation()
-      focusGridCell(rowIdx + 1, colIdx)
-    } else if (isUp) {
-      e.preventDefault()
-      e.stopPropagation()
-      focusGridCell(rowIdx - 1, colIdx)
-    } else if (isRight) {
-      e.preventDefault()
-      e.stopPropagation()
-      const nextInRow = document.querySelector<HTMLInputElement>(`input[data-qc-cell="${rowIdx}:${colIdx + 1}"]`)
-      if (nextInRow) {
-        focusGridCell(rowIdx, colIdx + 1)
-      } else {
-        focusGridCell(rowIdx + 1, 0)
-      }
-    } else if (isLeft) {
-      e.preventDefault()
-      e.stopPropagation()
-      if (colIdx > 0) {
-        focusGridCell(rowIdx, colIdx - 1)
-      } else {
-        focusGridCell(rowIdx - 1, VALUE_COLS + 1)
-      }
-    } else if (isEnter) {
+    if (isEnter) {
       e.preventDefault()
       e.stopPropagation()
       if (e.shiftKey) {
@@ -356,25 +275,6 @@ export default function QcSheetPage() {
       return { ...prev, textColors: colors }
     })
     setSaved(false)
-  }
-
-  function pickInspector(field: 'inspector' | 'approver', name: string) {
-    const found = inspectors.find((i) => i.name === name)
-    patchQc(
-      field === 'inspector'
-        ? { inspector: name, inspector_signature: found?.signature_url ?? '' }
-        : { approver: name, approver_signature: found?.signature_url ?? '' }
-    )
-    setSignaturePicker(null)
-  }
-
-  function clearSignature(field: 'inspector' | 'approver') {
-    patchQc(
-      field === 'inspector'
-        ? { inspector: '', inspector_signature: '' }
-        : { approver: '', approver_signature: '' }
-    )
-    setSignaturePicker(null)
   }
 
   // ป้ายชื่อแถวถัดไปแบบ spreadsheet — วิ่งได้ไม่จำกัด: A..Z แล้วต่อด้วย AA, AB, ..., AZ, BA, ...
@@ -701,9 +601,8 @@ export default function QcSheetPage() {
                       onKeyDown={(e) => handleGridKeyDown(e, rowIdx, 0)}
                       value={qc.points[pt]?.spec ?? ''}
                       onChange={(e) => updatePoint(pt, { spec: e.target.value })}
-                      onFocus={(e) => {
+                      onFocus={() => {
                         setSelectedTextField({ key: `spec:${pt}`, label: `SPEC ${pt}` })
-                        e.target.select()
                       }}
                       style={{ ...cellInput, textAlign: 'left', paddingLeft: '6px', color: qc.textColors[`spec:${pt}`] ?? '#000000' }}
                     />
@@ -717,9 +616,8 @@ export default function QcSheetPage() {
                         onKeyDown={(e) => handleGridKeyDown(e, rowIdx, colIdx + 1)}
                         value={v}
                         onChange={(e) => updatePointValue(pt, colIdx, e.target.value)}
-                        onFocus={(e) => {
+                        onFocus={() => {
                           setSelectedTextField({ key: `value:${pt}:${colIdx}`, label: `${pt}-${colIdx + 1}` })
-                          e.target.select()
                         }}
                         style={{ ...cellInput, color: qc.textColors[`value:${pt}:${colIdx}`] ?? '#000000' }}
                       />
@@ -733,9 +631,8 @@ export default function QcSheetPage() {
                       onKeyDown={(e) => handleGridKeyDown(e, rowIdx, VALUE_COLS + 1)}
                       value={qc.points[pt]?.equipment_symbol ?? ''}
                       onChange={(e) => updatePoint(pt, { equipment_symbol: e.target.value })}
-                      onFocus={(e) => {
+                      onFocus={() => {
                         setSelectedTextField({ key: `equipment_symbol:${pt}`, label: `EQUIPMENT SYMBOL ${pt}` })
-                        e.target.select()
                       }}
                       style={{ ...cellInput, color: qc.textColors[`equipment_symbol:${pt}`] ?? '#000000' }}
                     />
@@ -825,7 +722,7 @@ export default function QcSheetPage() {
             </tbody>
           </table>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '6px' }}>
+          <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', marginTop: '6px' }}>
             <tbody>
               <tr>
                 <td style={td({ verticalAlign: 'top', padding: '6px', width: '40%', fontSize: '9px' })}>
@@ -837,57 +734,27 @@ export default function QcSheetPage() {
                     </div>
                   ))}
                 </td>
-                <td style={td({ textAlign: 'center', height: '150px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px', position: 'relative' })}>
-                  <div
-                    onClick={() => setSignaturePicker((p) => (p === 'inspector' ? null : 'inspector'))}
-                    style={{ height: '95px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', cursor: 'pointer' }}
-                    title="คลิกเพื่อเปลี่ยนลายเซ็น"
-                  >
-                    {qc.inspector_signature ? (
+                <td style={td({ width: '30%', textAlign: 'center', height: '150px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px', position: 'relative' })}>
+                  <div style={{ width: '100%', height: '95px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '4px', boxSizing: 'border-box' }}>
+                    {fixedSignatures.qc_signature_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={qc.inspector_signature} alt="ลายเซ็นผู้ตรวจ" style={{ maxHeight: '50px', maxWidth: '70%', objectFit: 'contain' }} />
+                      <img src={fixedSignatures.qc_signature_url} alt="ลายเซ็น QC" style={{ display: 'block', maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
                     ) : (
-                      <span className="no-print" style={{ fontSize: '9px', color: '#aaa', border: '1px dashed #ccc', borderRadius: '4px', padding: '4px 8px' }}>
-                        คลิกเลือกลายเซ็น
-                      </span>
+                      <span className="no-print" style={{ fontSize: '9px', color: '#aaa' }}>ตั้งค่าลายเซ็น QC ในหน้าตั้งค่า</span>
                     )}
                   </div>
                   <strong style={{ display: 'block', marginTop: '4px' }}>INSPECTER / QC</strong>
-
-                  {signaturePicker === 'inspector' && (
-                    <SignaturePickerPopover
-                      inspectors={inspectors}
-                      onPick={(name) => pickInspector('inspector', name)}
-                      onClear={() => clearSignature('inspector')}
-                      onClose={() => setSignaturePicker(null)}
-                    />
-                  )}
                 </td>
-                <td style={td({ textAlign: 'center', height: '150px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px', position: 'relative' })}>
-                  <div
-                    onClick={() => setSignaturePicker((p) => (p === 'approver' ? null : 'approver'))}
-                    style={{ height: '95px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', cursor: 'pointer' }}
-                    title="คลิกเพื่อเปลี่ยนลายเซ็น"
-                  >
-                    {qc.approver_signature ? (
+                <td style={td({ width: '30%', textAlign: 'center', height: '150px', verticalAlign: 'bottom', padding: '6px', fontSize: '10px', position: 'relative' })}>
+                  <div style={{ width: '100%', height: '95px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '4px', boxSizing: 'border-box' }}>
+                    {fixedSignatures.approve_signature_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={qc.approver_signature} alt="ลายเซ็นผู้อนุมัติ" style={{ maxHeight: '90px', maxWidth: '100%', objectFit: 'contain' }} />
+                      <img src={fixedSignatures.approve_signature_url} alt="ลายเซ็น Approve" style={{ display: 'block', maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
                     ) : (
-                      <span className="no-print" style={{ fontSize: '9px', color: '#aaa', border: '1px dashed #ccc', borderRadius: '4px', padding: '4px 8px' }}>
-                        คลิกเลือกลายเซ็น
-                      </span>
+                      <span className="no-print" style={{ fontSize: '9px', color: '#aaa' }}>ตั้งค่าลายเซ็น Approve ในหน้าตั้งค่า</span>
                     )}
                   </div>
                   <strong style={{ display: 'block', marginTop: '4px' }}>APPROVE</strong>
-
-                  {signaturePicker === 'approver' && (
-                    <SignaturePickerPopover
-                      inspectors={inspectors}
-                      onPick={(name) => pickInspector('approver', name)}
-                      onClear={() => clearSignature('approver')}
-                      onClose={() => setSignaturePicker(null)}
-                    />
-                  )}
                 </td>
               </tr>
             </tbody>
