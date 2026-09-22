@@ -60,6 +60,13 @@ function formatDuration(seconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+function formatDate(value: string | null): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 function normalizeDamageCost(value: number | string | null | undefined): number {
   const amount = Number(value)
   return Number.isFinite(amount) && amount >= 0 ? amount : 0
@@ -171,6 +178,8 @@ export function ExportJobsPage() {
       const base: Record<string, string | number> = {
         'Job': r.job_code,
         'DWG': r.dwg_name,
+        'วันรับงาน': formatDate(r.received_date),
+        'วันกำหนดส่งมอบ': formatDate(r.due_date),
         'ลำดับ': r.index,
         'กระบวนการ': r.process,
         'เป้าหมาย (HH:MM)': normalizeTargetTime(r.target_time),
@@ -319,6 +328,8 @@ export function ExportJobsPage() {
                 <tr style={{ backgroundColor: '#a5f3fc' }}>
                   <th className="sticky left-0 z-10 bg-[#a5f3fc] border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-30">Job</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-35">DWG</th>
+                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-24">วันรับงาน</th>
+                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-24">วันกำหนดส่งมอบ</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-10">ลำดับ</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-25">กระบวนการ</th>
                   <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16 leading-snug">
@@ -344,6 +355,8 @@ export function ExportJobsPage() {
                   <tr key={`${r.job_code}-${r.index}`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
                     <td className={`sticky left-0 z-10 border border-slate-300 px-2 py-1.5 font-semibold text-slate-700 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>{r.job_code}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-slate-600">{r.dwg_name || '—'}</td>
+                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{formatDate(r.received_date)}</td>
+                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{formatDate(r.due_date)}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.index}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-slate-700">{r.process || '—'}</td>
                     <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{normalizeTargetTime(r.target_time)}</td>
