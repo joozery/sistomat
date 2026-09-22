@@ -20,15 +20,25 @@ interface RealtimeEvent {
   status: 'running' | 'idle' | 'completed'
 }
 
+// รองรับ "YYYY-MM-DD HH:MM:SS" (format ใหม่) และ "HH:MM" / "HH:MM:SS" (format เก่า)
+function parseStartTime(startTime: string, now: number): number {
+  if (/^\d{4}-\d{2}-\d{2}/.test(startTime)) {
+    return new Date(startTime.replace(' ', 'T')).getTime()
+  }
+  const todayStr = new Date(now).toISOString().split('T')[0]
+  const parts = startTime.split(':')
+  const normalized = parts.length === 2 ? `${startTime}:00` : startTime
+  let ms = new Date(`${todayStr}T${normalized}`).getTime()
+  if (ms > now + 60000) ms = new Date(`${new Date(now - 86400000).toISOString().split('T')[0]}T${normalized}`).getTime()
+  return ms
+}
+
 function elapsed(startTime: string): string {
   if (!startTime) return '—'
   try {
     const now = Date.now()
-    const todayStr = new Date(now).toISOString().split('T')[0]
-    const parts = startTime.split(':')
-    const normalized = parts.length === 2 ? `${startTime}:00` : startTime
-    let ms = new Date(`${todayStr}T${normalized}`).getTime()
-    if (ms > now + 60000) ms = new Date(`${new Date(now - 86400000).toISOString().split('T')[0]}T${normalized}`).getTime()
+    const ms = parseStartTime(startTime, now)
+    if (Number.isNaN(ms)) return '—'
     const secs = Math.max(0, Math.floor((now - ms) / 1000))
     const h = Math.floor(secs / 3600)
     const m = Math.floor((secs % 3600) / 60)
