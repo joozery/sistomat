@@ -2,7 +2,8 @@
 
 import dynamic from 'next/dynamic'
 import { useState, useCallback, useEffect } from 'react'
-import { Printer, ShieldOff, ShieldCheck, Loader2, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { flushSync } from 'react-dom'
+import { Printer, LayoutGrid, ShieldOff, ShieldCheck, Loader2, Plus, Pencil, Trash2, X, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -41,6 +42,23 @@ export function WorkerBarcodes() {
 
   const [deletingWorker, setDeletingWorker] = useState<WorkerRow | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  const [printMode, setPrintMode] = useState<'combined' | 'single'>('combined')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  function printAs(mode: 'combined' | 'single') {
+    flushSync(() => setPrintMode(mode))
+    window.print()
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const fetchBlocked = useCallback(async () => {
     try {
@@ -150,18 +168,21 @@ export function WorkerBarcodes() {
   }
 
   const list = (workers as WorkerRow[]).filter((w) => w.code !== 0)
+  const hasSelection = selectedIds.size > 0
+  const printList = hasSelection ? list.filter((w) => selectedIds.has(w.id)) : list
+  const lastPrintedId = printList[printList.length - 1]?.id
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm/50">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm/50 print:border-0 print:shadow-none print:rounded-none">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 print:hidden">
         <div>
           <h2 className="text-sm font-bold text-gray-800">บาร์โค้ดพนักงาน</h2>
           <p className="text-xs text-gray-400 mt-0.5">
             สแกนเพื่อระบุตัวพนักงาน — กดบล็อกเพื่อระงับสิทธิ์สแกนชั่วคราว
           </p>
         </div>
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex items-center gap-2">
           <Button
             onClick={openAddForm}
             size="sm"
@@ -170,12 +191,36 @@ export function WorkerBarcodes() {
             <Plus className="h-3.5 w-3.5" />
             เพิ่มพนักงาน
           </Button>
+
+          {hasSelection && (
+            <>
+              <span className="text-[11px] font-semibold text-[#7B1A1A] bg-red-50 border border-red-100 rounded-full px-2.5 py-1">
+                เลือกแล้ว {selectedIds.size} คน
+              </span>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-[11px] font-semibold text-gray-500 hover:text-gray-800 underline"
+              >
+                ล้างการเลือก
+              </button>
+            </>
+          )}
+
           <button
-            onClick={() => window.print()}
+            onClick={() => printAs('combined')}
+            title={hasSelection ? 'ปริ้นเฉพาะคนที่เลือก รวมหลายใบต่อหน้า' : 'ปริ้นรวมหลายใบต่อหน้า'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            {hasSelection ? `ปริ้นรวม (${selectedIds.size})` : 'ปริ้นรวม'}
+          </button>
+          <button
+            onClick={() => printAs('single')}
+            title={hasSelection ? 'ปริ้นเฉพาะคนที่เลือก คนละ 1 หน้า' : 'ปริ้นแยกใบ คนละ 1 หน้า'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <Printer className="h-3.5 w-3.5" />
-            ปริ้นทั้งหมด
+            {hasSelection ? `ปริ้นแยกใบ (${selectedIds.size})` : 'ปริ้นแยกใบ'}
           </button>
         </div>
       </div>
@@ -199,16 +244,31 @@ export function WorkerBarcodes() {
       ) : list.length === 0 ? (
         <div className="py-10 text-center text-sm text-gray-400">ยังไม่มีพนักงาน — กด &ldquo;เพิ่มพนักงาน&rdquo; เพื่อเริ่มต้น</div>
       ) : (
-        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 print:grid-cols-4 print:gap-2 print:p-2">
+        <div
+          className={`p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 ${
+            printMode === 'single' ? 'print:block print:p-0' : 'print:grid-cols-4 print:gap-2 print:p-2'
+          }`}
+        >
           {list.map((worker) => {
             const isBlocked = blockedCodes.has(worker.code)
             const isToggling = toggling === worker.code
+            const isSelected = selectedIds.has(worker.id)
+            const willPrint = !hasSelection || isSelected
+            const isLastPrinted = worker.id === lastPrintedId
             return (
               <div
                 key={worker.id}
-                className={`relative flex flex-col items-center gap-1 rounded-xl border px-3 pt-3 pb-2 transition-colors print:border print:border-gray-300 print:rounded-lg ${
+                className={`relative flex flex-col items-center gap-1 rounded-xl border px-3 pt-3 pb-2 transition-colors print:bg-white print:ring-0 ${
+                  !willPrint
+                    ? 'print:hidden'
+                    : printMode === 'single'
+                    ? `print:border-0 print:rounded-none print:h-screen print:w-full print:justify-center ${isLastPrinted ? '' : 'print:break-after-page'}`
+                    : 'print:border print:border-gray-300 print:rounded-lg'
+                } ${
                   isBlocked
                     ? 'border-red-200 bg-red-50/60'
+                    : isSelected
+                    ? 'border-[#7B1A1A]/40 bg-red-50/40 ring-1 ring-[#7B1A1A]/30'
                     : 'border-gray-100 bg-gray-50'
                 }`}
               >
@@ -220,6 +280,19 @@ export function WorkerBarcodes() {
                     </span>
                   </div>
                 )}
+
+                {/* Select for printing */}
+                <button
+                  onClick={() => toggleSelect(worker.id)}
+                  title="เลือกเพื่อพิมพ์เฉพาะคนนี้"
+                  className={`absolute top-1.5 left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-md border transition-colors print:hidden ${
+                    isSelected
+                      ? 'bg-[#7B1A1A] border-[#7B1A1A] text-white'
+                      : 'bg-white border-gray-300 text-transparent hover:border-[#7B1A1A]/50'
+                  }`}
+                >
+                  <Check className="h-3 w-3" />
+                </button>
 
                 {/* Edit / Delete */}
                 <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 z-10 print:hidden">
@@ -239,7 +312,11 @@ export function WorkerBarcodes() {
                   </button>
                 </div>
 
-                <div className={isBlocked ? 'opacity-30 pointer-events-none select-none' : ''}>
+                <div
+                  className={`flex flex-col items-center ${printMode === 'single' ? 'print:scale-[2.5]' : ''} ${
+                    isBlocked ? 'opacity-30 pointer-events-none select-none' : ''
+                  }`}
+                >
                   <Barcoder
                     value={String(worker.code)}
                     format="CODE128"
@@ -252,8 +329,8 @@ export function WorkerBarcodes() {
                     displayValue={false}
                   />
                   <p className="text-[13px] font-bold text-gray-800 tabular-nums text-center">{worker.code}</p>
-                  <p className="text-[10px] text-gray-500 text-center leading-tight line-clamp-2">{worker.name}</p>
-                  <p className="text-[9px] text-gray-400 text-center leading-tight">{worker.machines.join(', ')}</p>
+                  <p className="w-28 max-w-full mx-auto text-[10px] text-gray-500 text-center leading-tight break-words line-clamp-2">{worker.name}</p>
+                  <p className="w-28 max-w-full mx-auto text-[9px] text-gray-400 text-center leading-tight break-words">{worker.machines.join(', ')}</p>
                 </div>
 
                 {/* Block/Unblock button */}

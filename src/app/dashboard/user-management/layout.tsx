@@ -66,7 +66,7 @@ export default function UserManagementLayout({ children }: { children: React.Rea
   return (
     <div className="space-y-6 font-sans">
       {/* Page Title & Stats Bar */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 print:hidden">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#7B1A1A] bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100">
@@ -105,7 +105,7 @@ export default function UserManagementLayout({ children }: { children: React.Rea
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-full w-fit">
+      <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-full w-fit print:hidden">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href
           return (
