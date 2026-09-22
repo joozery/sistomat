@@ -106,6 +106,7 @@ function normalizeStatus(s: string) {
   if (s === 'FN_GOOD') return 'จบงาน'
   if (s === 'ACPT_FN') return 'รับงาน'
   if (s === 'CANCEL_FN') return 'ไม่รับงาน'
+  if (s === 'ยกเลิก' || s === 'CMD_REJECT') return 'REJECT'
   return s
 }
 
@@ -137,6 +138,14 @@ function StatusChip({
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-700">
         <XCircle className="h-2.5 w-2.5" />
         {s}
+      </span>
+    )
+  }
+  if (s === 'REJECT') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold bg-red-100 text-red-800">
+        <XCircle className="h-2.5 w-2.5" />
+        REJECT
       </span>
     )
   }
@@ -492,8 +501,8 @@ export default function JobListPage() {
                         </div>
                       )}
 
-                      {/* Status — แสดงสถานะในแถวหลักเลย */}
-                      <div className="shrink-0">
+                      {/* แถวกลุ่ม Level 2 ไม่มีสถานะของตัวเอง สถานะเป็นของ Job ย่อยแต่ละรายการ */}
+                      {!hasLevel3 && <div className="shrink-0">
                         {singleJob ? (
                           <StatusChip
                             status={singleJob.status}
@@ -514,7 +523,7 @@ export default function JobListPage() {
                                   currentProcessActive={items[0]?.current_process_active}
                                 />
                         )}
-                      </div>
+                      </div>}
 
                       {/* Action */}
                       <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0">

@@ -100,11 +100,11 @@ const COMMAND_BARCODES: CommandBarcodeSpec[] = [
     ],
   },
   {
-    value: 'CMD_REJECT', label: 'REJECT — ยุติทันที', desc: 'สแกน 2 ครั้งเพื่อปิดทุกกระบวนการทันที', status: 'ยกเลิก', accent: 'red', icon: XCircle,
+    value: 'CMD_REJECT', label: 'REJECT — ยุติทันที', desc: 'สแกน 2 ครั้งเพื่อปิดทุกกระบวนการทันที', status: 'REJECT', accent: 'red', icon: XCircle,
     detail: [
       'ใช้ยุติงานทั้งหมดทันทีในกรณีฉุกเฉิน',
       'ต้องสแกน 2 ครั้งติดกันภายใน 5 วินาทีเพื่อยืนยัน (ครั้งแรกเป็นการเตือน)',
-      'เมื่อยืนยันแล้ว ระบบหยุดเวลาพนักงานที่กำลังทำงานอยู่ทุกคนในทุกกระบวนการ และเปลี่ยนสถานะโปรเจกต์เป็น "ยกเลิก"',
+      'เมื่อยืนยันแล้ว ระบบหยุดเวลาพนักงานที่กำลังทำงานอยู่ทุกคนในทุกกระบวนการ และเปลี่ยนสถานะโปรเจกต์เป็น "REJECT"',
     ],
   },
   {
@@ -899,17 +899,19 @@ export default function ProcessDetailsPage() {
             ),
             next_confirmed_at: row.next_confirmed_at ?? nowTime,
           }))
-          setProcessList(next)
-          setProject((prev) => prev ? { ...prev, status: 'ยกเลิก' } : prev)
-          fetch(`/api/projects/${id}`, {
+          void fetch(`/api/projects/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-            body: JSON.stringify({ processes: next, status: 'ยกเลิก' }),
-          }).catch(console.error)
-          showToast('error', 'REJECT — ยุติงานทั้งหมดแล้ว', 'ทุกกระบวนการถูกปิด สถานะ: ยกเลิก')
+            body: JSON.stringify({ processes: next, status: 'REJECT' }),
+          }).then((response) => {
+            if (!response.ok) throw new Error('บันทึก REJECT ไม่สำเร็จ')
+            setProcessList(next)
+            setProject((prev) => prev ? { ...prev, status: 'REJECT' } : prev)
+            showToast('error', 'REJECT — ยุติงานทั้งหมดแล้ว', 'ทุกกระบวนการถูกปิด สถานะ: REJECT')
+          }).catch(() => showToast('error', 'บันทึก REJECT ไม่สำเร็จ', 'กรุณาลองสแกนอีกครั้ง'))
         } else {
           pendingRejectRef.current = true
-          showToast('warning', 'สแกน CMD_REJECT อีกครั้งเพื่อยืนยัน', 'จะปิดทุกกระบวนการทันที เปลี่ยนสถานะเป็น "ยกเลิก" (5 วินาที)')
+          showToast('warning', 'สแกน CMD_REJECT อีกครั้งเพื่อยืนยัน', 'จะปิดทุกกระบวนการทันที เปลี่ยนสถานะเป็น "REJECT" (5 วินาที)')
           pendingRejectTimerRef.current = setTimeout(() => { pendingRejectRef.current = false }, 5000)
         }
         return
@@ -1456,7 +1458,7 @@ export default function ProcessDetailsPage() {
   }
 
   // ── Main ──
-  const isJobFinished = ['รับงาน', 'ไม่รับงาน', 'จบงาน', 'ยกเลิก'].includes(project.status)
+  const isJobFinished = ['รับงาน', 'ไม่รับงาน', 'จบงาน', 'ยกเลิก', 'REJECT'].includes(project.status)
 
   return (
     <>
@@ -1512,7 +1514,7 @@ export default function ProcessDetailsPage() {
             </div>
           )}
           <span className="text-[11px] text-gray-400 hidden sm:block">
-            สถานะ: <span className="font-semibold text-gray-600">{project.status}</span>
+            สถานะ: <span className="font-semibold text-gray-600">{project.status === 'ยกเลิก' ? 'REJECT' : project.status}</span>
           </span>
         </div>
       </div>
@@ -1566,7 +1568,7 @@ export default function ProcessDetailsPage() {
             <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-5 py-4">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
               <p className="text-sm text-emerald-800">
-                งานนี้ปิดแล้ว — สถานะ: <span className="font-bold">{project.status}</span> ไม่ต้องสแกนบาร์โค้ดเพิ่มเติม
+                งานนี้ปิดแล้ว — สถานะ: <span className="font-bold">{project.status === 'ยกเลิก' ? 'REJECT' : project.status}</span> ไม่ต้องสแกนบาร์โค้ดเพิ่มเติม
               </p>
             </div>
           ) : (

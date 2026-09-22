@@ -232,7 +232,7 @@ export default function QuotationPage() {
 
   // Discount & Tax state
   const [discountType, setDiscountType] = useState<'percent' | 'amount'>('percent')
-  const [discountValue, setDiscountValue] = useState(10)
+  const [discountValue, setDiscountValue] = useState(0)
   const [vatEnabled, setVatEnabled] = useState(false)
   const [vatRate, setVatRate] = useState(7)
   const [remarks, setRemarks] = useState('')
