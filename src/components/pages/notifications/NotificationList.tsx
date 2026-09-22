@@ -208,9 +208,9 @@ export function NotificationList({ onUnreadChange }: { onUnreadChange?: (count: 
             return (
               <Card
                 key={note.id}
-                className={`rounded-xl border transition-all duration-200 shadow-none hover:border-gray-200 ${
+                className={`rounded-xl border transition-all duration-200 shadow-none ${
                   !note.read
-                    ? 'bg-gradient-to-r from-red-50/30 via-white to-white border-red-100/90'
+                    ? 'bg-red-50 border-red-100 border-l-4 border-l-[#7B1A1A] hover:bg-red-100/60'
                     : 'bg-white border-gray-100'
                 }`}
               >

@@ -105,16 +105,26 @@ export async function PUT(
         const isNowCompleted = Boolean(process.next_confirmed_at)
         const isImmediatelyBeforeQc = /QC/i.test(nextProcessName)
 
-        if (!wasCompleted && isNowCompleted && isImmediatelyBeforeQc) {
+        if (!wasCompleted && isNowCompleted) {
           const completedProcessName = process.process?.trim() || `Process ${index + 1}`
 
-          await createNotification(db, {
-            type: 'info',
-            category: 'qc',
-            title: `งานพร้อมตรวจ QC — ${id}`,
-            description: `ใบงาน ${id}${dwgName} จบ Process ${completedProcessName} แล้ว และพร้อมเข้าสู่ ${nextProcessName}`,
-            link: `/dashboard/process-details/${id}/qc`,
-          }).catch(() => {})
+          if (isImmediatelyBeforeQc) {
+            await createNotification(db, {
+              type: 'info',
+              category: 'qc',
+              title: `งานพร้อมตรวจ QC — ${id}`,
+              description: `ใบงาน ${id}${dwgName} จบ Process ${completedProcessName} แล้ว และพร้อมเข้าสู่ ${nextProcessName}`,
+              link: `/dashboard/process-details/${id}`,
+            }).catch(() => {})
+          } else {
+            await createNotification(db, {
+              type: 'success',
+              category: 'machine',
+              title: `กระบวนการเสร็จสิ้น — ${completedProcessName}`,
+              description: `ใบงาน ${id}${dwgName} เสร็จสิ้น Process ${completedProcessName} แล้ว`,
+              link: `/dashboard/process-details/${id}`,
+            }).catch(() => {})
+          }
         }
       }
     }

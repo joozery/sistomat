@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Printer, ArrowLeft, Save, Loader2, CheckCircle2 } from 'lucide-react'
+import { Printer, ArrowLeft, Save, Loader2, CheckCircle2, Copy, Check } from 'lucide-react'
 import { useInspectors } from '@/lib/useInspectors'
 
 function getToken() {
@@ -140,6 +140,17 @@ export default function QcSheetPage() {
   const [saved, setSaved] = useState(false)
   const [qc, setQc] = useState<QcData>(emptyQcData())
   const [selectedTextField, setSelectedTextField] = useState<{ key: string; label: string } | null>(null)
+  const [copiedPlusMinus, setCopiedPlusMinus] = useState(false)
+
+  const copyPlusMinus = async () => {
+    try {
+      await navigator.clipboard.writeText('±')
+      setCopiedPlusMinus(true)
+      setTimeout(() => setCopiedPlusMinus(false), 1500)
+    } catch {
+      // clipboard not available — ignore
+    }
+  }
   const lastSavedQcRef = useRef('')
 
   const fetchData = useCallback(async () => {
@@ -645,7 +656,31 @@ export default function QcSheetPage() {
               </tr>
               <tr>
                 <th style={th({ backgroundColor: '#d8d8d8', width: '36px' })}>POINT</th>
-                <th style={th({ backgroundColor: '#d8d8d8', width: '115px' })}>SPEC</th>
+                <th style={th({ backgroundColor: '#d8d8d8', width: '115px' })}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    SPEC
+                    <button
+                      type="button"
+                      onClick={copyPlusMinus}
+                      title="คลิกเพื่อคัดลอกสัญลักษณ์ ± ไปยังคลิปบอร์ด"
+                      className="no-print"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '2px',
+                        border: '1px solid #999', borderRadius: '3px', background: '#fff',
+                        padding: '1px 4px', fontSize: '10px', fontWeight: 'bold', color: '#555', cursor: 'pointer',
+                      }}
+                    >
+                      {copiedPlusMinus ? (
+                        <Check size={10} color="#059669" />
+                      ) : (
+                        <>
+                          <span>±</span>
+                          <Copy size={9} />
+                        </>
+                      )}
+                    </button>
+                  </span>
+                </th>
                 {Array.from({ length: VALUE_COLS }, (_, i) => i + 1).map((n) => (
                   <th key={n} style={th({ backgroundColor: '#d8d8d8', width: '40px' })}>{n}</th>
                 ))}
@@ -810,7 +845,7 @@ export default function QcSheetPage() {
                   >
                     {qc.inspector_signature ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={qc.inspector_signature} alt="ลายเซ็นผู้ตรวจ" style={{ maxHeight: '90px', maxWidth: '100%', objectFit: 'contain' }} />
+                      <img src={qc.inspector_signature} alt="ลายเซ็นผู้ตรวจ" style={{ maxHeight: '50px', maxWidth: '70%', objectFit: 'contain' }} />
                     ) : (
                       <span className="no-print" style={{ fontSize: '9px', color: '#aaa', border: '1px dashed #ccc', borderRadius: '4px', padding: '4px 8px' }}>
                         คลิกเลือกลายเซ็น

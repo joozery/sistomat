@@ -361,8 +361,10 @@ export function AppNavbar() {
                   <div
                     key={n.id}
                     onClick={() => handleNotificationClick(n)}
-                    className={`flex items-start gap-2.5 p-2.5 hover:bg-gray-50 cursor-pointer transition-colors ${
-                      !n.read ? 'bg-red-50/20' : ''
+                    className={`flex items-start gap-2.5 p-2.5 cursor-pointer transition-colors border-l-4 ${
+                      !n.read
+                        ? 'bg-red-50 border-l-[#7B1A1A] hover:bg-red-100/60'
+                        : 'border-l-transparent'
                     }`}
                   >
                     <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${iconBg} mt-0.5`}>
