@@ -1273,7 +1273,7 @@ export default function ProcessDetailsPage() {
 
   const blankProcessRow = (): ProcessRow => ({
     id: Date.now(),
-    process: 'MATERAIL',
+    process: processOptions[0] ?? '',
     target_time: '00:00',
     skill: '0',
     overtime_grace: '',

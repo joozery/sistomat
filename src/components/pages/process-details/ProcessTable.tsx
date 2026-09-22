@@ -302,6 +302,9 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                           className={`w-full h-9 border-0 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 px-2 pr-6 text-slate-700 font-medium cursor-pointer appearance-none ${isActive ? 'bg-blue-100' : 'bg-white'}`}
                           style={{ fontSize: '12px' }}
                         >
+                          {row.process && !processOptions.includes(row.process) && (
+                            <option value={row.process}>⚠ {row.process} (ไม่อยู่ในลิสต์)</option>
+                          )}
                           {processOptions.map((opt) => (
                             <option key={opt} value={opt}>{opt}</option>
                           ))}
