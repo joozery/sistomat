@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
 
     type ProjectProcess = {
       process: string
+      on_hold?: boolean
       next_confirmed_at?: string | Date | null
       workers?: Array<{ worker_id: string; start_time: string; stop_time: string }>
     }
@@ -104,13 +105,14 @@ export async function GET(req: NextRequest) {
       const currentIdx = processes.findIndex((p) => !p.next_confirmed_at)
       if (currentIdx === -1) {
         // All processes confirmed — waiting for final barcode
-        return { ...job, current_process_name: null, current_process_active: false }
+        return { ...job, current_process_name: null, current_process_active: false, on_hold: false }
       }
 
       const cur = processes[currentIdx]
       const isActive = cur.workers?.some((w) => w.worker_id && w.start_time && !w.stop_time) ?? false
 
-      return { ...job, current_process_name: cur.process, current_process_active: isActive }
+      const onHold = processes.some(process => process.on_hold && !process.next_confirmed_at)
+      return { ...job, current_process_name: cur.process, current_process_active: isActive, on_hold: onHold }
     })
 
     return NextResponse.json({ jobs: enrichedJobs, total, page: pageNum, limit })

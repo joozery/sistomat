@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { assignBuCodes, changeBuCode, fetchBuJobs, normalizeBuCode, validateBuCodes } from '@/lib/bu-numbering'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -122,9 +123,31 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   const [fileError, setFileError] = useState('')
   const [rows, setRows] = useState<JobRowInput[]>([])
   const [syncJobCode, setSyncJobCode] = useState(false)
+  const [existingCodes, setExistingCodes] = useState<string[]>([])
+  const [loadedCodeKey, setLoadedCodeKey] = useState<string | null>(null)
+  const [codeLoadError, setCodeLoadError] = useState('')
+  const parentKey = JSON.stringify(Array.from(new Set(rows.map(row => deriveLevel1(normalizeBuCode(row.jobCode))).filter(code => /^[A-Z]+-\d{3,4}$/.test(code)))).sort())
+  const checkingCodes = open && loadedCodeKey !== parentKey
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    const parents: string[] = JSON.parse(parentKey)
+    Promise.all(parents.map(parent => fetchBuJobs(parent, localStorage.getItem('token'))))
+      .then(lists => {
+        if (cancelled) return
+        const codes = lists.flat().map(job => normalizeBuCode(job.job_code))
+        setCodeLoadError('')
+      setExistingCodes(codes)
+        setRows(prev => assignBuCodes(prev, codes))
+      })
+      .catch(error => { if (!cancelled) setCodeLoadError(error.message) })
+      .finally(() => { if (!cancelled) setLoadedCodeKey(parentKey) })
+    return () => { cancelled = true }
+  }, [open, parentKey])
   const inputRef = useRef<HTMLInputElement>(null)
 
   function resetAll() {
+    setLoadedCodeKey(null)
     setStep(1)
     setForm({ projectId: '', receivedDate: '', dueDate: '' })
     setFiles([])
@@ -138,7 +161,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   }
 
   function handleClose(v: boolean) {
-    if (!v) resetAll()
+    if (!v) { resetAll(); setLoadedCodeKey(null) }
     onOpenChange(v)
   }
 
@@ -187,7 +210,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       if (!groups.has(base)) groups.set(base, [])
       groups.get(base)!.push(f)
     }
-    setRows(
+    setRows(prev =>
       Array.from(groups.entries()).map(([base, groupFiles], i) => ({
         id: `${base}-${i}`,
         files: groupFiles,
@@ -197,7 +220,10 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         level3Touched: false,
         jobNote: '',
         quantity: '1',
-      }))
+      })).map(row => {
+        const old = prev.find(item => item.id === row.id)
+        return old ? { ...old, files: row.files } : row
+      })
     )
     setStep(3)
   }
@@ -260,6 +286,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   }
 
   async function handleSaveAll() {
+    if (checkingCodes || codeLoadError) return
+    const numberingError = validateBuCodes(rows, existingCodes)
+    if (numberingError) { setSaveError(numberingError); return }
     for (const r of rows) {
       if (!r.jobCode.trim()) {
         setSaveError(`กรุณากรอกหมายเลข JOB สำหรับ "${r.drawingName}"`)
@@ -276,6 +305,10 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     const projectId = form.projectId.trim()
 
     try {
+      const parents = Array.from(new Set(rows.map(row => deriveLevel1(normalizeBuCode(row.jobCode)))))
+      const latest = (await Promise.all(parents.map(parent => fetchBuJobs(parent, token)))).flat().map(job => job.job_code)
+      const conflict = validateBuCodes(rows, latest)
+      if (conflict) { setExistingCodes(latest); throw new Error(conflict) }
       // อัปโหลดไฟล์ของทุก Job ย่อยก่อน แล้วค่อยสร้างโปรเจคแม่ด้วยไฟล์จริง (ไม่ใช่ null)
       const rowUploads: { row: JobRowInput; uploaded: { file_url: string; file_name: string }[] }[] = []
       for (let i = 0; i < rows.length; i++) {
@@ -496,9 +529,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
               )}
             </div>
 
-            {saveError && (
+            {(saveError || codeLoadError) && (
               <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError}
+                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError || codeLoadError}
               </div>
             )}
 
@@ -545,16 +578,8 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                         const next = !syncJobCode
                         setSyncJobCode(next)
                         if (next && rows[0]?.jobCode.trim()) {
-                          const baseCode = rows[0].jobCode.trim()
-                          setRows((prev) =>
-                            prev.map((r, i) => ({
-                              ...r,
-                              jobCode: baseCode,
-                              level3: r.level3Touched
-                                ? r.level3
-                                : `${baseCode}-${String(i + 1).padStart(2, '0')}`,
-                            }))
-                          )
+                          const base = rows[0].jobCode.trim()
+                          setRows(prev => assignBuCodes(prev.map(row => ({ ...row, jobCode: base })), existingCodes))
                         }
                       }}
                       className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${syncJobCode ? 'bg-[#7B1A1A]' : 'bg-gray-200'}`}
@@ -566,6 +591,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                 )}
               </div>
 
+              <p className="text-xs text-gray-500">แก้ BU แถวแรกของกลุ่มเพื่อรันแถวถัดไปอัตโนมัติ โดยข้ามเลขที่ใช้แล้ว{checkingCodes ? ' — กำลังตรวจเลขเดิม...' : ''}</p>
               <div className="space-y-3">
                 {rows.map((r, rowIdx) => {
                   const fullCode = r.level3.trim() || r.jobCode.trim()
@@ -605,27 +631,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                             disabled={syncJobCode && rowIdx > 0}
                             onChange={(e) => {
                               const code = e.target.value
-                              if (syncJobCode) {
-                                setRows((prev) =>
-                                  prev.map((row, i) => ({
-                                    ...row,
-                                    jobCode: code,
-                                    level3: row.level3Touched
-                                      ? row.level3
-                                      : code.trim()
-                                      ? `${code.trim()}-${String(i + 1).padStart(2, '0')}`
-                                      : '',
-                                  }))
-                                )
-                              } else {
-                                const patch: Partial<JobRowInput> = { jobCode: code }
-                                if (!r.level3Touched) {
-                                  patch.level3 = code.trim()
-                                    ? `${code.trim()}-${String(rowIdx + 1).padStart(2, '0')}`
-                                    : ''
-                                }
-                                updateRow(r.id, patch)
-                              }
+                              setRows(prev => assignBuCodes(prev.map(row =>
+                                syncJobCode || row.id === r.id ? { ...row, jobCode: code } : row
+                              ), existingCodes))
                             }}
                             className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${syncJobCode && rowIdx > 0 ? 'bg-gray-50 text-gray-400' : ''}`}
                           />
@@ -637,7 +645,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                           <Input
                             placeholder="auto จาก JOB"
                             value={r.level3}
-                            onChange={(e) => updateRow(r.id, { level3: e.target.value, level3Touched: true })}
+                            onChange={(e) => setRows(prev => changeBuCode(prev, r.id, e.target.value, existingCodes))}
                             className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${!r.level3Touched && r.level3 ? 'text-emerald-700 bg-emerald-50/50' : ''}`}
                           />
                         </div>
@@ -683,9 +691,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
               </div>
             )}
 
-            {saveError && (
+            {(saveError || codeLoadError) && (
               <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg shrink-0">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError}
+                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError || codeLoadError}
               </div>
             )}
 
@@ -696,7 +704,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
               <Button
                 type="button"
                 onClick={handleSaveAll}
-                disabled={saving}
+                disabled={saving || checkingCodes || Boolean(codeLoadError)}
                 className="rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6 gap-1"
               >
                 {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}

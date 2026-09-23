@@ -6,6 +6,8 @@ import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown, PauseCircle, Info, X } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
+import { HoldReasonDialog } from '@/components/pages/process-details/HoldReasonDialog'
+import { getPastHolds, updateHoldHistory } from '@/lib/hold-history'
 import { ProcessTable, normalizeTargetTime, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
 import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess, isRowCompleted, type WorkerData } from '@/lib/workers'
@@ -625,6 +627,9 @@ export default function ProcessDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [processList, setProcessList] = useState<ProcessRow[]>([])
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
+  const [holdTarget, setHoldTarget] = useState<{ id: number; process: string } | null>(null)
+  const holdDialogOpenRef = useRef(false)
+  const holdSavingRef = useRef(false)
   
   // Scanner states
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null)
@@ -676,6 +681,41 @@ export default function ProcessDetailsPage() {
     setToasts((prev) => [...prev, { id, type, title, subtitle }])
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500)
   }, [])
+
+  const saveHold = useCallback(async (rowId: number, reason: string | null) => {
+    if (holdSavingRef.current) return
+    const list = processListRef.current
+    const index = list.findIndex(row => row.id === rowId && !row.next_confirmed_at)
+    if (index < 0) throw new Error('กระบวนการเปลี่ยนไปแล้ว กรุณาเปิดใบงานใหม่')
+    const row = list[index]
+    const holding = reason !== null
+    if (holding && !reason.trim()) throw new Error('กรุณาระบุเหตุผลในการ HOLD')
+    const nowTime = getNowFormatted()
+    const next = [...list]
+    next[index] = {
+      ...row,
+      on_hold: holding,
+      hold_reason: holding ? reason.trim() : row.hold_reason,
+      hold_history: updateHoldHistory(row, reason, nowTime),
+      workers: holding ? row.workers.map(worker => worker.worker_id && worker.start_time && !worker.stop_time
+        ? { ...worker, stop_time: nowTime } : worker) : row.workers,
+    }
+    const flags = { ...projectRef.current?.flags, has_hold: true }
+    holdSavingRef.current = true
+    try {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ processes: next, flags }),
+      })
+      if (!response.ok) throw new Error('บันทึก HOLD ไม่สำเร็จ กรุณาลองใหม่')
+      processListRef.current = next
+      setProcessList(next)
+      setProject(prev => prev ? { ...prev, flags } : prev)
+      showToast(holding ? 'warning' : 'success', holding ? `HOLD — ${row.process}` : `ปลดล็อก HOLD — ${row.process}`,
+        holding ? reason : 'พนักงานสแกนเริ่มงานต่อได้เลย')
+    } finally { holdSavingRef.current = false }
+  }, [id, showToast])
 
   // Fetch project from MongoDB
   useEffect(() => {
@@ -828,6 +868,7 @@ export default function ProcessDetailsPage() {
 
   useEffect(() => {
     const handleLocalScan = (e: any) => {
+      if (holdDialogOpenRef.current || holdSavingRef.current) { e.preventDefault(); return }
       const raw = e.detail.barcode.trim()
       const list = processListRef.current
       const rawUpper = raw.toUpperCase()
@@ -940,34 +981,13 @@ export default function ProcessDetailsPage() {
           return
         }
         const targetRow = list[targetIdx]
-        const nowTime = getNowFormatted()
         if (targetRow.on_hold) {
-          // ปลดล็อก HOLD
-          const nextList = [...list]
-          nextList[targetIdx] = { ...targetRow, on_hold: false }
-          setProcessList(nextList)
-          fetch(`/api/projects/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-            body: JSON.stringify({ processes: nextList }),
-          }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
-          showToast('success', `ปลดล็อก HOLD — "${targetRow.process}"`, 'พนักงานสแกนต่อได้เลย')
+          void saveHold(targetRow.id, null).catch(error => showToast('error', error.message))
         } else {
-          // เข้าสู่ HOLD — หยุดพนักงานที่ running ทุกคน
-          const stoppedWorkers = targetRow.workers.map((w) =>
-            w.worker_id && w.start_time && !w.stop_time ? { ...w, stop_time: nowTime } : w
-          )
-          const nextList = [...list]
-          nextList[targetIdx] = { ...targetRow, workers: stoppedWorkers, on_hold: true }
-          setProcessList(nextList)
-          const newFlags = { ...projectRef.current?.flags, has_hold: true }
-          setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
-          fetch(`/api/projects/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-            body: JSON.stringify({ processes: nextList, flags: newFlags }),
-          }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
-          showToast('warning', `HOLD — "${targetRow.process}"`, 'หยุดพักชั่วคราว สแกน CMD_HOLD อีกครั้งเพื่อดำเนินการต่อ')
+          setActionModal(null)
+          setPendingStop(null)
+          holdDialogOpenRef.current = true
+          setHoldTarget({ id: targetRow.id, process: targetRow.process })
         }
         return
       }
@@ -1043,6 +1063,10 @@ export default function ProcessDetailsPage() {
         }
         const targetRow = list[targetIdx]
         // หยุดพนักงานที่ยังวิ่งอยู่ทุกคน + set next_confirmed_at
+        if (targetRow.on_hold) {
+          showToast('warning', 'กระบวนการนี้กำลัง HOLD', 'กรุณาปลด HOLD ก่อนยืนยันจบกระบวนการ')
+          return
+        }
         const closedWorkers = targetRow.workers.map((w) =>
           w.worker_id && w.start_time && !w.stop_time ? { ...w, stop_time: nowTime } : w
         )
@@ -1261,7 +1285,7 @@ export default function ProcessDetailsPage() {
 
     document.addEventListener('onBarcodeScan', handleLocalScan)
     return () => document.removeEventListener('onBarcodeScan', handleLocalScan)
-  }, [activeRowIndex, id, applyFinishStatus])
+  }, [activeRowIndex, id, applyFinishStatus, saveHold, showToast])
 
   const handleWorkerChange = (index: number, workerIndex: number, field: keyof WorkerLog, value: string) => {
     setProcessList((prev) => {
@@ -1317,6 +1341,10 @@ export default function ProcessDetailsPage() {
     const current = processListRef.current
 
     if (mode === 'start') {
+      if (current[row]?.on_hold) {
+        showToast('warning', 'กระบวนการนี้กำลัง HOLD', 'กรุณาปลด HOLD ก่อนเริ่มงาน')
+        return
+      }
       const worker = findWorker(workerId, workersRef.current)
       if (!worker) {
         showToast('error', 'ไม่พบรหัสพนักงาน', `รหัส "${workerId}" ไม่มีในระบบ`)
@@ -1463,6 +1491,17 @@ export default function ProcessDetailsPage() {
   return (
     <>
     <ScanToast toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
+    {holdTarget && (
+      <HoldReasonDialog
+        processName={holdTarget.process}
+        onCancel={() => { holdDialogOpenRef.current = false; setHoldTarget(null) }}
+        onConfirm={async reason => {
+          await saveHold(holdTarget.id, reason)
+          holdDialogOpenRef.current = false
+          setHoldTarget(null)
+        }}
+      />
+    )}
     {actionModal && (
       <ActionModal
         mode={actionModal.mode}
@@ -1537,6 +1576,8 @@ export default function ProcessDetailsPage() {
             attachments={project.attachments}
             hasRework={!!project.flags?.has_rework}
             hasHold={!!project.flags?.has_hold}
+            activeHolds={processList.filter(row => row.on_hold && !row.next_confirmed_at).map(row => ({ process: row.process, reason: row.hold_reason }))}
+            pastHolds={processList.flatMap(row => getPastHolds(row).map(hold => ({ ...hold, process: row.process })))}
           />
 
           <ProcessTable

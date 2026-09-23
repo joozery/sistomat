@@ -4,6 +4,7 @@ import { Plus, Trash2, ScanBarcode, CheckCircle2, PauseCircle } from 'lucide-rea
 import { Fragment, useMemo, useState } from 'react'
 import { isRowCompleted } from '@/lib/workers'
 import { useCurrentUser } from '@/lib/useCurrentUser'
+import { getPastHolds, type HoldEntry } from '@/lib/hold-history'
 
 type OvertimeUnit = 'min' | 'hour'
 
@@ -119,6 +120,8 @@ export interface ProcessRow {
   remark: string
   next_confirmed_at?: string
   on_hold?: boolean
+  hold_reason?: string
+  hold_history?: HoldEntry[]
 }
 
 interface ProcessTableProps {
@@ -146,6 +149,7 @@ const workerColors = [
 
 export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
   const { role } = useCurrentUser()
+  const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   const canSeeSkill = role !== 'User' && role !== 'ช่าง'
   // role "User" และ "ช่าง" ดูตารางนี้ได้อย่างเดียว แก้ไข/กดปุ่มอะไรไม่ได้เลย — สแกนบาร์โค้ดจริงยังทำงานได้ปกติ
   // เพราะไม่ได้ขึ้นกับปุ่มบนหน้าจอ (GlobalBarcodeScanner ดักที่ keystroke ไม่ใช่การคลิก)
@@ -316,6 +320,17 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                         </div>
                       </>
                     )}
+                    {isOnHold && (
+                      <div className="px-2 py-1 text-xs font-semibold text-amber-800 bg-amber-50 whitespace-pre-wrap break-words">
+                        HOLD: {row.hold_reason || 'ไม่ได้ระบุเหตุผล'}
+                      </div>
+                    )}
+                    {canViewHoldHistory && getPastHolds(row).map(hold => (
+                      <div key={hold.round} className="px-2 py-1 text-xs text-gray-600 bg-gray-50 whitespace-pre-wrap break-words">
+                        เคยมีการ Hold รอบ {hold.round}: {hold.reason || 'ไม่ได้ระบุเหตุผล'} (ปลดแล้ว)
+                        <div>Hold: {hold.held_at || 'ไม่มีเวลาเดิม'} · ปลด: {hold.released_at || 'ไม่มีเวลาเดิม'}</div>
+                      </div>
+                    ))}
                   </td>
 
                   {/* เป้าหมาย */}

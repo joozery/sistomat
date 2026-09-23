@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { assignBuCodes, changeBuCode, fetchBuJobs, normalizeBuCode, validateBuCodes } from '@/lib/bu-numbering'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -75,12 +76,12 @@ function suggestLevel2(parentId: string, existingCodes: string[], closedLevel2Co
 
 // หาเลข BU (level3) ถัดไปที่ยังไม่ถูกใช้ภายใต้ level2 เดียวกัน — ต่อจากของเดิมแทนที่จะเริ่ม 01 ใหม่ทุกครั้ง
 function nextLevel3Suffix(level2: string, existingCodes: string[]): number {
-  const prefix = level2.trim()
+  const prefix = normalizeBuCode(level2)
   if (!prefix) return 1
   const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const re = new RegExp(`^${escaped}-(\\d{2})$`)
   const nums = existingCodes
-    .map((c) => c.match(re)?.[1])
+    .map((c) => normalizeBuCode(c).match(re)?.[1])
     .filter(Boolean).map(Number)
   return nums.length > 0 ? Math.max(...nums) + 1 : 1
 }
@@ -133,40 +134,37 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
   const [rows, setRows] = useState<BuRow[]>([])
   const [syncCode, setSyncCode] = useState(false)
   const [existingCodes, setExistingCodes] = useState<string[]>([])
+  const [loadedCodeKey, setLoadedCodeKey] = useState<string | null>(null)
+  const [codeLoadError, setCodeLoadError] = useState('')
 
   // Upload progress
   const [uploadingFileName, setUploadingFileName] = useState('')
   const [uploadIndex, setUploadIndex] = useState(0)
   const [uploadProgress, setUploadProgress] = useState(0)
 
+  const checkingCodes = open && loadedCodeKey !== parentId
   useEffect(() => {
     if (!open) return
     const token = localStorage.getItem('token')
     const normalizedParent = normalizeJobCode(parentId)
     // เผื่อมี job เก่าที่ยังไม่ได้ normalize เป็น "J" prefix ค้างอยู่ใน level1 อีกฟอร์มหนึ่ง —
     // ดึงทั้ง 2 ฟอร์มมารวมกัน ไม่งั้นเลข BU ถัดไปจะชนของเดิมที่มองไม่เห็น
-    const variants = Array.from(new Set([parentId, normalizedParent]))
-    Promise.all(
-      variants.map((level1) =>
-        fetch(`/api/jobs?level1=${encodeURIComponent(level1)}&limit=200`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((r) => r.json())
-          .then((data) => (Array.isArray(data) ? data : (data.jobs ?? [])))
-          .catch(() => [])
-      )
-    ).then((lists) => {
-      const allJobs = lists.flat() as Array<{ job_code: string; level2?: string | null; sale_closed_at?: string | null }>
-      const codes = Array.from(new Set(allJobs.map((job) => job.job_code)))
-      const closedLevel2Codes = new Set(
-        allJobs.filter((job) => job.sale_closed_at).map((job) => job.level2).filter((code): code is string => Boolean(code))
-      )
+    let cancelled = false
+    fetchBuJobs(parentId, token).then(allJobs => {
+      if (cancelled) return
+      const codes = Array.from(new Set(allJobs.map(job => normalizeBuCode(job.job_code))))
+      const closedLevel2Codes = new Set(allJobs.filter(job => job.sale_closed_at && job.level2).map(job => normalizeBuCode(job.level2!)))
+      setCodeLoadError('')
       setExistingCodes(codes)
       setJobCode(suggestLevel2(normalizedParent, codes, closedLevel2Codes))
-    })
+    }).catch(error => {
+      if (!cancelled) setCodeLoadError(error.message)
+    }).finally(() => { if (!cancelled) setLoadedCodeKey(parentId) })
+    return () => { cancelled = true }
   }, [open, parentId])
 
   function reset() {
+    setLoadedCodeKey(null)
     setStep(1); setSaving(false); setSaveError('')
     setJobCode(''); setReceivedDate(''); setDueDate('')
     setFiles([]); setFileError(''); setRows([]); setSyncCode(false); setExistingCodes([])
@@ -194,7 +192,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
   // ── Step navigation ──
   function goStep2(e: React.FormEvent) {
     e.preventDefault()
-    if (!jobCode.trim()) return
+    if (!jobCode.trim() || checkingCodes || codeLoadError) return
     setSaveError('')
     setStep(2)
   }
@@ -218,7 +216,10 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
       jobNote: '',
       quantity: '1',
     }))
-    setRows(buRows)
+    setRows(prev => assignBuCodes(buRows.map(row => {
+      const old = prev.find(item => item.id === row.id)
+      return old ? { ...old, files: row.files } : row
+    }), existingCodes))
     setStep(3)
   }
 
@@ -231,6 +232,9 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
     ['stl', 'step', 'stp', 'obj', '3mf', 'glb', 'gltf'].includes(name.split('.').pop()?.toLowerCase() ?? '')
 
   async function handleSaveAll() {
+    if (checkingCodes || codeLoadError) return
+    const numberingError = validateBuCodes(rows, existingCodes)
+    if (numberingError) { setSaveError(numberingError); return }
     for (const r of rows) {
       if (!r.level3.trim() && !r.jobCode.trim()) {
         setSaveError(`กรุณากรอกเลข BU สำหรับ "${r.drawingName}"`)
@@ -242,6 +246,10 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
     const skipped: string[] = []
 
     try {
+      const parents = Array.from(new Set(rows.map(row => normalizeBuCode(row.jobCode).match(/^([A-Z]+-\d{3,4})/)?.[1]).filter((parent): parent is string => Boolean(parent))))
+      const latest = (await Promise.all(parents.map(parent => fetchBuJobs(parent, token)))).flat().map(job => job.job_code)
+      const conflict = validateBuCodes(rows, latest)
+      if (conflict) { setExistingCodes(latest); throw new Error(conflict) }
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         setUploadIndex(i + 1); setUploadProgress(0)
@@ -372,9 +380,10 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
               </div>
             </div>
 
+            {codeLoadError && <p className="text-xs text-red-600">{codeLoadError}</p>}
             <DialogFooter className="pt-2 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => handleClose(false)} className="rounded-full h-10 border-gray-200">ยกเลิก</Button>
-              <Button type="submit" className="rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6 gap-1">
+              <Button type="submit" disabled={checkingCodes || Boolean(codeLoadError)} className="rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6 gap-1">
                 ถัดไป <ChevronRight className="h-4 w-4" />
               </Button>
             </DialogFooter>
@@ -436,9 +445,9 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
               )}
             </div>
 
-            {saveError && (
+            {(saveError || codeLoadError) && (
               <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg shrink-0">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError}
+                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError || codeLoadError}
               </div>
             )}
 
@@ -472,11 +481,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                         const next = !syncCode; setSyncCode(next)
                         if (next && rows[0]?.jobCode.trim()) {
                           const base = rows[0].jobCode.trim()
-                          const start = nextLevel3Suffix(base, existingCodes)
-                          setRows((prev) => prev.map((r, i) => ({
-                            ...r, jobCode: base,
-                            level3: r.level3Touched ? r.level3 : `${base}-${String(start + i).padStart(2, '0')}`,
-                          })))
+                          setRows(prev => assignBuCodes(prev.map(row => ({ ...row, jobCode: base })), existingCodes))
                         }
                       }}
                       className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${syncCode ? 'bg-[#7B1A1A]' : 'bg-gray-200'}`}
@@ -488,6 +493,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                 )}
               </div>
 
+              <p className="text-xs text-gray-500">แก้ BU แถวแรกของกลุ่มเพื่อรันแถวถัดไปอัตโนมัติ โดยข้ามเลขที่ใช้แล้ว{checkingCodes ? ' — กำลังตรวจเลขเดิม...' : ''}</p>
               <div className="space-y-3">
                 {rows.map((r, rowIdx) => {
                   const fullCode = r.level3.trim() || r.jobCode.trim()
@@ -524,20 +530,9 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                             disabled={syncCode && rowIdx > 0}
                             onChange={(e) => {
                               const code = e.target.value
-                              if (syncCode) {
-                                const start = nextLevel3Suffix(code, existingCodes)
-                                setRows((prev) => prev.map((row, i) => ({
-                                  ...row, jobCode: code,
-                                  level3: row.level3Touched ? row.level3 : code.trim() ? `${code.trim()}-${String(start + i).padStart(2, '0')}` : '',
-                                })))
-                              } else {
-                                const patch: Partial<BuRow> = { jobCode: code }
-                                if (!r.level3Touched) {
-                                  const start = nextLevel3Suffix(code, existingCodes)
-                                  patch.level3 = code.trim() ? `${code.trim()}-${String(start).padStart(2, '0')}` : ''
-                                }
-                                updateRow(r.id, patch)
-                              }
+                              setRows(prev => assignBuCodes(prev.map(row =>
+                                syncCode || row.id === r.id ? { ...row, jobCode: code } : row
+                              ), existingCodes))
                             }}
                             className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${syncCode && rowIdx > 0 ? 'bg-gray-50 text-gray-400' : ''}`}
                           />
@@ -549,7 +544,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                           <Input
                             placeholder="auto"
                             value={r.level3}
-                            onChange={(e) => updateRow(r.id, { level3: e.target.value, level3Touched: true })}
+                            onChange={(e) => setRows(prev => changeBuCode(prev, r.id, e.target.value, existingCodes))}
                             className={`rounded-lg h-9 text-sm border-gray-200 font-mono ${!r.level3Touched && r.level3 ? 'text-emerald-700 bg-emerald-50/50' : ''}`}
                           />
                         </div>
@@ -592,9 +587,9 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
               </div>
             )}
 
-            {saveError && (
+            {(saveError || codeLoadError) && (
               <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg shrink-0">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError}
+                <AlertCircle className="h-4 w-4 shrink-0" /> {saveError || codeLoadError}
               </div>
             )}
 
@@ -602,7 +597,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
               <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={saving} className="rounded-full h-10 border-gray-200 gap-1">
                 <ChevronLeft className="h-4 w-4" /> ย้อนกลับ
               </Button>
-              <Button type="button" onClick={handleSaveAll} disabled={saving} className="rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6">
+              <Button type="button" onClick={handleSaveAll} disabled={saving || checkingCodes || Boolean(codeLoadError)} className="rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6">
                 {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
                 {saving ? 'กำลังบันทึก...' : `บันทึก ${rows.length} BU`}
               </Button>

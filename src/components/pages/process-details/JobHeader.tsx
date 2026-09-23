@@ -28,10 +28,13 @@ interface JobHeaderProps {
   attachments?: JobHeaderAttachment[]
   hasRework?: boolean
   hasHold?: boolean
+  activeHolds?: { process: string; reason?: string }[]
+  pastHolds?: { process: string; reason?: string; round: number; held_at: string | null; released_at: string | null }[]
 }
 
-export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasHold }: JobHeaderProps) {
+export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasHold, activeHolds = [], pastHolds = [] }: JobHeaderProps) {
   const { role } = useCurrentUser()
+  const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   // ช่างต้องเปิดดูไฟล์ PDF/3D, QR/บาร์โค้ดใบงาน และใบงาน QC ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
   const canViewFile = role !== 'User'
   const codeRef = useRef<HTMLDivElement>(null)
@@ -87,7 +90,18 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
             <p className="text-xs text-gray-400">
               บาร์โค้ดประจำใบงานสำหรับสแกนเข้าสถานีปฏิบัติงาน
             </p>
-            {(hasRework || hasHold) && (
+            {activeHolds.map((hold, index) => (
+              <div key={index} role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 break-words whitespace-pre-wrap">
+                <span className="font-bold">HOLD — {hold.process}</span>: {hold.reason || 'ไม่ได้ระบุเหตุผล'}
+              </div>
+            ))}
+            {canViewHoldHistory && pastHolds.map((hold, index) => (
+              <div key={index} className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 break-words whitespace-pre-wrap">
+                <span className="font-semibold">เคยมีการ Hold — {hold.process} รอบ {hold.round}</span>: {hold.reason || 'ไม่ได้ระบุเหตุผล'} <span className="text-xs">(ปลดแล้ว)</span>
+                <div className="text-xs">Hold: {hold.held_at || 'ไม่มีเวลาเดิม'} · ปลด: {hold.released_at || 'ไม่มีเวลาเดิม'}</div>
+              </div>
+            ))}
+            {(hasRework || (canViewHoldHistory && hasHold)) && (
               <div className="flex items-center justify-center md:justify-start gap-1.5 pt-1">
                 {hasRework && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-700 border border-orange-100">
@@ -95,10 +109,10 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
                     มีการ Rework
                   </span>
                 )}
-                {hasHold && (
+                {canViewHoldHistory && hasHold && activeHolds.length === 0 && pastHolds.length === 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-100">
                     <PauseCircle className="h-3 w-3" />
-                    มีการ Hold
+                    เคยมีการ Hold
                   </span>
                 )}
               </div>

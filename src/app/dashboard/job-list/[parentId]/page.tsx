@@ -74,6 +74,7 @@ interface Job {
   attachments?: Attachment[]
   current_process_name?: string | null
   current_process_active?: boolean
+  on_hold?: boolean
   sale_closed_at?: string | null
 }
 
@@ -119,12 +120,21 @@ function StatusChip({
   status,
   currentProcessName,
   currentProcessActive,
+  onHold,
 }: {
   status: string
   currentProcessName?: string | null
   currentProcessActive?: boolean
+  onHold?: boolean
 }) {
   const s = normalizeStatus(status)
+  if (onHold && !['จบงาน', 'รับงาน', 'ไม่รับงาน', 'REJECT'].includes(s)) {
+    return (
+      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800">
+        HOLD
+      </span>
+    )
+  }
   if (s === 'จบงาน' || s === 'รับงาน') {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700">
@@ -508,6 +518,8 @@ export default function JobListPage() {
                             status={singleJob.status}
                             currentProcessName={singleJob.current_process_name}
                             currentProcessActive={singleJob.current_process_active}
+
+                            onHold={singleJob.on_hold}
                           />
                         ) : (
                           doneInGroup === items.length && items.length > 0
@@ -521,6 +533,8 @@ export default function JobListPage() {
                                   status={items[0]?.status ?? ''}
                                   currentProcessName={items[0]?.current_process_name}
                                   currentProcessActive={items[0]?.current_process_active}
+
+                                  onHold={items[0]?.on_hold}
                                 />
                         )}
                       </div>}
@@ -684,6 +698,8 @@ export default function JobListPage() {
                                   status={job.status}
                                   currentProcessName={job.current_process_name}
                                   currentProcessActive={job.current_process_active}
+
+                                  onHold={job.on_hold}
                                 />
                               </div>
                             </div>
@@ -752,6 +768,8 @@ export default function JobListPage() {
                               status={job.status}
                               currentProcessName={job.current_process_name}
                               currentProcessActive={job.current_process_active}
+
+                              onHold={job.on_hold}
                             />
                             {!isReadOnly && (
                               <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
