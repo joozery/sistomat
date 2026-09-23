@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 
-export function HoldReasonDialog({ processName, onCancel, onConfirm }: {
-  processName: string
+export function HoldReasonDialog({ processName, kind = 'HOLD', onCancel, onConfirm }: {
+  processName?: string
+  kind?: 'HOLD' | 'Reject' | 'Rework'
   onCancel: () => void
   onConfirm: (reason: string) => Promise<void>
 }) {
@@ -17,8 +18,8 @@ export function HoldReasonDialog({ processName, onCancel, onConfirm }: {
     <Dialog open onOpenChange={open => { if (!open && !saving) onCancel() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>ระบุเหตุผลในการ HOLD</DialogTitle>
-          <DialogDescription>พักกระบวนการ {processName} และหยุดเวลาพนักงานเมื่อยืนยัน</DialogDescription>
+          <DialogTitle>ระบุเหตุผลในการ {kind}</DialogTitle>
+          <DialogDescription>{kind === 'HOLD' ? `พักกระบวนการ ${processName} และหยุดเวลาพนักงานเมื่อยืนยัน` : `ติดป้าย ${kind} พร้อมเหตุผล งานยังดำเนินต่อได้ตามปกติ`}</DialogDescription>
         </DialogHeader>
         <form onSubmit={async event => {
           event.preventDefault()
@@ -26,10 +27,10 @@ export function HoldReasonDialog({ processName, onCancel, onConfirm }: {
           setSaving(true)
           setError('')
           try { await onConfirm(reason.trim()) }
-          catch (error) { setError(error instanceof Error ? error.message : 'บันทึก HOLD ไม่สำเร็จ') }
+          catch (error) { setError(error instanceof Error ? error.message : `บันทึก ${kind} ไม่สำเร็จ`) }
           finally { setSaving(false) }
         }} className="space-y-4">
-          <label htmlFor="hold-reason" className="block text-sm font-medium">เหตุผลในการ HOLD <span className="text-red-600">*</span></label>
+          <label htmlFor="hold-reason" className="block text-sm font-medium">เหตุผลในการ {kind} <span className="text-red-600">*</span></label>
           <textarea id="hold-reason" autoFocus required maxLength={500} disabled={saving}
             value={reason} onChange={event => setReason(event.target.value)}
             placeholder="เช่น รอวัตถุดิบ / แบบงานต้องแก้ไข / เครื่องขัดข้อง"
@@ -38,7 +39,7 @@ export function HoldReasonDialog({ processName, onCancel, onConfirm }: {
           <DialogFooter>
             <Button type="button" variant="outline" disabled={saving} onClick={onCancel}>ยกเลิก</Button>
             <Button type="submit" disabled={saving || !reason.trim()} className="bg-amber-600 hover:bg-amber-700 text-white">
-              {saving ? 'กำลังบันทึก...' : 'ยืนยัน HOLD'}
+              {saving ? 'กำลังบันทึก...' : `ยืนยัน ${kind}`}
             </Button>
           </DialogFooter>
         </form>

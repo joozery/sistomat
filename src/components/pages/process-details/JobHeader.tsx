@@ -4,11 +4,12 @@ import { useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { Calendar, Tag, Download, QrCode, Barcode, RotateCcw, PauseCircle, ClipboardCheck } from 'lucide-react'
+import { Calendar, Tag, Download, QrCode, Barcode, RotateCcw, PauseCircle, ClipboardCheck, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
 import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
 import { useCurrentUser } from '@/lib/useCurrentUser'
+import type { JobMarker } from '@/lib/job-markers'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ssr: false })
 const Barcoder = dynamic(() => import('react-barcode'), { ssr: false })
@@ -27,12 +28,14 @@ interface JobHeaderProps {
   fileName?: string
   attachments?: JobHeaderAttachment[]
   hasRework?: boolean
+  hasReject?: boolean
+  markerHistory?: JobMarker[]
   hasHold?: boolean
   activeHolds?: { process: string; reason?: string }[]
   pastHolds?: { process: string; reason?: string; round: number; held_at: string | null; released_at: string | null }[]
 }
 
-export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasHold, activeHolds = [], pastHolds = [] }: JobHeaderProps) {
+export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasReject, hasHold, markerHistory = [], activeHolds = [], pastHolds = [] }: JobHeaderProps) {
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   // ช่างต้องเปิดดูไฟล์ PDF/3D, QR/บาร์โค้ดใบงาน และใบงาน QC ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
@@ -101,12 +104,39 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
                 <div className="text-xs">Hold: {hold.held_at || 'ไม่มีเวลาเดิม'} · ปลด: {hold.released_at || 'ไม่มีเวลาเดิม'}</div>
               </div>
             ))}
-            {(hasRework || (canViewHoldHistory && hasHold)) && (
+            {(['reject', 'rework'] as const).map(type => {
+              const history = markerHistory.filter(entry => entry.type === type)
+              const latest = history[history.length - 1]
+              if (!latest) return null
+              const label = type === 'reject' ? 'Reject' : 'Rework'
+              const color = type === 'reject' ? 'border-red-200 bg-red-50 text-red-800' : 'border-orange-200 bg-orange-50 text-orange-800'
+              return (
+                <div key={type} className={`mt-2 rounded-lg border px-3 py-2 text-sm break-words whitespace-pre-wrap ${color}`}>
+                  <p role="status"><span className="font-bold">มีการ {label} รอบ {history.length}</span>: {latest.reason}</p>
+                  <p className="text-xs">{new Date(latest.created_at).toLocaleString('th-TH')}</p>
+                  {canViewHoldHistory && history.length > 1 && (
+                    <details className="mt-2 text-xs">
+                      <summary className="cursor-pointer">ประวัติ {label} ก่อนหน้า ({history.length - 1} รอบ)</summary>
+                      {history.slice(0, -1).map((entry, index) => (
+                        <p key={entry.id} className="mt-1">รอบ {index + 1}: {entry.reason} — {new Date(entry.created_at).toLocaleString('th-TH')}</p>
+                      ))}
+                    </details>
+                  )}
+                </div>
+              )
+            })}
+            {(hasRework || hasReject || (canViewHoldHistory && hasHold)) && (
               <div className="flex items-center justify-center md:justify-start gap-1.5 pt-1">
-                {hasRework && (
+                {hasReject && !markerHistory.some(entry => entry.type === 'reject') && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700 border border-red-100">
+                    <XCircle className="h-3 w-3" />
+                    มีการ Reject — ไม่ได้ระบุเหตุผลเดิม
+                  </span>
+                )}
+                {hasRework && !markerHistory.some(entry => entry.type === 'rework') && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-700 border border-orange-100">
                     <RotateCcw className="h-3 w-3" />
-                    มีการ Rework
+                    มีการ Rework — ไม่ได้ระบุเหตุผลเดิม
                   </span>
                 )}
                 {canViewHoldHistory && hasHold && activeHolds.length === 0 && pastHolds.length === 0 && (

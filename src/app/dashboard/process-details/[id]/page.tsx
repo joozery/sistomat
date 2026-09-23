@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printe
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
 import { HoldReasonDialog } from '@/components/pages/process-details/HoldReasonDialog'
 import { getPastHolds, updateHoldHistory } from '@/lib/hold-history'
+import type { JobMarker, JobMarkerType } from '@/lib/job-markers'
 import { ProcessTable, normalizeTargetTime, type ProcessRow, type WorkerLog } from '@/components/pages/process-details/ProcessTable'
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
 import { findWorker, findWorkerByUsername, findEligibleRowIndex, canWorkerDoProcess, isRowCompleted, type WorkerData } from '@/lib/workers'
@@ -89,7 +90,7 @@ const COMMAND_BARCODES: CommandBarcodeSpec[] = [
   {
     value: 'CMD_REVERSE', label: 'ตั้งสถานะ Rework', desc: 'ติดป้าย Rework ให้ใบงานนี้', status: '', accent: 'orange', icon: RotateCcw,
     detail: [
-      'ใช้เมื่อต้องการทำ rework — สแกนแล้วระบบจะติดป้าย "มีการ Rework" ไว้ที่หัวใบงานทันที ไม่ต้องเลือกกระบวนการ',
+      'สแกนแล้วกรอกเหตุผลและยืนยัน ระบบจะแสดง "มีการ Rework" พร้อมเหตุผลหลังบันทึกสำเร็จ',
       'ไปเพิ่มแถวใหม่ในตารางกระบวนการเองสำหรับงาน rework ที่จะทำ',
       'ไม่กระทบข้อมูลเวลาหรือสถานะยืนยันของกระบวนการเดิมที่มีอยู่แล้ว',
     ],
@@ -102,11 +103,11 @@ const COMMAND_BARCODES: CommandBarcodeSpec[] = [
     ],
   },
   {
-    value: 'CMD_REJECT', label: 'REJECT — ยุติทันที', desc: 'สแกน 2 ครั้งเพื่อปิดทุกกระบวนการทันที', status: 'REJECT', accent: 'red', icon: XCircle,
+    value: 'CMD_REJECT', label: 'ตั้งสถานะ Reject', desc: 'ติดป้าย Reject ให้ใบงานนี้', status: '', accent: 'red', icon: XCircle,
     detail: [
-      'ใช้ยุติงานทั้งหมดทันทีในกรณีฉุกเฉิน',
-      'ต้องสแกน 2 ครั้งติดกันภายใน 5 วินาทีเพื่อยืนยัน (ครั้งแรกเป็นการเตือน)',
-      'เมื่อยืนยันแล้ว ระบบหยุดเวลาพนักงานที่กำลังทำงานอยู่ทุกคนในทุกกระบวนการ และเปลี่ยนสถานะโปรเจกต์เป็น "REJECT"',
+      'สแกนแล้วกรอกเหตุผลและยืนยัน ระบบจะแสดง "มีการ Reject" พร้อมเหตุผลหลังบันทึกสำเร็จ',
+      'ไม่หยุดเวลา ไม่ปิดกระบวนการ และไม่เปลี่ยนสถานะหลักของงาน',
+      'เพิ่มหรือแทรกกระบวนการสำหรับงานแก้ไขได้เอง สแกนใหม่เพื่อบันทึกเหตุผลรอบถัดไป ไม่ใช่การปลดป้าย',
     ],
   },
   {
@@ -575,11 +576,13 @@ interface ProjectAttachment {
 
 interface ProjectFlags {
   has_rework?: boolean
+  has_reject?: boolean
   has_hold?: boolean
   awaiting_finish_decision?: boolean
 }
 
 interface ProjectData {
+  marker_history?: JobMarker[]
   project_id: string
   dwg_name?: string
   received_date: string
@@ -628,6 +631,7 @@ export default function ProcessDetailsPage() {
   const [processList, setProcessList] = useState<ProcessRow[]>([])
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
   const [holdTarget, setHoldTarget] = useState<{ id: number; process: string } | null>(null)
+  const [markerTarget, setMarkerTarget] = useState<{ id: string; type: JobMarkerType } | null>(null)
   const holdDialogOpenRef = useRef(false)
   const holdSavingRef = useRef(false)
   
@@ -670,8 +674,7 @@ export default function ProcessDetailsPage() {
   // Special command barcodes
   const pendingResetRef = useRef(false)
   const pendingResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingRejectRef = useRef(false)
-  const pendingRejectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const markerSavingRef = useRef(false)
 
   // Toast
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -925,50 +928,13 @@ export default function ProcessDetailsPage() {
         return
       }
 
-      // ── CMD_REJECT: ยุติงานทั้งหมดทันที (ต้อง scan 2 ครั้ง) ──
-      if (rawUpper === 'CMD_REJECT') {
+      // Ask for a reason before appending a Reject/Rework round.
+      if (rawUpper === 'CMD_REJECT' || rawUpper === 'CMD_REVERSE') {
         e.preventDefault()
-        if (pendingRejectRef.current) {
-          if (pendingRejectTimerRef.current) clearTimeout(pendingRejectTimerRef.current)
-          pendingRejectRef.current = false
-          const nowTime = getNowFormatted()
-          const current = processListRef.current
-          const next = current.map((row) => ({
-            ...row,
-            workers: row.workers.map((w) =>
-              w.worker_id && w.start_time && !w.stop_time ? { ...w, stop_time: nowTime } : w
-            ),
-            next_confirmed_at: row.next_confirmed_at ?? nowTime,
-          }))
-          void fetch(`/api/projects/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-            body: JSON.stringify({ processes: next, status: 'REJECT' }),
-          }).then((response) => {
-            if (!response.ok) throw new Error('บันทึก REJECT ไม่สำเร็จ')
-            setProcessList(next)
-            setProject((prev) => prev ? { ...prev, status: 'REJECT' } : prev)
-            showToast('error', 'REJECT — ยุติงานทั้งหมดแล้ว', 'ทุกกระบวนการถูกปิด สถานะ: REJECT')
-          }).catch(() => showToast('error', 'บันทึก REJECT ไม่สำเร็จ', 'กรุณาลองสแกนอีกครั้ง'))
-        } else {
-          pendingRejectRef.current = true
-          showToast('warning', 'สแกน CMD_REJECT อีกครั้งเพื่อยืนยัน', 'จะปิดทุกกระบวนการทันที เปลี่ยนสถานะเป็น "REJECT" (5 วินาที)')
-          pendingRejectTimerRef.current = setTimeout(() => { pendingRejectRef.current = false }, 5000)
-        }
-        return
-      }
-
-      // ── CMD_REVERSE: ตั้งสถานะ Rework เฉยๆ — ไม่ต้องเลือกกระบวนการ เพราะจะไปเพิ่มแถวใหม่เองสำหรับ rework ──
-      if (rawUpper === 'CMD_REVERSE') {
-        e.preventDefault()
-        const newFlags = { ...projectRef.current?.flags, has_rework: true }
-        setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
-        fetch(`/api/projects/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-          body: JSON.stringify({ flags: newFlags }),
-        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
-        showToast('warning', 'ตั้งสถานะ Rework แล้ว', 'เพิ่มแถวใหม่ในตารางกระบวนการเพื่อทำ rework')
+        setActionModal(null)
+        setPendingStop(null)
+        holdDialogOpenRef.current = true
+        setMarkerTarget({ id: crypto.randomUUID(), type: rawUpper === 'CMD_REJECT' ? 'reject' : 'rework' })
         return
       }
 
@@ -1502,6 +1468,34 @@ export default function ProcessDetailsPage() {
         }}
       />
     )}
+    {markerTarget && (
+      <HoldReasonDialog
+        kind={markerTarget.type === 'reject' ? 'Reject' : 'Rework'}
+        onCancel={() => { holdDialogOpenRef.current = false; setMarkerTarget(null) }}
+        onConfirm={async reason => {
+          if (markerSavingRef.current) return
+          markerSavingRef.current = true
+          try {
+            const response = await fetch(`/api/projects/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+              body: JSON.stringify({ marker: { ...markerTarget, reason } }),
+            })
+            const data = await response.json()
+            if (!response.ok) throw new Error(data.message || 'บันทึกเหตุผลไม่สำเร็จ กรุณาลองใหม่')
+            const current = projectRef.current
+            if (current) {
+              const next = { ...current, flags: data.flags, marker_history: data.marker_history }
+              projectRef.current = next
+              setProject(next)
+            }
+            holdDialogOpenRef.current = false
+            setMarkerTarget(null)
+            showToast('success', `บันทึก ${markerTarget.type === 'reject' ? 'Reject' : 'Rework'} แล้ว`, reason)
+          } finally { markerSavingRef.current = false }
+        }}
+      />
+    )}
     {actionModal && (
       <ActionModal
         mode={actionModal.mode}
@@ -1575,6 +1569,8 @@ export default function ProcessDetailsPage() {
             fileName={project.file_name}
             attachments={project.attachments}
             hasRework={!!project.flags?.has_rework}
+            hasReject={!!project.flags?.has_reject}
+            markerHistory={project.marker_history}
             hasHold={!!project.flags?.has_hold}
             activeHolds={processList.filter(row => row.on_hold && !row.next_confirmed_at).map(row => ({ process: row.process, reason: row.hold_reason }))}
             pastHolds={processList.flatMap(row => getPastHolds(row).map(hold => ({ ...hold, process: row.process })))}

@@ -3,6 +3,7 @@ import { getClientPromise } from '@/lib/mongodb'
 import { emitRealtimeUpdate } from '@/lib/socket-server'
 import { createNotification } from '@/lib/notify'
 import jwt from 'jsonwebtoken'
+import { parseJobMarker, type JobMarker } from '@/lib/job-markers'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
@@ -54,9 +55,26 @@ export async function PUT(
     const { id } = await params
     const body = await req.json()
     const { processes, status, qc, flags } = body
+    const marker = body.marker === undefined ? undefined : parseJobMarker(body.marker)
+    if (marker === null) return NextResponse.json({ message: 'กรุณาระบุเหตุผล Reject / Rework ไม่เกิน 500 ตัวอักษร' }, { status: 400 })
 
     const client = await getClientPromise()
     const db = client.db('sistomat')
+
+    if (marker) {
+      // Append atomically, retaining previous rounds and unrelated flags.
+      // Repeating the same request after a lost response must not add a second round.
+      const projects = db.collection<{ project_id: string; marker_history?: JobMarker[]; flags?: Record<string, boolean>; updated_at?: Date }>('projects')
+      const updated = await projects.findOneAndUpdate(
+        { project_id: id, 'marker_history.id': { $ne: marker.id } },
+        { $push: { marker_history: { ...marker, created_at: new Date().toISOString() } },
+          $set: { [`flags.has_${marker.type}`]: true, updated_at: new Date() } },
+        { returnDocument: 'after', projection: { flags: 1, marker_history: 1 } },
+      )
+      const result = updated ?? await projects.findOne({ project_id: id }, { projection: { flags: 1, marker_history: 1 } })
+      if (!result) return NextResponse.json({ message: 'ไม่พบใบงาน' }, { status: 404 })
+      return NextResponse.json({ flags: result.flags, marker_history: result.marker_history })
+    }
 
     const before = await db
       .collection('projects')
@@ -69,7 +87,18 @@ export async function PUT(
     if (processes !== undefined) update.processes = processes
     if (status !== undefined) update.status = status
     if (qc !== undefined) update.qc = qc
-    if (flags !== undefined) update.flags = flags
+    if (flags !== undefined) {
+      // A barcode may update one flag; retain Hold/Rework and other existing flags.
+      if (!flags || typeof flags !== 'object' || Array.isArray(flags)) {
+        return NextResponse.json({ message: 'Invalid flags' }, { status: 400 })
+      }
+      for (const [key, value] of Object.entries(flags)) {
+        if (!/^[a-z_]+$/.test(key) || typeof value !== 'boolean') {
+          return NextResponse.json({ message: 'Invalid flags' }, { status: 400 })
+        }
+        update[`flags.${key}`] = value
+      }
+    }
 
     const result = await db
       .collection('projects')
