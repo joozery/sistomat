@@ -26,7 +26,20 @@ export async function GET(req: NextRequest) {
     const db = client.db('sistomat')
     const collection = db.collection('notifications')
 
-    const items = await collection.find({ category: 'qc' }).sort({ created_at: -1 }).limit(50).toArray()
+    const token = getToken(req)
+    let isSuperAdmin = false
+    if (token) {
+      try {
+        const payload = jwt.verify(token, process.env.JWT_SECRET!) as any
+        isSuperAdmin = payload?.role?.trim().toLowerCase() === 'superadmin'
+      } catch {}
+    }
+
+    const filter = isSuperAdmin
+      ? { $or: [{ category: 'qc' }, { category: 'subjob' }] }
+      : { category: 'qc' }
+
+    const items = await collection.find(filter).sort({ created_at: -1 }).limit(50).toArray()
 
     const notifications = items.map((doc) => ({
       id: doc._id.toString(),

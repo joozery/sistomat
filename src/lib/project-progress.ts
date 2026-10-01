@@ -21,6 +21,7 @@ export interface ProgressJob {
   dwg_name?: string
   job_note?: string
   status?: string
+  is_printed?: boolean
   processes?: ProgressProcess[]
 }
 
@@ -31,6 +32,8 @@ export interface ProjectProgress {
   elapsed_seconds: number
   jobs_total: number
   jobs_done: number
+  jobs_printed: number
+  jobs_pending_process: number
   active_steps: { process: string; count: number }[]
   active_jobs: { job_code: string; drawing_name: string; job_note: string; process: string }[]
 }
@@ -44,19 +47,29 @@ export function summarizeProjectProgress(
   let total = 0
   let done = 0
   let started = 0
+  let printed = 0
+  let pendingProcess = 0
   let elapsedSeconds = 0
   const stepCounts = new Map<string, number>()
   const activeJobs: ProjectProgress['active_jobs'] = []
 
   for (const job of jobs) {
-    const processes = job.processes ?? []
-    if (processes.length === 0) continue
     if (job.status === 'ยกเลิก') continue  // งานที่ถูก REJECT ไม่นับเป็นงานที่ทำอยู่/เสร็จ
+
+    const processes = job.processes ?? []
+    const validProcesses = processes.filter((p) => p && typeof p.process === 'string' && p.process.trim().length > 0)
+
     total++
+    if (job.is_printed) printed++
 
-    for (const proc of processes) elapsedSeconds += getEffectiveElapsedSeconds(proc, nowMs)
+    if (validProcesses.length === 0) {
+      pendingProcess++
+      continue
+    }
 
-    const current = processes.find((proc) => !isProcessDone(proc))
+    for (const proc of validProcesses) elapsedSeconds += getEffectiveElapsedSeconds(proc, nowMs)
+
+    const current = validProcesses.find((proc) => !isProcessDone(proc))
     if (!current) {
       done++
       continue
@@ -98,6 +111,8 @@ export function summarizeProjectProgress(
     elapsed_seconds: elapsedSeconds,
     jobs_total: total,
     jobs_done: done,
+    jobs_printed: printed,
+    jobs_pending_process: pendingProcess,
     active_steps: Array.from(stepCounts, ([process, count]) => ({ process, count }))
       .sort((a, b) => b.count - a.count),
     active_jobs: activeJobs,

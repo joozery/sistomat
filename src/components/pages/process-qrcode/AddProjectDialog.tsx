@@ -26,6 +26,8 @@ import {
   ChevronLeft,
   AlertCircle,
   Hash,
+  AlertTriangle,
+  Layers,
 } from 'lucide-react'
 
 interface AddProjectDialogProps {
@@ -115,6 +117,17 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   const [step, setStep] = useState<Step>(1)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  type SavePhase = 'idle' | 'uploading' | 'creating_project' | 'creating_jobs' | 'done'
+  const [savePhase, setSavePhase] = useState<SavePhase>('idle')
+  const [saveStatus, setSaveStatus] = useState({
+    uploadCurrent: 0,
+    uploadTotal: 0,
+    currentFileName: '',
+    fileProgress: 0,
+    jobCurrent: 0,
+    jobTotal: 0,
+    currentJobCode: '',
+  })
   const [uploadingFileName, setUploadingFileName] = useState('')
   const [uploadIndex, setUploadIndex] = useState(0)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -126,6 +139,34 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   const [existingCodes, setExistingCodes] = useState<string[]>([])
   const [loadedCodeKey, setLoadedCodeKey] = useState<string | null>(null)
   const [codeLoadError, setCodeLoadError] = useState('')
+
+  useEffect(() => {
+    if (!saving) return
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [saving])
+
+  const overallProgressPercent = (() => {
+    if (!saving) return 0
+    if (savePhase === 'uploading') {
+      if (saveStatus.uploadTotal === 0) return 15
+      const fileFraction = Math.max(0, (saveStatus.uploadCurrent - 1 + (saveStatus.fileProgress / 100)) / saveStatus.uploadTotal)
+      return Math.min(65, Math.max(5, Math.round(fileFraction * 65)))
+    }
+    if (savePhase === 'creating_project') return 70
+    if (savePhase === 'creating_jobs') {
+      if (saveStatus.jobTotal === 0) return 90
+      const jobFraction = saveStatus.jobCurrent / saveStatus.jobTotal
+      return Math.min(98, Math.round(70 + (jobFraction * 28)))
+    }
+    if (savePhase === 'done') return 100
+    return 10
+  })()
+
   const parentKey = JSON.stringify(Array.from(new Set(rows.map(row => deriveLevel1(normalizeBuCode(row.jobCode))).filter(code => /^[A-Z]+-\d{3,4}$/.test(code)))).sort())
   const checkingCodes = open && loadedCodeKey !== parentKey
   useEffect(() => {
@@ -137,7 +178,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         if (cancelled) return
         const codes = lists.flat().map(job => normalizeBuCode(job.job_code))
         setCodeLoadError('')
-      setExistingCodes(codes)
+        setExistingCodes(codes)
         setRows(prev => assignBuCodes(prev, codes))
       })
       .catch(error => { if (!cancelled) setCodeLoadError(error.message) })
@@ -155,12 +196,23 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     setRows([])
     setSyncJobCode(false)
     setSaveError('')
+    setSavePhase('idle')
+    setSaveStatus({
+      uploadCurrent: 0,
+      uploadTotal: 0,
+      currentFileName: '',
+      fileProgress: 0,
+      jobCurrent: 0,
+      jobTotal: 0,
+      currentJobCode: '',
+    })
     setUploadingFileName('')
     setUploadIndex(0)
     setUploadProgress(0)
   }
 
   function handleClose(v: boolean) {
+    if (saving) return
     if (!v) { resetAll(); setLoadedCodeKey(null) }
     onOpenChange(v)
   }
@@ -240,20 +292,38 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   async function createProjectOnly() {
     setSaving(true)
     setSaveError('')
+    setSavePhase('uploading')
+    setSaveStatus({
+      uploadCurrent: 0,
+      uploadTotal: files.length,
+      currentFileName: '',
+      fileProgress: 0,
+      jobCurrent: 0,
+      jobTotal: 0,
+      currentJobCode: '',
+    })
     try {
       const token = localStorage.getItem('token')
-      // "เลขที่โปรเจค" is just a display label for this project shell — keep
-      // it exactly as typed (unlike job codes, it isn't parsed into level1/2/3)
       const projectId = form.projectId.trim()
-
-      // อัปโหลดไฟล์ที่แนบไว้ (ถ้ามี) แล้วผูกเข้ากับตัวโปรเจคแม่โดยตรง
       const uploaded: { file_url: string; file_name: string }[] = []
-      for (const file of files) {
-        setUploadingFileName(file.name)
-        setUploadProgress(0)
-        const url = await uploadOne(file, projectId, token, setUploadProgress)
-        uploaded.push({ file_url: url, file_name: file.name })
+
+      if (files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          setSaveStatus(prev => ({
+            ...prev,
+            uploadCurrent: i + 1,
+            currentFileName: file.name,
+            fileProgress: 0,
+          }))
+          const url = await uploadOne(file, projectId, token, (pct) => {
+            setSaveStatus(prev => ({ ...prev, fileProgress: pct }))
+          })
+          uploaded.push({ file_url: url, file_name: file.name })
+        }
       }
+
+      setSavePhase('creating_project')
       const primary = uploaded.find((f) => is3DFile(f.file_name)) ?? uploaded[0]
 
       const res = await fetch('/api/projects/add', {
@@ -274,6 +344,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         throw new Error(data.message || 'สร้างโปรเจคไม่สำเร็จ')
       }
 
+      setSavePhase('done')
       resetAll()
       onOpenChange(false)
       onSuccess()
@@ -281,7 +352,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       setSaveError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
       setSaving(false)
-      setUploadingFileName('')
+      setSavePhase('idle')
     }
   }
 
@@ -298,10 +369,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
 
     setSaving(true)
     setSaveError('')
+    setSavePhase('uploading')
+
     const token = localStorage.getItem('token')
-    // "เลขที่โปรเจค" is just a display label for this project shell — keep it
-    // exactly as typed. Only the job codes below (level1/2/3 hierarchy) need
-    // the "J" prefix normalized.
     const projectId = form.projectId.trim()
 
     try {
@@ -309,24 +379,67 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       const latest = (await Promise.all(parents.map(parent => fetchBuJobs(parent, token)))).flat().map(job => job.job_code)
       const conflict = validateBuCodes(rows, latest)
       if (conflict) { setExistingCodes(latest); throw new Error(conflict) }
-      // อัปโหลดไฟล์ของทุก Job ย่อยก่อน แล้วค่อยสร้างโปรเจคแม่ด้วยไฟล์จริง (ไม่ใช่ null)
-      const rowUploads: { row: JobRowInput; uploaded: { file_url: string; file_name: string }[] }[] = []
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i]
-        setUploadIndex(i + 1)
-        setUploadProgress(0)
 
-        const uploaded: { file_url: string; file_name: string }[] = []
-        for (const file of r.files) {
-          setUploadingFileName(file.name)
-          setUploadProgress(0)
-          const url = await uploadOne(file, projectId, token, setUploadProgress)
-          uploaded.push({ file_url: url, file_name: file.name })
+      // จัดเตรียมคิวอัปโหลดไฟล์ทุกไฟล์
+      const tasks: { rowIdx: number; file: File }[] = []
+      rows.forEach((r, rowIdx) => {
+        r.files.forEach((file) => {
+          tasks.push({ rowIdx, file })
+        })
+      })
+
+      const totalFiles = tasks.length
+      setSaveStatus({
+        uploadCurrent: 0,
+        uploadTotal: totalFiles,
+        currentFileName: tasks[0]?.file.name || '',
+        fileProgress: 0,
+        jobCurrent: 0,
+        jobTotal: rows.length,
+        currentJobCode: '',
+      })
+
+      const rowUploadsMap = new Map<number, { file_url: string; file_name: string }[]>()
+      rows.forEach((_, idx) => rowUploadsMap.set(idx, []))
+
+      // อัปโหลดแบบขนานทีละ 3 ไฟล์พร้อมกัน
+      if (totalFiles > 0) {
+        let taskCursor = 0
+        let completedFiles = 0
+
+        const poolSize = Math.min(3, totalFiles)
+        const worker = async () => {
+          while (taskCursor < tasks.length) {
+            const currentIdx = taskCursor++
+            const { rowIdx, file } = tasks[currentIdx]
+
+            setSaveStatus(prev => ({
+              ...prev,
+              uploadCurrent: completedFiles + 1,
+              currentFileName: file.name,
+              fileProgress: 0,
+            }))
+
+            const url = await uploadOne(file, projectId, token, (pct) => {
+              setSaveStatus(prev => (prev.currentFileName === file.name ? { ...prev, fileProgress: pct } : prev))
+            })
+
+            rowUploadsMap.get(rowIdx)!.push({ file_url: url, file_name: file.name })
+            completedFiles++
+            setSaveStatus(prev => ({
+              ...prev,
+              uploadCurrent: completedFiles,
+              fileProgress: 100,
+            }))
+          }
         }
-        rowUploads.push({ row: r, uploaded })
+
+        await Promise.all(Array.from({ length: poolSize }, () => worker()))
       }
 
-      const allUploaded = rowUploads.flatMap((ru) => ru.uploaded)
+      // สร้างโปรเจกต์หลัก
+      setSavePhase('creating_project')
+      const allUploaded = Array.from(rowUploadsMap.values()).flat()
       const primaryProject = allUploaded.find((f) => is3DFile(f.file_name)) ?? allUploaded[0]
 
       const projRes = await fetch('/api/projects/add', {
@@ -347,12 +460,22 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         throw new Error(projData.message || 'สร้างโปรเจคไม่สำเร็จ')
       }
 
+      // ทยอยสร้าง Job ย่อย
+      setSavePhase('creating_jobs')
       const skippedJobCodes: string[] = []
 
-      for (const { row: r, uploaded } of rowUploads) {
-        // prefer 3D file as primary (for 3D viewer), fallback to first
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]
+        const uploaded = rowUploadsMap.get(i) ?? []
         const primary = uploaded.find((f) => is3DFile(f.file_name)) ?? uploaded[0]
         const fullJobCode = normalizeJobCode(r.level3.trim() || r.jobCode.trim())
+
+        setSaveStatus(prev => ({
+          ...prev,
+          jobCurrent: i + 1,
+          jobTotal: rows.length,
+          currentJobCode: `${fullJobCode}${r.drawingName ? ` (${r.drawingName})` : ''}`,
+        }))
 
         const jobRes = await fetch('/api/jobs', {
           method: 'POST',
@@ -364,9 +487,9 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
             quantity: Number(r.quantity) || 1,
             received_date: form.receivedDate,
             due_date: form.dueDate,
-            file_url: primary.file_url,
-            file_name: primary.file_name,
-            attachments: uploaded,
+            file_url: primary?.file_url ?? null,
+            file_name: primary?.file_name ?? null,
+            attachments: uploaded.length ? uploaded : null,
           }),
         })
         if (!jobRes.ok) {
@@ -379,6 +502,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         }
       }
 
+      setSavePhase('done')
       const level1 = deriveLevel1(normalizeJobCode(rows[0].jobCode.trim()))
       resetAll()
       onOpenChange(false)
@@ -391,7 +515,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       setSaveError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
       setSaving(false)
-      setUploadingFileName('')
+      setSavePhase('idle')
     }
   }
 
@@ -399,7 +523,15 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-3xl rounded-2xl p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col scrollbar-hide">
+      <DialogContent
+        onInteractOutside={(e) => {
+          if (saving) e.preventDefault()
+        }}
+        onEscapeKeyDown={(e) => {
+          if (saving) e.preventDefault()
+        }}
+        className="sm:max-w-3xl rounded-2xl p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col scrollbar-hide relative overflow-hidden"
+      >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <QrCode className="h-5 w-5 text-[#7B1A1A]" />
@@ -676,21 +808,6 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
               </div>
             </div>
 
-            {saving && uploadingFileName && (
-              <div className="space-y-1 shrink-0">
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Job {uploadIndex}/{rows.length} — {uploadingFileName}</span>
-                  <span>{uploadProgress}%</span>
-                </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#7B1A1A] rounded-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
             {(saveError || codeLoadError) && (
               <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg shrink-0">
                 <AlertCircle className="h-4 w-4 shrink-0" /> {saveError || codeLoadError}
@@ -712,6 +829,73 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
               </Button>
             </DialogFooter>
           </>
+        )}
+
+        {/* Processing & Lock Overlay */}
+        {saving && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center select-none animate-in fade-in duration-200">
+            <div className="max-w-md w-full flex flex-col items-center space-y-4">
+              <div className="relative">
+                <div className="absolute -inset-2 rounded-full bg-red-100 animate-ping opacity-60" />
+                <div className="relative w-16 h-16 rounded-full bg-red-50 border-2 border-[#7B1A1A]/30 flex items-center justify-center shadow-inner">
+                  {savePhase === 'uploading' && <Upload className="h-8 w-8 text-[#7B1A1A] animate-bounce" />}
+                  {savePhase === 'creating_project' && <Layers className="h-8 w-8 text-[#7B1A1A] animate-pulse" />}
+                  {savePhase === 'creating_jobs' && <Loader2 className="h-8 w-8 text-[#7B1A1A] animate-spin" />}
+                  {savePhase === 'done' && <CheckCircle2 className="h-8 w-8 text-emerald-600" />}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-gray-800 tracking-tight">
+                  {savePhase === 'uploading' && `กำลังอัปโหลดไฟล์ Drawing (${saveStatus.uploadCurrent}/${saveStatus.uploadTotal})`}
+                  {savePhase === 'creating_project' && 'กำลังสร้างโฟลเดอร์โปรเจกต์หลักในระบบ'}
+                  {savePhase === 'creating_jobs' && `กำลังสร้าง Job ย่อย (${saveStatus.jobCurrent}/${saveStatus.jobTotal})`}
+                  {savePhase === 'done' && 'เสร็จสิ้นเรียบร้อย'}
+                </h3>
+                <p className="text-xs text-gray-500 font-mono truncate max-w-sm">
+                  {savePhase === 'uploading' && (saveStatus.currentFileName || 'กำลังเตรียมส่งไฟล์...')}
+                  {savePhase === 'creating_project' && `รหัสโปรเจกต์: ${form.projectId.trim()}`}
+                  {savePhase === 'creating_jobs' && `รหัส Job: ${saveStatus.currentJobCode || '...'}`}
+                  {savePhase === 'done' && 'กำลังเปิดหน้ารายการ...'}
+                </p>
+              </div>
+
+              <div className="w-full space-y-1.5 pt-1">
+                <div className="flex justify-between items-center text-xs font-semibold text-gray-600">
+                  <span>ความคืบหน้ารวม</span>
+                  <span className="text-[#7B1A1A] font-mono">{overallProgressPercent}%</span>
+                </div>
+                <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden p-0.5 border border-gray-200">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#7B1A1A] to-[#a32a2a] rounded-full transition-all duration-300"
+                    style={{ width: `${overallProgressPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              {savePhase === 'uploading' && saveStatus.uploadTotal > 0 && (
+                <div className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-left space-y-1">
+                  <div className="flex justify-between text-[11px] text-gray-500">
+                    <span className="truncate max-w-[240px] font-medium">{saveStatus.currentFileName}</span>
+                    <span className="font-mono">{saveStatus.fileProgress}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#7B1A1A] rounded-full transition-all duration-200"
+                      style={{ width: `${saveStatus.fileProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-amber-50 border border-amber-300/80 rounded-xl p-3 flex items-start gap-2.5 text-left text-amber-900 mt-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs leading-relaxed">
+                  <span className="font-bold">กรุณารอสักครู่ ห้ามปิดหน้าต่างหรือรีเฟรชเบราว์เซอร์:</span> ระบบกำลังประมวลผลไฟล์ Drawing และเชื่อมโยงฐานข้อมูลการผลิต
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>

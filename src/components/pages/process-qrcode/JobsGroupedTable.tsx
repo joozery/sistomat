@@ -141,19 +141,11 @@ export function JobsGroupedTable({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button
-            onClick={onOpenImportDialog}
-            variant="outline"
-            className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#7B1A1A] hover:text-[#7B1A1A] px-4 text-sm"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            นำเข้า Excel
-          </Button>
-          <Button
             onClick={onOpenAddDialog}
             className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-sm"
           >
             <Plus className="h-4 w-4" />
-            เพิ่มกระบวนการ
+            เพิ่มJOB
           </Button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   Calendar, X, Loader2, Box,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 import {
   type ProcessSummary, STATUS_CONFIG, colorFor, formatDate, getToken, planStatus,
 } from './shared'
@@ -39,9 +40,15 @@ export function AllPlansOverview() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  const { role } = useCurrentUser()
+  const isTechnician = role === 'ช่าง'
+  const visibleStatusFilters: StatusFilter[] = isTechnician
+    ? ['all', 'completed']
+    : STATUS_FILTERS
+
   // ตัวกรองเก็บใน URL (?status=&from=&to=) เพื่อให้กดย้อนกลับจากหน้ารายละเอียดแล้วตัวกรองยังอยู่
   const rawStatus = searchParams.get('status')
-  const statusFilter: StatusFilter = STATUS_FILTERS.includes(rawStatus as StatusFilter) ? (rawStatus as StatusFilter) : 'all'
+  const statusFilter: StatusFilter = visibleStatusFilters.includes(rawStatus as StatusFilter) ? (rawStatus as StatusFilter) : 'all'
   const summaryDateFrom = searchParams.get('from') ?? ''
   const summaryDateTo = searchParams.get('to') ?? ''
 
@@ -73,12 +80,15 @@ export function AllPlansOverview() {
 
   const filteredSummary = summary.filter((s) => statusFilter === 'all' || planStatus(s) === statusFilter)
 
-  const stats = [
-    { label: 'กระบวนการทั้งหมด', value: summary.length,                                              icon: LayoutGrid,   color: 'text-gray-700',    bg: 'bg-gray-100'    },
-    { label: 'กำลังดำเนินการ',    value: summary.filter((s) => planStatus(s) === 'on-track').length,  icon: Clock,        color: 'text-blue-700',    bg: 'bg-blue-50'     },
-    { label: 'ล่าช้า',             value: summary.filter((s) => planStatus(s) === 'at-risk').length,   icon: AlertCircle,  color: 'text-amber-700',   bg: 'bg-amber-50'    },
-    { label: 'เสร็จแล้ว',         value: summary.filter((s) => planStatus(s) === 'completed').length,  icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-50'  },
+  const allStats = [
+    { key: 'all',       label: 'กระบวนการทั้งหมด', value: summary.length,                                              icon: LayoutGrid,   color: 'text-gray-700',    bg: 'bg-gray-100'    },
+    { key: 'on-track',  label: 'กำลังดำเนินการ',    value: summary.filter((s) => planStatus(s) === 'on-track').length,  icon: Clock,        color: 'text-blue-700',    bg: 'bg-blue-50'     },
+    { key: 'at-risk',   label: 'ล่าช้า',             value: summary.filter((s) => planStatus(s) === 'at-risk').length,   icon: AlertCircle,  color: 'text-amber-700',   bg: 'bg-amber-50'    },
+    { key: 'completed', label: 'เสร็จแล้ว',         value: summary.filter((s) => planStatus(s) === 'completed').length,  icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-50'  },
   ]
+  const stats = isTechnician
+    ? allStats.filter((s) => s.key === 'all' || s.key === 'completed')
+    : allStats
 
   return (
     <div className="space-y-6 font-sans">
@@ -103,7 +113,7 @@ export function AllPlansOverview() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3 sm:px-5 sm:py-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-gray-400 mr-1">สถานะ</span>
-          {STATUS_FILTERS.map((v) => (
+          {visibleStatusFilters.map((v) => (
             <button key={v} onClick={() => updateFilters({ status: v })}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
                 statusFilter === v ? 'bg-gray-900 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -164,7 +174,9 @@ export function AllPlansOverview() {
             {filteredSummary.map((s) => {
               const c = colorFor(s.process)
               const pct = s.job_count > 0 ? Math.round((s.completed_count / s.job_count) * 100) : 0
-              const stCfg = STATUS_CONFIG[planStatus(s)]
+              const currentStatus = planStatus(s)
+              const stCfg = STATUS_CONFIG[currentStatus]
+              const showBadge = !isTechnician || currentStatus === 'completed'
 
               return (
                 <Link
@@ -183,12 +195,14 @@ export function AllPlansOverview() {
                           {s.process}
                         </span>
                         <p className="mt-1.5 text-sm font-semibold text-gray-700">
-                          {s.job_count.toLocaleString()} งาน · {s.total_qty.toLocaleString()} ชิ้น
+                          {s.job_count.toLocaleString()} แบบ · {s.total_qty.toLocaleString()} ชิ้น
                         </p>
                       </div>
-                      <Badge variant="outline" className={`shrink-0 text-[10px] font-semibold ${stCfg.cls}`}>
-                        {stCfg.label}
-                      </Badge>
+                      {showBadge && (
+                        <Badge variant="outline" className={`shrink-0 text-[10px] font-semibold ${stCfg.cls}`}>
+                          {stCfg.label}
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-4 sm:gap-5">
@@ -221,7 +235,7 @@ export function AllPlansOverview() {
                         {s.overtime_hours > 0 && (
                           <div className="flex items-center gap-1 text-[11px] text-red-600 font-semibold">
                             <AlertTriangle className="h-3 w-3 shrink-0" />
-                            <span>เกินเวลา +{s.overtime_hours.toLocaleString()} ชม. ({s.overtime_jobs} งาน)</span>
+                            <span>เกินเวลา +{s.overtime_hours.toLocaleString()} ชม. ({s.overtime_jobs} แบบ)</span>
                           </div>
                         )}
                         <p className="text-[11px] text-[#7B1A1A] font-semibold">คลิกเพื่อดูรายการ →</p>

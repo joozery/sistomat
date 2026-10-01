@@ -21,7 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react'
+import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Trash2, AlertTriangle, Printer } from 'lucide-react'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface Project {
@@ -35,6 +35,8 @@ interface Project {
     elapsed_seconds: number
     jobs_total: number
     jobs_done: number
+    jobs_printed?: number
+    jobs_pending_process?: number
     active_steps?: { process: string; count: number }[]
   }
 }
@@ -45,6 +47,7 @@ interface MatchedJob {
   drawing_name?: string
   quantity?: number
   status?: string
+  is_printed?: boolean
 }
 
 interface ProjectTableProps {
@@ -205,6 +208,34 @@ export function ProjectTable({
       ? matchedJobs.filter((j) => j.level1 === projectId || j.level1 === `J${projectId}`)
       : []
 
+  const renderPrintBadge = (progress: Project['progress']) => {
+    const total = progress?.jobs_total ?? 0
+    const printed = progress?.jobs_printed ?? 0
+    if (total === 0) return <span className="text-gray-300 text-xs">—</span>
+
+    if (printed === 0) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
+          <Printer className="h-3 w-3 text-gray-400" /> 0/{total}
+        </span>
+      )
+    }
+
+    if (printed < total) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+          <Printer className="h-3 w-3 text-amber-600" /> {printed}/{total}
+        </span>
+      )
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <Printer className="h-3 w-3 text-emerald-600" /> {printed}/{total} (ครบ)
+      </span>
+    )
+  }
+
   const renderStepBadge = (progress: Project['progress']) => {
     const steps = progress?.active_steps?.length
       ? progress.active_steps
@@ -257,6 +288,15 @@ export function ProjectTable({
             {job.quantity != null && (
               <span className="text-gray-400 shrink-0">{job.quantity} ชิ้น</span>
             )}
+            {job.is_printed ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full shrink-0">
+                <Printer className="h-2.5 w-2.5 text-emerald-600" /> ปริ้นแล้ว
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
+                <Printer className="h-2.5 w-2.5 text-amber-600" /> ยังไม่ปริ้น
+              </span>
+            )}
             {job.status && (
               <Badge variant="outline" className="rounded-full text-[10px] px-2 py-0 shrink-0">
                 {job.status}
@@ -303,21 +343,11 @@ export function ProjectTable({
           )}
           {!isReadOnly && (
             <Button
-              onClick={onOpenImportDialog}
-              variant="outline"
-              className="gap-2 rounded-full h-10 border-gray-200 text-gray-600 hover:border-[#7B1A1A] hover:text-[#7B1A1A] px-4 text-sm"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              <span>นำเข้า Excel</span>
-            </Button>
-          )}
-          {!isReadOnly && (
-            <Button
               onClick={onOpenAddDialog}
               className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 shadow-sm transition-all"
             >
               <Plus className="h-4 w-4" />
-              <span>เพิ่มกระบวนการ</span>
+              <span>เพิ่มJOB</span>
             </Button>
           )}
         </div>
@@ -356,13 +386,28 @@ export function ProjectTable({
                           {String((currentPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}
                         </span>
                         <span className="font-mono font-bold text-sm text-gray-800 truncate">{project.project_id}</span>
+                        {role?.trim().toLowerCase() === 'superadmin' && (project.progress?.jobs_pending_process ?? 0) > 0 && (
+                          <span
+                            title={`มี ${project.progress!.jobs_pending_process} จ๊อบย่อยที่รอเพิ่ม Process`}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap"
+                          >
+                            <AlertTriangle className="h-2.5 w-2.5 text-amber-600" />
+                            รอเพิ่ม Process ({project.progress!.jobs_pending_process})
+                          </span>
+                        )}
                       </div>
                       <div className="shrink-0">{renderStatusBadge(project.progress)}</div>
                     </div>
 
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[11px] text-gray-400 shrink-0">ขั้นตอนปัจจุบัน</span>
-                      {renderStepBadge(project.progress)}
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] text-gray-400 shrink-0">ขั้นตอน</span>
+                        {renderStepBadge(project.progress)}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[11px] text-gray-400">ปริ้นใบงาน:</span>
+                        {renderPrintBadge(project.progress)}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 text-xs">
@@ -431,13 +476,14 @@ export function ProjectTable({
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">ระยะเวลาใช้งาน</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">กำหนดส่งมอบ</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase">สถานะ</TableHead>
+                <TableHead className="text-xs font-bold text-gray-500 uppercase text-center">ปริ้นใบงาน</TableHead>
                 <TableHead className="text-xs font-bold text-gray-500 uppercase text-center w-28">การจัดการ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100">
               {projects.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-32 text-center text-gray-400">
+                  <TableCell colSpan={10} className="h-32 text-center text-gray-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <QrCode className="h-6 w-6 opacity-30" />
                       <p className="text-sm">ไม่พบโปรเจคที่ค้นหา</p>
@@ -467,10 +513,19 @@ export function ProjectTable({
                       </TableCell>
 
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                             {project.project_id}
                           </span>
+                          {role?.trim().toLowerCase() === 'superadmin' && (progress?.jobs_pending_process ?? 0) > 0 && (
+                            <span
+                              title={`มี ${progress!.jobs_pending_process} จ๊อบย่อยที่รอเพิ่ม Process`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 animate-pulse whitespace-nowrap"
+                            >
+                              <AlertTriangle className="h-3 w-3 text-amber-600" />
+                              รอเพิ่ม Process ({progress!.jobs_pending_process})
+                            </span>
+                          )}
                         </div>
                       </TableCell>
 
@@ -498,6 +553,10 @@ export function ProjectTable({
 
                       <TableCell>
                         {renderStatusBadge(progress)}
+                      </TableCell>
+
+                      <TableCell className="text-center whitespace-nowrap">
+                        {renderPrintBadge(progress)}
                       </TableCell>
 
                       <TableCell className="text-center">

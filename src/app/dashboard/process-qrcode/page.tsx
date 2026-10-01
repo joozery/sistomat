@@ -21,6 +21,8 @@ interface Project {
     elapsed_seconds: number
     jobs_total: number
     jobs_done: number
+    jobs_printed?: number
+    jobs_pending_process?: number
     active_steps?: { process: string; count: number }[]
     active_jobs?: { job_code: string; drawing_name: string; job_note: string; process: string }[]
   }

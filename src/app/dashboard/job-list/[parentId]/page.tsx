@@ -64,10 +64,14 @@ interface Job {
   completed: number
   remaining: number
   status: string
+  has_no_process?: boolean
+  is_printed?: boolean
+  printed_at?: string
   processes: ProcessEntry[]
   coating: string
   outsource_process: string
   due_date: string
+  received_date?: string
   sheet_name: string
   file_url?: string
   file_name?: string
@@ -255,6 +259,14 @@ export default function JobListPage() {
 
   function handlePrintGroup(groupCode: string, groupJobs: Job[]) {
     if (groupJobs.length === 0) return
+    const codes = groupJobs.map((job) => job.job_code).filter(Boolean)
+    if (codes.length > 0) {
+      fetch('/api/jobs/print-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+        body: JSON.stringify({ job_codes: codes }),
+      }).catch(() => {})
+    }
     const ids = groupJobs.map((job) => encodeURIComponent(job.job_code)).join(',')
     router.push(`/dashboard/job-list/${encodeURIComponent(parentId)}/print?group=${encodeURIComponent(groupCode)}&ids=${ids}`)
   }
@@ -645,7 +657,7 @@ export default function JobListPage() {
                         {/* Sub-header */}
                         <div className="hidden md:grid grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                           <span></span>
-                          <span>BU Code</span>
+                          <span>เลข Job</span>
                           <span>ชื่อแบบ</span>
                           <span className="text-center">จำนวน</span>
                           <span>Process</span>
@@ -657,7 +669,9 @@ export default function JobListPage() {
                           <div
                             key={job.job_code}
                             className={`flex flex-col gap-2.5 px-4 py-3 md:grid md:grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] md:gap-4 md:px-12 md:py-2 md:items-center ${
-                              idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                              canCloseSale && job.has_no_process
+                                ? 'bg-amber-50/70 border-l-4 border-l-amber-500'
+                                : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                             } hover:bg-red-50/20 transition-colors`}
                           >
                             <div className="flex items-center gap-3 md:contents">
@@ -669,9 +683,20 @@ export default function JobListPage() {
                                 onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                               />
                               <div className="min-w-0 flex-1 md:contents">
-                                <span className="block font-mono text-xs font-semibold text-gray-700 break-all md:break-normal">
-                                  {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="block font-mono text-xs font-semibold text-gray-700 break-all md:break-normal">
+                                    {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
+                                  </span>
+                                  {job.is_printed ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                      <Printer className="h-2.5 w-2.5 text-emerald-600" /> ปริ้นแล้ว
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                      <Printer className="h-2.5 w-2.5 text-amber-600" /> ยังไม่ปริ้น
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="block text-xs text-gray-500 truncate">{job.drawing_name}</span>
                               </div>
                             </div>
@@ -680,7 +705,12 @@ export default function JobListPage() {
                                 <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
                                 <span className="text-[10px] text-gray-400"> ชิ้น</span>
                               </div>
-                              <div className="flex gap-1 flex-wrap">
+                              <div className="flex gap-1 flex-wrap items-center">
+                                {canCloseSale && job.has_no_process && (
+                                  <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse whitespace-nowrap">
+                                    <AlertTriangle className="h-3 w-3 text-amber-600" /> รอเพิ่ม Process
+                                  </span>
+                                )}
                                 {job.processes.slice(0, 2).map((p, i) => (
                                   <span key={i} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
                                     {p.process}
@@ -751,7 +781,9 @@ export default function JobListPage() {
                           <div
                             key={job.job_code}
                             className={`flex flex-wrap items-center gap-x-3 gap-y-2 md:gap-4 px-4 py-3 md:px-12 md:py-2 ${
-                              idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                              canCloseSale && job.has_no_process
+                                ? 'bg-amber-50/70 border-l-4 border-l-amber-500'
+                                : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                             } hover:bg-red-50/20 transition-colors`}
                           >
                             <JobThumbnail
@@ -760,10 +792,26 @@ export default function JobListPage() {
                               isReadOnly={!canViewFile}
                               onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
                             />
-                            <span className="font-mono text-xs font-semibold text-gray-700 md:w-40 md:shrink-0 break-all md:break-normal">
-                              {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap md:w-48 md:shrink-0">
+                              <span className="font-mono text-xs font-semibold text-gray-700 break-all md:break-normal">
+                                {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
+                              </span>
+                              {job.is_printed ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                  <Printer className="h-2.5 w-2.5 text-emerald-600" /> ปริ้นแล้ว
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                  <Printer className="h-2.5 w-2.5 text-amber-600" /> ยังไม่ปริ้น
+                                </span>
+                              )}
+                            </div>
                             <span className="text-xs text-gray-500 flex-1 min-w-[8rem] truncate">{job.drawing_name}</span>
+                            {canCloseSale && job.has_no_process && (
+                              <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse whitespace-nowrap">
+                                <AlertTriangle className="h-3 w-3 text-amber-600" /> รอเพิ่ม Process
+                              </span>
+                            )}
                             <StatusChip
                               status={job.status}
                               currentProcessName={job.current_process_name}

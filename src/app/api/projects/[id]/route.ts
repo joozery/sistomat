@@ -36,7 +36,33 @@ export async function GET(
       return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })
     }
 
-    return NextResponse.json({ ...project, _id: project._id.toString() })
+    let quantity = project.quantity
+    let isPrinted = project.is_printed
+    let printedAt = project.printed_at
+    let jobNote = project.job_note
+
+    if (quantity == null || isPrinted == null || !jobNote) {
+      const jobDoc = await db.collection('jobs').findOne({ job_code: id }, { projection: { quantity: 1, is_printed: 1, printed_at: 1, job_note: 1 } })
+      if (quantity == null && jobDoc?.quantity != null) {
+        quantity = jobDoc.quantity
+      }
+      if (isPrinted == null && jobDoc?.is_printed != null) {
+        isPrinted = jobDoc.is_printed
+        printedAt = jobDoc.printed_at
+      }
+      if (!jobNote && jobDoc?.job_note) {
+        jobNote = jobDoc.job_note
+      }
+    }
+
+    return NextResponse.json({
+      ...project,
+      job_note: jobNote,
+      quantity,
+      is_printed: Boolean(isPrinted),
+      printed_at: printedAt,
+      _id: project._id.toString()
+    })
   } catch (e) {
     console.error('GET /api/projects/[id]:', e)
     return NextResponse.json({ message: 'เกิดข้อผิดพลาด' }, { status: 500 })
@@ -168,21 +194,34 @@ export async function DELETE(
     const client = await getClientPromise()
     const db = client.db('sistomat')
 
-    // เผื่อ id เป็น level1 project ที่มี sub-job ผูกอยู่ (เช่น "A-2917" → level1 "JA-2917")
-    const childLevel1s = /^J[A-Z]-\d{3,4}$/.test(id) ? [id] : [id, `J${id}`]
+    const cleanId = id.trim()
+    const variants = Array.from(new Set([
+      cleanId,
+      cleanId.startsWith('J') ? cleanId : `J${cleanId}`,
+      cleanId.replace(/^J(?=[A-Z]-)/, ''),
+    ])).filter(Boolean)
     const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    // fallback ด้วย project_id prefix เผื่อ projects doc เก่าที่ไม่มี field level1 (สร้างผ่าน /api/jobs ก่อนหน้านี้)
-    const level1PrefixPattern = new RegExp(`^(${childLevel1s.map(escapeRegExp).join('|')})-`)
+    const prefixPattern = new RegExp(`^(${variants.map(escapeRegExp).join('|')})(-|$)`)
 
     const [projectResult] = await Promise.all([
-      db.collection('projects').deleteOne({ project_id: id }),
       db.collection('projects').deleteMany({
-        $or: [{ level1: { $in: childLevel1s } }, { project_id: { $regex: level1PrefixPattern } }],
+        $or: [
+          { project_id: { $in: variants } },
+          { project_id: { $regex: prefixPattern } },
+          { level1: { $in: variants } },
+          { level2: { $in: variants } },
+          { level3: { $in: variants } },
+        ],
       }),
-      db.collection('jobs').deleteMany({ level1: { $in: childLevel1s } }),
-      // เผื่อ id เป็น job_code เดี่ยว (เช่น "JA-8888-001-01") ไม่ใช่ level1 root —
-      // ลบ entry ใน jobs collection ที่ตรงกันด้วย ไม่งั้นจะเหลือค้างให้เห็นในหน้า job-list
-      db.collection('jobs').deleteOne({ job_code: id }),
+      db.collection('jobs').deleteMany({
+        $or: [
+          { job_code: { $in: variants } },
+          { job_code: { $regex: prefixPattern } },
+          { level1: { $in: variants } },
+          { level2: { $in: variants } },
+          { level3: { $in: variants } },
+        ],
+      }),
     ])
 
     if (projectResult.deletedCount === 0) {

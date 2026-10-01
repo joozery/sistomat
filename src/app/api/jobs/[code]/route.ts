@@ -41,6 +41,26 @@ export async function PATCH(
   if (!Number.isSafeInteger(quantity) || quantity < 1) {
     return NextResponse.json({ message: 'จำนวนชิ้นงานต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป' }, { status: 400 })
   }
+  const hasDueDate = 'due_date' in body
+  const rawDueDate = typeof body.due_date === 'string' ? body.due_date.trim() : (body.due_date ? String(body.due_date).trim() : '')
+  let dueDateObj: Date | null = null
+  if (rawDueDate) {
+    const parsed = new Date(rawDueDate)
+    if (isNaN(parsed.getTime())) {
+      return NextResponse.json({ message: 'รูปแบบวันกำหนดส่งมอบไม่ถูกต้อง' }, { status: 400 })
+    }
+    dueDateObj = parsed
+  }
+  const hasReceivedDate = 'received_date' in body
+  const rawReceivedDate = typeof body.received_date === 'string' ? body.received_date.trim() : (body.received_date ? String(body.received_date).trim() : '')
+  let receivedDateObj: Date | null = null
+  if (rawReceivedDate) {
+    const parsed = new Date(rawReceivedDate)
+    if (isNaN(parsed.getTime())) {
+      return NextResponse.json({ message: 'รูปแบบวันรับงานไม่ถูกต้อง' }, { status: 400 })
+    }
+    receivedDateObj = parsed
+  }
   if (!Array.isArray(body.attachments) || body.attachments.some((a: Attachment) =>
     !a || typeof a.file_url !== 'string' || typeof a.file_name !== 'string' || !a.file_url || !a.file_name
   )) {
@@ -80,16 +100,46 @@ export async function PATCH(
       }
     }
 
+    const projectSet: Record<string, unknown> = {
+      ...fileUpdate,
+      project_id: newCode,
+      level1,
+      level2,
+      level3,
+      dwg_name: drawingName,
+      job_note: jobNote,
+      quantity,
+    }
+    const jobSet: Record<string, unknown> = {
+      ...fileUpdate,
+      job_code: newCode,
+      level1,
+      level2,
+      level3,
+      drawing_name: drawingName,
+      job_note: jobNote,
+      quantity,
+      remaining: quantity - completed,
+    }
+    if (hasDueDate) {
+      projectSet.due_date = dueDateObj
+      jobSet.due_date = rawDueDate
+    }
+    if (hasReceivedDate) {
+      projectSet.received_date = receivedDateObj
+      jobSet.received_date = rawReceivedDate
+    }
+
     const projectResult = await db.collection('projects').updateOne(
       { project_id: code, type: 'job' },
-      { $set: { ...fileUpdate, project_id: newCode, level1, level2, level3, dwg_name: drawingName, job_note: jobNote, quantity } },
+      { $set: projectSet },
     )
     if (!projectResult.matchedCount) {
       return NextResponse.json({ message: 'ไม่พบใบงานของ Job' }, { status: 404 })
     }
     await db.collection('jobs').updateOne(
       { job_code: code },
-      { $set: { ...fileUpdate, job_code: newCode, level1, level2, level3, drawing_name: drawingName, job_note: jobNote, quantity, remaining: quantity - completed } },
+      { $set: jobSet },
     )
     return NextResponse.json({ message: 'บันทึกสำเร็จ' })
   } catch (error) {

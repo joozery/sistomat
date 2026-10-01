@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, type ComponentType }
 import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown, PauseCircle, Info, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Save, CheckCircle2, AlertCircle, Loader2, Printer, UserX, ShieldX, RotateCcw, XCircle, ScanBarcode, Play, Square, Ban, PackageCheck, ThumbsDown, PauseCircle, Info, X, AlertTriangle } from 'lucide-react'
 import { JobHeader } from '@/components/pages/process-details/JobHeader'
 import { HoldReasonDialog } from '@/components/pages/process-details/HoldReasonDialog'
 import { getPastHolds, updateHoldHistory } from '@/lib/hold-history'
@@ -584,7 +584,10 @@ interface ProjectFlags {
 interface ProjectData {
   marker_history?: JobMarker[]
   project_id: string
+  job_note?: string
   dwg_name?: string
+  quantity?: number
+  is_printed?: boolean
   received_date: string
   due_date: string
   status: string
@@ -1562,7 +1565,11 @@ export default function ProcessDetailsPage() {
         <div className="space-y-6">
           <JobHeader
             id={project.project_id}
+            jobNote={project.job_note}
             dwgName={project.dwg_name}
+            quantity={project.quantity}
+            hasNoProcess={role === 'superadmin' && processList.every(p => !p.process?.trim())}
+            isPrinted={project.is_printed}
             receivedDate={formatThaiDate(project.received_date)}
             dueDate={formatThaiDate(project.due_date)}
             fileUrl={project.file_url}
@@ -1575,6 +1582,20 @@ export default function ProcessDetailsPage() {
             activeHolds={processList.filter(row => row.on_hold && !row.next_confirmed_at).map(row => ({ process: row.process, reason: row.hold_reason }))}
             pastHolds={processList.flatMap(row => getPastHolds(row).map(hold => ({ ...hold, process: row.process })))}
           />
+
+          {role === 'superadmin' && processList.every(p => !p.process?.trim()) && (
+            <div className="bg-amber-50 border border-amber-300 text-amber-900 px-5 py-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-sm animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-sm">จ๊อบย่อยนี้เป็นจ๊อบเพิ่มใหม่ — ยังไม่มีขั้นตอนการผลิต (Process)</p>
+                  <p className="text-xs text-amber-700 mt-0.5">กรุณากำหนดขั้นตอนในตารางด้านล่างแล้วกด "บันทึก" เมื่อบันทึกเสร็จป้ายแจ้งเตือนนี้จะหายไปอัตโนมัติ</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <ProcessTable
             processList={processList}
@@ -1680,7 +1701,14 @@ export default function ProcessDetailsPage() {
       <div className="flex justify-between items-center pt-2">
         <Button
           variant="outline"
-          onClick={() => router.push(`/dashboard/process-details/${id}/print`)}
+          onClick={() => {
+            fetch('/api/jobs/print-status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+              body: JSON.stringify({ job_codes: [id] }),
+            }).catch(() => {})
+            router.push(`/dashboard/process-details/${id}/print`)
+          }}
           className="gap-2 rounded-full h-11 border-gray-200 text-gray-700 hover:bg-gray-50 px-6 text-sm font-semibold"
         >
           <Printer className="h-4 w-4" />

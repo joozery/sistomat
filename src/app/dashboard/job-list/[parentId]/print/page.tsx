@@ -9,6 +9,8 @@ import type { ProcessRow } from '@/components/pages/process-details/ProcessTable
 interface Attachment { file_url: string; file_name: string }
 interface PrintableJob {
   jobId: string
+  jobNote?: string
+  quantity?: number
   receivedDate: string
   dueDate: string
   processList: ProcessRow[]
@@ -45,6 +47,8 @@ export default function GroupPrintPage() {
         const project = await res.json()
         return {
           jobId: id,
+          jobNote: project.job_note,
+          quantity: project.quantity,
           receivedDate: formatThaiDate(project.received_date ?? ''),
           dueDate: formatThaiDate(project.due_date ?? ''),
           processList: (project.processes ?? []) as ProcessRow[],
@@ -108,7 +112,22 @@ export default function GroupPrintPage() {
           <img src="/logo2.png" alt="Sistomat" className="h-8 w-auto" />
           <span className="font-bold text-indigo-100">ตัวอย่างก่อนปริ้น — {group}</span>
         </div>
-        <button onClick={() => window.print()} className="flex items-center gap-2 rounded-full bg-[#7B1A1A] px-5 py-2 text-sm font-bold text-white hover:bg-[#5C1212]"><Printer className="h-4 w-4" /> ปริ้นเลย</button>
+        <button
+          onClick={() => {
+            const codes = jobs.map((j) => j.jobId).filter(Boolean)
+            if (codes.length > 0) {
+              fetch('/api/jobs/print-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+                body: JSON.stringify({ job_codes: codes }),
+              }).catch(() => {})
+            }
+            window.print()
+          }}
+          className="flex items-center gap-2 rounded-full bg-[#7B1A1A] px-5 py-2 text-sm font-bold text-white hover:bg-[#5C1212]"
+        >
+          <Printer className="h-4 w-4" /> ปริ้นเลย
+        </button>
       </div>
       <div id="pages-wrap" className="p-6">
         {jobs.map((job) => <div key={job.jobId} className="group-print-sheet"><PrintJobSheet {...job} dwgName="" /></div>)}

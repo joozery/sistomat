@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import jwt from 'jsonwebtoken'
+import { createNotification } from '@/lib/notify'
 
 function getToken(req: NextRequest): string | null {
   const auth = req.headers.get('authorization')
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
     const jobCodes = jobs.map((j) => j.job_code as string)
     const projectDocs = await db
       .collection('projects')
-      .find({ project_id: { $in: jobCodes } }, { projection: { project_id: 1, processes: 1 } })
+      .find({ project_id: { $in: jobCodes } }, { projection: { project_id: 1, processes: 1, received_date: 1, is_printed: 1, printed_at: 1 } })
       .toArray()
 
     type ProjectProcess = {
@@ -96,23 +97,48 @@ export async function GET(req: NextRequest) {
       next_confirmed_at?: string | Date | null
       workers?: Array<{ worker_id: string; start_time: string; stop_time: string }>
     }
-    const projectMap = new Map(projectDocs.map((p) => [p.project_id as string, p.processes as ProjectProcess[]]))
+    type ProjectDocItem = {
+      project_id: string
+      processes?: ProjectProcess[]
+      received_date?: string | Date | null
+      is_printed?: boolean
+      printed_at?: string | Date | null
+    }
+    const projectMap = new Map(projectDocs.map((p) => [p.project_id as string, p as unknown as ProjectDocItem]))
 
     const enrichedJobs = jobs.map((job) => {
-      const processes = projectMap.get(job.job_code as string)
-      if (!Array.isArray(processes) || processes.length === 0) return job
+      const proj = projectMap.get(job.job_code as string)
+      const receivedDate = job.received_date || (proj?.received_date ? (proj.received_date instanceof Date ? proj.received_date.toISOString().slice(0, 10) : String(proj.received_date)) : '')
+      const processes = (proj?.processes && proj.processes.length > 0) ? proj.processes : (job.processes ?? [])
+      const hasValidProcess = Array.isArray(processes) && processes.some((p: any) => p && typeof p.process === 'string' && p.process.trim().length > 0)
+      const isPrinted = Boolean(proj?.is_printed || job.is_printed)
+      const printedAt = proj?.printed_at || job.printed_at || null
 
-      const currentIdx = processes.findIndex((p) => !p.next_confirmed_at)
+      if (!hasValidProcess) {
+        return {
+          ...job,
+          processes: Array.isArray(processes) ? processes : [],
+          has_no_process: true,
+          is_printed: isPrinted,
+          printed_at: printedAt,
+          received_date: receivedDate,
+          current_process_name: null,
+          current_process_active: false,
+          on_hold: false,
+        }
+      }
+
+      const currentIdx = processes.findIndex((p: any) => !p.next_confirmed_at)
       if (currentIdx === -1) {
         // All processes confirmed — waiting for final barcode
-        return { ...job, current_process_name: null, current_process_active: false, on_hold: false }
+        return { ...job, processes, has_no_process: false, is_printed: isPrinted, printed_at: printedAt, received_date: receivedDate, current_process_name: null, current_process_active: false, on_hold: false }
       }
 
       const cur = processes[currentIdx]
-      const isActive = cur.workers?.some((w) => w.worker_id && w.start_time && !w.stop_time) ?? false
+      const isActive = cur.workers?.some((w: any) => w.worker_id && w.start_time && !w.stop_time) ?? false
 
-      const onHold = processes.some(process => process.on_hold && !process.next_confirmed_at)
-      return { ...job, current_process_name: cur.process, current_process_active: isActive, on_hold: onHold }
+      const onHold = processes.some((process: any) => process.on_hold && !process.next_confirmed_at)
+      return { ...job, processes, has_no_process: false, is_printed: isPrinted, printed_at: printedAt, received_date: receivedDate, current_process_name: cur.process, current_process_active: isActive, on_hold: onHold }
     })
 
     return NextResponse.json({ jobs: enrichedJobs, total, page: pageNum, limit })
@@ -188,6 +214,7 @@ export async function POST(req: NextRequest) {
       coating: body.coating || '',
       outsource_process: body.outsource_process || '',
       due_date: due_date || '',
+      received_date: received_date || '',
       sheet_name: 'manual',
       file_url: file_url || null,
       file_name: file_name || null,
@@ -232,6 +259,18 @@ export async function POST(req: NextRequest) {
         target: job_code.trim(),
         detail: `${drawing_name?.trim() || ''} | qty: ${Number(quantity) || 1}`,
         created_at: new Date(),
+      }).catch(() => {})
+    }
+
+    // Notify superadmin if subjob has no process
+    const hasValidProcess = processRows.some((p: any) => p && typeof p.process === 'string' && p.process.trim().length > 0)
+    if (!hasValidProcess) {
+      createNotification(db, {
+        type: 'info',
+        category: 'subjob',
+        title: `มีจ๊อบย่อยรอเพิ่มขั้นตอน — ${job_code.trim()}`,
+        description: `จ๊อบ ${job_code.trim()}${drawing_name?.trim() ? ` (${drawing_name.trim()})` : ''} ยังไม่มีขั้นตอนกระบวนการผลิต`,
+        link: `/dashboard/process-details/${encodeURIComponent(job_code.trim())}`,
       }).catch(() => {})
     }
 

@@ -28,6 +28,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useCurrentUser } from '@/lib/useCurrentUser'
+import { useSystemName } from '@/lib/useSystemName'
 
 interface MenuItem {
   label: string
@@ -57,6 +58,7 @@ const managementMenuItems: MenuItem[] = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { role } = useCurrentUser()
+  const { subName } = useSystemName()
   const isAdmin = role === 'Admin' || role === 'superadmin'
   const isUser = role === 'User' || role === 'ช่าง'
   const [unreadCount, setUnreadCount] = useState(0)
@@ -144,17 +146,22 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-gray-100/80 bg-white font-sans">
       {/* Header */}
-      <SidebarHeader className="px-4 py-5 border-b border-gray-100/60 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-4">
+      <SidebarHeader className="px-4 py-4 border-b border-gray-100/60 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-4">
         <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
-          <Link href="/dashboard" className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
+          <Link href="/dashboard" className="flex flex-col items-start min-w-0 group-data-[collapsible=icon]:hidden">
             <Image
               src="/logo.svg"
               alt="Sistomat"
               width={160}
               height={52}
-              className="h-11 w-auto object-contain"
+              className="h-10 w-auto object-contain"
               priority
             />
+            {subName ? (
+              <span className="text-[11px] font-semibold text-gray-500 tracking-wide truncate max-w-[190px] mt-1 pl-0.5">
+                {subName}
+              </span>
+            ) : null}
           </Link>
 
           {/* Compact Logo Mark for Icon Mode */}

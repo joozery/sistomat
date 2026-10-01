@@ -1,7 +1,7 @@
 import { Db } from 'mongodb'
 
 export type NotificationType = 'success' | 'warning' | 'error' | 'info'
-export type NotificationCategory = 'machine' | 'system' | 'qc' | 'inventory'
+export type NotificationCategory = 'machine' | 'system' | 'qc' | 'inventory' | 'subjob'
 
 interface CreateNotificationInput {
   type: NotificationType

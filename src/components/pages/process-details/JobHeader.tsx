@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { Calendar, Tag, Download, QrCode, Barcode, RotateCcw, PauseCircle, ClipboardCheck, XCircle } from 'lucide-react'
+import { Calendar, Tag, Download, QrCode, Barcode, RotateCcw, PauseCircle, ClipboardCheck, XCircle, Package, AlertTriangle, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FileThumbnail } from '@/components/pages/process-qrcode/FileThumbnail'
 import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreviewDialog'
@@ -21,7 +21,11 @@ interface JobHeaderAttachment {
 
 interface JobHeaderProps {
   id: string
+  jobNote?: string
   dwgName?: string
+  quantity?: number
+  hasNoProcess?: boolean
+  isPrinted?: boolean
   receivedDate: string
   dueDate: string
   fileUrl?: string
@@ -35,7 +39,8 @@ interface JobHeaderProps {
   pastHolds?: { process: string; reason?: string; round: number; held_at: string | null; released_at: string | null }[]
 }
 
-export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasReject, hasHold, markerHistory = [], activeHolds = [], pastHolds = [] }: JobHeaderProps) {
+export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrinted, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasReject, hasHold, markerHistory = [], activeHolds = [], pastHolds = [] }: JobHeaderProps) {
+  const fullJobId = [id, jobNote?.trim()].filter(Boolean).join('-')
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   // ช่างต้องเปิดดูไฟล์ PDF/3D, QR/บาร์โค้ดใบงาน และใบงาน QC ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
@@ -78,18 +83,55 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
 
           {/* Job Details */}
           <div className="space-y-1.5 text-center md:text-left">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-[#7B1A1A] border border-red-100 text-xs font-bold">
-              <Tag className="h-3.5 w-3.5" />
-              JOB ID: {id}
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-[#7B1A1A] border border-red-100 text-xs font-bold">
+                <Tag className="h-3.5 w-3.5" />
+                JOB ID: {fullJobId}
+              </div>
+              {hasNoProcess && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold animate-pulse">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                  รอเพิ่ม Process
+                </div>
+              )}
+              {quantity != null && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-800 border border-blue-200 text-xs font-extrabold">
+                  <Package className="h-3.5 w-3.5" />
+                  <span>จำนวน:</span>
+                  <span className="text-sm font-black">{quantity}</span>
+                  <span>ชิ้น</span>
+                </div>
+              )}
+              {isPrinted ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
+                  <Printer className="h-3.5 w-3.5 text-emerald-600" />
+                  ปริ้นแล้ว
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold">
+                  <Printer className="h-3.5 w-3.5 text-amber-600" />
+                  ยังไม่ปริ้น
+                </div>
+              )}
             </div>
             <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
-              รายละเอียดกระบวนการผลิต #{id}
+              รายละเอียดกระบวนการผลิต #{fullJobId}
             </h2>
-            {dwgName && (
-              <p className="text-sm font-medium text-gray-600">
-                DWG: <span className="text-gray-800 font-semibold">{dwgName}</span>
-              </p>
-            )}
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1 text-sm text-gray-700 font-bold">
+              {dwgName && (
+                <p className="font-bold">
+                  DWG: <span className="text-gray-900 font-bold">{dwgName}</span>
+                </p>
+              )}
+              {quantity != null && (
+                <p className="flex items-center gap-1 font-bold text-gray-900">
+                  {dwgName && <span className="text-gray-300 font-normal">•</span>}
+                  <span>จำนวน:</span>
+                  <span className="text-blue-700 font-black text-base">{quantity}</span>
+                  <span>ชิ้น</span>
+                </p>
+              )}
+            </div>
             <p className="text-xs text-gray-400">
               บาร์โค้ดประจำใบงานสำหรับสแกนเข้าสถานีปฏิบัติงาน
             </p>
@@ -148,16 +190,21 @@ export function JobHeader({ id, dwgName, receivedDate, dueDate, fileUrl, fileNam
               </div>
             )}
             {canViewFile && fileUrl && fileName && (
-              <div className="flex items-center justify-center md:justify-start gap-2 pt-1">
-                <FileThumbnail
-                  fileUrl={fileUrl}
-                  fileName={fileName}
-                  size={40}
+              <div className="flex items-center justify-center md:justify-start gap-3 pt-1">
+                <div
+                  className="flex items-center gap-2 cursor-pointer group p-1 -ml-1 rounded-xl hover:bg-red-50/50 transition-colors"
                   onClick={() => setPreviewOpen(true)}
-                />
-                <div className="text-left">
-                  <p className="text-xs font-medium text-gray-700 truncate max-w-[160px]">{fileName}</p>
-                  <p className="text-[10px] text-gray-400">คลิกเพื่อดู PDF/3D</p>
+                  title="คลิกเพื่อดูแบบเต็มจอ"
+                >
+                  <FileThumbnail
+                    fileUrl={fileUrl}
+                    fileName={fileName}
+                    size={40}
+                  />
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-gray-800 group-hover:text-[#7B1A1A] transition-colors truncate max-w-[180px]">{fileName}</p>
+                    <p className="text-[10px] text-gray-400 group-hover:text-[#7B1A1A] transition-colors font-medium">คลิกเพื่อดูเต็มจอ (PDF/3D)</p>
+                  </div>
                 </div>
                 <Link
                   href={`/dashboard/process-details/${id}/qc`}

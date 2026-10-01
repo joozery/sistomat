@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { FileText, Box, Loader2, Download, ExternalLink } from 'lucide-react'
+import { FileText, Box, Loader2, Download, ExternalLink, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Suspense, useEffect } from 'react'
 import { logActivity } from '@/lib/logActivity'
@@ -84,44 +84,56 @@ export function FilePreviewDialog({ open, onOpenChange, fileUrl, fileName, attac
   if (showSplit) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl w-full h-[88vh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden font-sans">
+        <DialogContent showCloseButton={false} className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !max-h-none !rounded-none !border-0 flex flex-col p-0 gap-0 overflow-hidden font-sans bg-slate-900 text-white z-[9999]">
           {/* Header */}
-          <DialogHeader className="flex flex-row items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0 gap-4">
-            <DialogTitle className="flex items-center gap-4 text-sm font-bold text-gray-800 min-w-0">
+          <div className="flex flex-row items-center justify-between px-6 py-3 bg-[#1e293b] text-white border-b border-slate-700 shrink-0 gap-4">
+            <div className="flex items-center gap-4 text-sm font-bold text-slate-100 min-w-0">
               <span className="flex items-center gap-1.5 shrink-0">
-                <FileText className="h-4 w-4 text-red-500" />
-                <span className="truncate max-w-[200px] text-gray-700">{pdfFile.file_name}</span>
+                <FileText className="h-4 w-4 text-rose-400" />
+                <span className="truncate max-w-[220px] text-slate-100">{pdfFile.file_name}</span>
               </span>
-              <span className="text-gray-300">|</span>
+              <span className="text-slate-600">|</span>
               <span className="flex items-center gap-1.5 shrink-0">
-                <Box className="h-4 w-4 text-blue-500" />
-                <span className="truncate max-w-[200px] text-gray-700">{threeDFile.file_name}</span>
+                <Box className="h-4 w-4 text-sky-400" />
+                <span className="truncate max-w-[220px] text-slate-100">{threeDFile.file_name}</span>
               </span>
-            </DialogTitle>
-            <div className="flex items-center gap-3 shrink-0">
-              <FileActions url={pdfFile.file_url} name={pdfFile.file_name} />
-              <div className="w-px h-5 bg-gray-200" />
-              <FileActions url={threeDFile.file_url} name={threeDFile.file_name} />
+              <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 shrink-0">
+                เต็มจอ (Split View)
+              </span>
             </div>
-          </DialogHeader>
+            <div className="flex items-center gap-2 shrink-0">
+              <FileActions url={pdfFile.file_url} name={pdfFile.file_name} />
+              <div className="w-px h-5 bg-slate-700" />
+              <FileActions url={threeDFile.file_url} name={threeDFile.file_name} />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                className="rounded-full h-7 gap-1 px-3 text-xs font-semibold bg-rose-600/90 hover:bg-rose-600 text-white border-rose-500/50 hover:border-rose-400 ml-2"
+              >
+                <X className="h-3.5 w-3.5" /> <span>ปิด</span>
+              </Button>
+            </div>
+          </div>
 
           {/* Split body */}
-          <div className="flex-1 flex min-h-0 overflow-hidden">
+          <div className="flex-1 flex min-h-0 overflow-hidden bg-slate-950">
             {/* Left: PDF */}
-            <div className="flex-1 min-w-0 flex flex-col border-r border-gray-200 overflow-hidden">
-              <div className="px-3 py-1.5 bg-red-50 border-b border-red-100 shrink-0 flex items-center justify-between">
-                <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
-                  <FileText className="h-3 w-3" /> Drawing PDF
+            <div className="flex-1 min-w-0 flex flex-col border-r border-slate-800 overflow-hidden">
+              <div className="px-4 py-1.5 bg-slate-800 border-b border-slate-700 shrink-0 flex items-center justify-between">
+                <p className="text-[11px] font-bold text-rose-300 uppercase tracking-wider flex items-center gap-1">
+                  <FileText className="h-3.5 w-3.5" /> Drawing PDF
                 </p>
                 <a href={pdfFile.file_url} target="_blank" rel="noopener noreferrer"
-                  className="text-[9px] text-red-400 hover:text-red-600 underline">
+                  className="text-[10px] text-slate-400 hover:text-white underline">
                   เปิดแท็บใหม่
                 </a>
               </div>
-              <div className="flex-1 relative overflow-hidden">
+              <div className="flex-1 relative overflow-hidden bg-white">
                 <iframe
-                  src={`${pdfFile.file_url}#toolbar=1&view=FitH`}
-                  className="absolute inset-0 w-full h-full border-0"
+                  src={`${pdfFile.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=Fit`}
+                  className="absolute inset-0 w-full h-full border-0 bg-white"
                   title={pdfFile.file_name}
                 />
               </div>
@@ -129,12 +141,12 @@ export function FilePreviewDialog({ open, onOpenChange, fileUrl, fileName, attac
 
             {/* Right: 3D */}
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-              <div className="px-3 py-1.5 bg-blue-50 border-b border-blue-100 shrink-0">
-                <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider flex items-center gap-1">
-                  <Box className="h-3 w-3" /> 3D Model
+              <div className="px-4 py-1.5 bg-slate-800 border-b border-slate-700 shrink-0">
+                <p className="text-[11px] font-bold text-sky-300 uppercase tracking-wider flex items-center gap-1">
+                  <Box className="h-3.5 w-3.5" /> 3D Model
                 </p>
               </div>
-              <div className="flex-1 relative overflow-hidden bg-gray-50">
+              <div className="flex-1 relative overflow-hidden bg-slate-900">
                 <Suspense fallback={<SpinnerBox />}>
                   <Viewer3D fileUrl={threeDFile.file_url} ext={getExt(threeDFile.file_name)} />
                 </Suspense>
@@ -149,31 +161,47 @@ export function FilePreviewDialog({ open, onOpenChange, fileUrl, fileName, attac
   // Single file view
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-full h-[85vh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden font-sans">
-        <DialogHeader className="flex flex-row items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-800 truncate pr-4">
+      <DialogContent showCloseButton={false} className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !max-h-none !rounded-none !border-0 flex flex-col p-0 gap-0 overflow-hidden font-sans bg-slate-900 text-white z-[9999]">
+        <div className="flex flex-row items-center justify-between px-6 py-3 bg-[#1e293b] text-white border-b border-slate-700 shrink-0 gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             {isPdf
-              ? <FileText className="h-4 w-4 text-red-500 shrink-0" />
-              : <Box className="h-4 w-4 text-blue-500 shrink-0" />}
-            <span className="truncate">{fileName}</span>
-          </DialogTitle>
+              ? <FileText className="h-5 w-5 text-rose-400 shrink-0" />
+              : <Box className="h-5 w-5 text-sky-400 shrink-0" />}
+            <span className="font-bold text-sm md:text-base text-slate-100 truncate max-w-[400px]">{fileName}</span>
+            <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 shrink-0">
+              โหมดดูแบบเต็มจอ
+            </span>
+          </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button asChild variant="outline" size="sm" className="rounded-full h-8 gap-1 text-xs">
+            <Button asChild variant="outline" size="sm" className="rounded-full h-8 gap-1 text-xs border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white">
               <a href={proxyDownloadUrl(fileUrl, fileName)} download={fileName}>
-                <Download className="h-3.5 w-3.5" /> ดาวน์โหลด
+                <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">ดาวน์โหลด</span>
               </a>
             </Button>
-            <Button asChild variant="outline" size="sm" className="rounded-full h-8 gap-1 text-xs">
+            <Button asChild variant="outline" size="sm" className="rounded-full h-8 gap-1 text-xs border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white">
               <a href={fileUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" /> เปิดแท็บใหม่
+                <ExternalLink className="h-3.5 w-3.5" /> <span className="hidden sm:inline">เปิดแท็บใหม่</span>
               </a>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="rounded-full h-8 gap-1 px-3 text-xs font-semibold bg-rose-600/90 hover:bg-rose-600 text-white border-rose-500/50 hover:border-rose-400 ml-1"
+            >
+              <X className="h-4 w-4" /> <span>ปิด</span>
             </Button>
           </div>
-        </DialogHeader>
+        </div>
 
-        <div className="flex-1 overflow-hidden bg-gray-50">
+        <div className="flex-1 w-full h-full overflow-hidden bg-slate-950 relative">
           {isPdf && (
-            <iframe src={fileUrl} className="w-full h-full border-0" title={fileName} />
+            <iframe
+              src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=1&view=Fit`}
+              className="w-full h-full border-0 bg-white"
+              title={fileName}
+            />
           )}
           {is3d && (
             <Suspense fallback={<SpinnerBox />}>

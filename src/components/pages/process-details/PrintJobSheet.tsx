@@ -10,7 +10,9 @@ const PdfPagePreview = dynamic(() => import('./PdfPagePreview').then((m) => m.Pd
 interface Attachment { file_url: string; file_name: string }
 interface PrintJobSheetProps {
   jobId: string
+  jobNote?: string
   dwgName?: string
+  quantity?: number
   receivedDate: string
   dueDate: string
   processList: ProcessRow[]
@@ -27,7 +29,8 @@ function splitProcesses(list: ProcessRow[]) {
   return { left: padded.slice(0, 10), right: padded.slice(10, 20) }
 }
 
-export function PrintJobSheet({ jobId, receivedDate, dueDate, processList, fileUrl, fileName, attachments = [] }: PrintJobSheetProps) {
+export function PrintJobSheet({ jobId, jobNote, quantity, receivedDate, dueDate, processList, fileUrl, fileName, attachments = [] }: PrintJobSheetProps) {
+  const displayJobId = [jobId, jobNote?.trim()].filter(Boolean).join('-')
   const [drawingLandscape, setDrawingLandscape] = useState(false)
   const { left, right } = useMemo(() => splitProcesses(processList), [processList])
   const safeAttachments = Array.isArray(attachments) ? attachments : []
@@ -57,10 +60,23 @@ export function PrintJobSheet({ jobId, receivedDate, dueDate, processList, fileU
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px' }}>
           <tbody><tr>
-            <td style={td({ fontWeight: 'bold', whiteSpace: 'nowrap', width: '120px', fontSize: '11px' })}>JOB {jobId}</td>
+            <td style={td({ fontWeight: 'bold', whiteSpace: 'nowrap', width: '120px', fontSize: '11px', verticalAlign: 'middle' })}>
+              <div>JOB {displayJobId}</div>
+              {quantity != null && (
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000', marginTop: '3px' }}>
+                  จำนวน: <span style={{ fontSize: '16px', fontWeight: '900' }}>{quantity}</span> ชิ้น
+                </div>
+              )}
+            </td>
             <td style={tdc()}><Barcode value={jobId} width={1.2} height={36} fontSize={0} displayValue={false} background="#fff" lineColor="#000" /></td>
-            <td style={td({ whiteSpace: 'nowrap', width: '120px' })}>วันรับงาน: <strong>{receivedDate}</strong></td>
-            <td style={td({ whiteSpace: 'nowrap', width: '120px' })}>กำหนดส่ง: <strong>{dueDate}</strong></td>
+            <td style={td({ whiteSpace: 'nowrap', width: '135px', verticalAlign: 'middle', padding: '2px 6px' })}>
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#222', lineHeight: 1.2 }}>วันรับงาน:</div>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#000', lineHeight: 1.15, letterSpacing: '-0.3px' }}>{receivedDate}</div>
+            </td>
+            <td style={td({ whiteSpace: 'nowrap', width: '135px', verticalAlign: 'middle', padding: '2px 6px' })}>
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#222', lineHeight: 1.2 }}>กำหนดส่ง:</div>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#000', lineHeight: 1.15, letterSpacing: '-0.3px' }}>{dueDate}</div>
+            </td>
           </tr></tbody>
         </table>
         <div style={{ border, backgroundColor: '#fde047', textAlign: 'center', fontWeight: 'bold', fontSize: '13px', padding: '3px 0' }}>กระบวนการผลิต</div>

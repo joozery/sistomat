@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Settings,
   CheckCircle2,
@@ -28,7 +28,9 @@ import { useOvertimeThreshold } from '@/lib/useOvertimeThreshold'
 import { useMachineRates, type MachineRate } from '@/lib/useMachineRates'
 import { useQuotationHeader, type QuotationHeader } from '@/lib/useQuotationHeader'
 import { useStopReasons } from '@/lib/useStopReasons'
+import { useSystemName } from '@/lib/useSystemName'
 import { QcSignaturesSection } from '@/components/pages/settings/QcSignaturesSection'
+import Image from 'next/image'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -683,6 +685,147 @@ function MachineRatesSection() {
   )
 }
 
+/* ── System Branding (ชื่อใต้โลโก้ Sidebar) ── */
+function SystemBrandingSection() {
+  const { subName, loading, refresh } = useSystemName()
+  const [draft, setDraft] = useState('')
+  const [initialized, setInitialized] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!loading && !initialized) {
+      setDraft(subName)
+      setInitialized(true)
+    }
+  }, [loading, subName, initialized])
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const token = getToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch('/api/settings/system-name', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ sub_name: draft }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'บันทึกไม่สำเร็จ')
+        return
+      }
+      setSaved(true)
+      refresh()
+      window.dispatchEvent(new CustomEvent('system-name-updated', { detail: { sub_name: draft.trim() } }))
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-5 sm:mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-rose-50 border-rose-100">
+            <Building2 className="h-5 w-5 text-[#7B1A1A]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">ชื่อระบบ / ข้อความใต้โลโก้</h3>
+            <p className="text-xs text-gray-400">
+              ข้อความหรือชื่อหน่วยงานที่จะแสดงใต้โลโก้ SISTOMAT ในแถบเมนูด้านซ้าย (Sidebar) เช่น ชื่อสาขา หรือ แผนก
+            </p>
+          </div>
+        </div>
+        {saved && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+            <CheckCircle2 className="h-4 w-4" />
+            บันทึกแล้ว
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">กำลังโหลด...</span>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700">ข้อความใต้โลโก้ (Sub-title)</Label>
+              <Input
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value)
+                  setSaved(false)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSave()
+                  }
+                }}
+                placeholder="เช่น ERP SISTOMAT, โรงงาน 1, ฝ่ายผลิต"
+                className="rounded-xl h-10 text-sm border-gray-200"
+              />
+              <p className="text-[11px] text-gray-400">
+                พิมพ์ชื่อแล้วกด Enter หรือกดปุ่ม &ldquo;บันทึกชื่อใต้โลโก้&rdquo; ด้านล่าง (หากเว้นว่างไว้ ระบบจะแสดงเฉพาะโลโก้)
+              </p>
+            </div>
+
+            {/* Live Preview */}
+            <div className="bg-gray-50/80 border border-gray-100 rounded-2xl p-4 flex flex-col items-start gap-1">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                ตัวอย่างการแสดงผลใน Sidebar
+              </span>
+              <div className="bg-white border border-gray-200/80 rounded-xl px-4 py-3 shadow-sm min-w-[200px]">
+                <Image
+                  src="/logo.svg"
+                  alt="Sistomat"
+                  width={140}
+                  height={45}
+                  className="h-9 w-auto object-contain"
+                />
+                {draft.trim() ? (
+                  <span className="text-[11px] font-semibold text-gray-600 tracking-wide block mt-1 pl-0.5 truncate">
+                    {draft.trim()}
+                  </span>
+                ) : (
+                  <span className="text-[11px] italic text-gray-300 block mt-1 pl-0.5">
+                    (ยังไม่ได้ตั้งชื่อ)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {error && <p className="text-xs text-red-600 font-medium mt-1">{error}</p>}
+
+          <div className="flex justify-end pt-2">
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="gap-2 rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 text-xs font-semibold"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              บันทึกชื่อใต้โลโก้
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   return (
     <div className="space-y-6 font-sans">
@@ -695,6 +838,8 @@ export default function SettingsPage() {
           <Settings className="h-5 w-5 text-[#7B1A1A]" />
         </h1>
       </div>
+
+      <SystemBrandingSection />
 
       <OptionsListSection
         endpoint="/api/settings/process-options"

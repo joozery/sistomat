@@ -1,3 +1,4 @@
+import { useCurrentUser } from '@/lib/useCurrentUser'
 import { Department, PlanStatus } from './data'
 
 const depts: { value: Department | 'all'; label: string }[] = [
@@ -24,6 +25,12 @@ interface FilterBarProps {
 }
 
 export function FilterBar({ dept, status, onDeptChange, onStatusChange, total, filtered }: FilterBarProps) {
+  const { role } = useCurrentUser()
+  const isTechnician = role === 'ช่าง'
+  const visibleStatuses = isTechnician
+    ? statuses.filter((s) => s.value === 'all' || s.value === 'completed')
+    : statuses
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -47,7 +54,7 @@ export function FilterBar({ dept, status, onDeptChange, onStatusChange, total, f
 
         {/* Status filter */}
         <span className="text-xs font-semibold text-gray-400 mr-1">สถานะ</span>
-        {statuses.map((s) => (
+        {visibleStatuses.map((s) => (
           <button
             key={s.value}
             onClick={() => onStatusChange(s.value as PlanStatus | 'all')}
