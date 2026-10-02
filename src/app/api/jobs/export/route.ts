@@ -93,11 +93,39 @@ export async function GET(req: NextRequest) {
       .sort({ project_id: 1 })
       .toArray()
 
+    // รวบรวมรหัสโปรเจกต์หลักที่ยังคงมีอยู่จริงในระบบ เพื่อคัดกรองไม่ให้ Job กำพร้าที่ถูกลบไปแล้วหลุดมาแสดง
+    const activeParents = await db
+      .collection('projects')
+      .find({ type: { $ne: 'job' } })
+      .project({ project_id: 1 })
+      .toArray()
+    const activeParentCodes = new Set<string>()
+    for (const ap of activeParents) {
+      if (ap.project_id) {
+        const clean = String(ap.project_id).trim()
+        activeParentCodes.add(clean)
+        activeParentCodes.add(`J${clean}`)
+        activeParentCodes.add(clean.replace(/^J(?=[A-Z]-)/, ''))
+      }
+    }
+
     const workers = await db.collection<WorkerDoc>('workers').find({}).project<WorkerDoc>({ code: 1, name: 1 }).toArray()
     const nameByCode = new Map(workers.map((w) => [String(w.code), w.name]))
 
     const rows: ExportRow[] = []
     for (const p of projects) {
+      // คัดกรองเฉพาะ Job ที่โปรเจกต์หลักยังคงมีอยู่ในระบบ
+      const level1 = p.project_id.split('-').slice(0, 2).join('-')
+      const level1Clean = level1.replace(/^J(?=[A-Z]-)/, '')
+      if (
+        activeParentCodes.size > 0 &&
+        !activeParentCodes.has(level1) &&
+        !activeParentCodes.has(level1Clean) &&
+        !activeParentCodes.has(p.project_id)
+      ) {
+        continue
+      }
+
       const procs = Array.isArray(p.processes) ? p.processes : []
       procs.forEach((row, i) => {
         if (processFilter && row.process !== processFilter) return

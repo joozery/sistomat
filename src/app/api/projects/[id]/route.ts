@@ -40,9 +40,10 @@ export async function GET(
     let isPrinted = project.is_printed
     let printedAt = project.printed_at
     let jobNote = project.job_note
+    let receivedDate = project.received_date
 
-    if (quantity == null || isPrinted == null || !jobNote) {
-      const jobDoc = await db.collection('jobs').findOne({ job_code: id }, { projection: { quantity: 1, is_printed: 1, printed_at: 1, job_note: 1 } })
+    if (quantity == null || isPrinted == null || !jobNote || !receivedDate) {
+      const jobDoc = await db.collection('jobs').findOne({ job_code: id }, { projection: { quantity: 1, is_printed: 1, printed_at: 1, job_note: 1, received_date: 1 } })
       if (quantity == null && jobDoc?.quantity != null) {
         quantity = jobDoc.quantity
       }
@@ -53,6 +54,9 @@ export async function GET(
       if (!jobNote && jobDoc?.job_note) {
         jobNote = jobDoc.job_note
       }
+      if (!receivedDate && jobDoc?.received_date) {
+        receivedDate = jobDoc.received_date
+      }
     }
 
     return NextResponse.json({
@@ -61,6 +65,7 @@ export async function GET(
       quantity,
       is_printed: Boolean(isPrinted),
       printed_at: printedAt,
+      received_date: receivedDate,
       _id: project._id.toString()
     })
   } catch (e) {
@@ -200,26 +205,40 @@ export async function DELETE(
       cleanId.startsWith('J') ? cleanId : `J${cleanId}`,
       cleanId.replace(/^J(?=[A-Z]-)/, ''),
     ])).filter(Boolean)
+
+    const letterNumberMatch = cleanId.replace(/^J(?=[A-Z]-)/, '').match(/^([A-Z]+)-(\d+)$/)
+    if (letterNumberMatch) {
+      const prefix = letterNumberMatch[1]
+      const num = parseInt(letterNumberMatch[2], 10)
+      if (!isNaN(num)) {
+        const d3 = String(num).padStart(3, '0')
+        const d4 = String(num).padStart(4, '0')
+        variants.push(`${prefix}-${d3}`, `J${prefix}-${d3}`)
+        variants.push(`${prefix}-${d4}`, `J${prefix}-${d4}`)
+      }
+    }
+
+    const uniqueVariants = Array.from(new Set(variants)).filter(Boolean)
     const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const prefixPattern = new RegExp(`^(${variants.map(escapeRegExp).join('|')})(-|$)`)
+    const prefixPattern = new RegExp(`^(${uniqueVariants.map(escapeRegExp).join('|')})(-|$)`)
 
     const [projectResult] = await Promise.all([
       db.collection('projects').deleteMany({
         $or: [
-          { project_id: { $in: variants } },
+          { project_id: { $in: uniqueVariants } },
           { project_id: { $regex: prefixPattern } },
-          { level1: { $in: variants } },
-          { level2: { $in: variants } },
-          { level3: { $in: variants } },
+          { level1: { $in: uniqueVariants } },
+          { level2: { $in: uniqueVariants } },
+          { level3: { $in: uniqueVariants } },
         ],
       }),
       db.collection('jobs').deleteMany({
         $or: [
-          { job_code: { $in: variants } },
+          { job_code: { $in: uniqueVariants } },
           { job_code: { $regex: prefixPattern } },
-          { level1: { $in: variants } },
-          { level2: { $in: variants } },
-          { level3: { $in: variants } },
+          { level1: { $in: uniqueVariants } },
+          { level2: { $in: uniqueVariants } },
+          { level3: { $in: uniqueVariants } },
         ],
       }),
     ])

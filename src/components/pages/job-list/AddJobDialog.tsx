@@ -69,8 +69,10 @@ function suggestLevel2(parentId: string, existingCodes: string[], closedLevel2Co
     .filter((value): value is string => Boolean(value))
     .map(Number)
   const latest = nums.length > 0 ? Math.max(...nums) : 1
-  const latestCode = `${parentId}-${String(latest).padStart(3, '0')}`
-  const next = closedLevel2Codes.has(latestCode) ? latest + 1 : latest
+  let next = latest
+  while (closedLevel2Codes.has(`${parentId}-${String(next).padStart(3, '0')}`)) {
+    next++
+  }
   return `${parentId}-${String(next).padStart(3, '0')}`
 }
 
@@ -452,7 +454,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
         onEscapeKeyDown={(e) => {
           if (saving) e.preventDefault()
         }}
-        className="sm:max-w-2xl rounded-2xl p-4 sm:p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col relative overflow-hidden"
+        className="sm:max-w-2xl rounded-2xl p-4 sm:p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col scrollbar-hide overflow-hidden"
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -496,7 +498,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-gray-700">วันผลิต</Label>
+                <Label className="text-xs font-semibold text-gray-700">วันรับงาน</Label>
                 <Input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} className="rounded-xl h-10 text-sm border-gray-200" />
               </div>
               <div className="space-y-1.5">
@@ -505,10 +507,17 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
               </div>
             </div>
 
-            {codeLoadError && <p className="text-xs text-red-600">{codeLoadError}</p>}
+            {checkingCodes && (
+              <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+                <Loader2 className="h-4 w-4 animate-spin text-[#7B1A1A]" />
+                กำลังโหลดและตรวจสอบเลข Job เดิม...
+              </div>
+            )}
+            {codeLoadError && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{codeLoadError}</p>}
             <DialogFooter className="pt-2 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => handleClose(false)} className="rounded-full h-10 border-gray-200">ยกเลิก</Button>
               <Button type="submit" disabled={checkingCodes || Boolean(codeLoadError)} className="rounded-full h-10 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-6 gap-1">
+                {checkingCodes && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                 ถัดไป <ChevronRight className="h-4 w-4" />
               </Button>
             </DialogFooter>

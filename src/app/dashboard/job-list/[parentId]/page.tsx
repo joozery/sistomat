@@ -93,7 +93,7 @@ interface PrintableJob {
   attachments?: Attachment[]
 }
 
-function formatDate(d: string) {
+function formatDate(d?: string | null) {
   if (!d) return '-'
   try {
     return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -449,266 +449,314 @@ export default function JobListPage() {
               <p className="text-sm">ไม่พบรายการงานสำหรับ {parentId}</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
-              {Array.from(byLevel2.entries()).map(([level2Code, items]) => {
-                const hasLevel3 = items.some((j) => j.level3)
-                const isOpen = expanded.has(level2Code)
-                const doneInGroup = items.filter((j) => isJobDone(j.status)).length
-                const groupQty = items.reduce((s, j) => s + j.quantity, 0)
-                const processes = [...new Set(items.flatMap((j) => j.processes.map((p) => p.process)).filter(Boolean))]
-                const coatings = [...new Set(items.map((j) => j.coating).filter(Boolean))]
-                const minDue = items.map((j) => j.due_date).filter(Boolean).sort()[0]
-                const saleClosed = items.some((job) => Boolean(job.sale_closed_at))
+            <div className="overflow-x-auto min-w-full">
+              <div className="min-w-[1100px]">
+                {/* Level 2 main header */}
+                <div className="grid grid-cols-[24px_180px_125px_1fr_90px_90px_110px_340px] items-center gap-3 sm:gap-4 px-3 sm:px-6 py-2.5 bg-gray-50/80 border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                  <span></span>
+                  <span>กลุ่ม Job (Level 2)</span>
+                  <span>จำนวน / ความคืบหน้า</span>
+                  <span>กระบวนการ</span>
+                  <span className="text-center">วันรับงาน</span>
+                  <span className="text-center">กำหนดส่ง</span>
+                  <span className="text-center">สถานะ</span>
+                  <span className="text-right">จัดการ</span>
+                </div>
+                <div className="divide-y divide-gray-100">
+                {Array.from(byLevel2.entries()).map(([level2Code, items]) => {
+                  const hasLevel3 = items.some((j) => j.level3)
+                  const isOpen = expanded.has(level2Code)
+                  const doneInGroup = items.filter((j) => isJobDone(j.status)).length
+                  const groupQty = items.reduce((s, j) => s + j.quantity, 0)
+                  const processes = [...new Set(items.flatMap((j) => j.processes.map((p) => p.process)).filter(Boolean))]
+                  const coatings = [...new Set(items.map((j) => j.coating).filter(Boolean))]
+                  const dueDates = [...new Set(items.map((j) => j.due_date).filter(Boolean))].sort()
+                  const minDue = dueDates[0]
+                  const maxDue = dueDates[dueDates.length - 1]
+                  const hasMultipleDue = dueDates.length > 1
 
-                // If no level3 → single job, link directly to process-details
-                const singleJob = !hasLevel3 && items.length === 1 ? items[0] : null
+                  const receivedDates = [...new Set(items.map((j) => j.received_date).filter(Boolean))].sort()
+                  const minReceived = receivedDates[0]
+                  const maxReceived = receivedDates[receivedDates.length - 1]
+                  const hasMultipleReceived = receivedDates.length > 1
 
-                return (
-                  <div key={level2Code}>
-                    {/* Level 2 row */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4 px-3 py-3 sm:px-6 hover:bg-gray-50/70 transition-colors group">
-                      {/* Expand toggle */}
-                      <button
-                        onClick={() => toggle(level2Code)}
-                        className="text-gray-300 hover:text-gray-500 shrink-0 w-5"
-                      >
-                        {isOpen
-                          ? <ChevronDown className="h-4 w-4" />
-                          : <ChevronRight className="h-4 w-4" />}
-                      </button>
+                  const saleClosed = items.some((job) => Boolean(job.sale_closed_at))
 
-                      {/* Code */}
-                      <div className="min-w-0 flex-1 sm:flex-none sm:w-48 sm:shrink-0">
-                        <span className="font-mono font-bold text-sm break-all text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
-                          {level2Code}
-                        </span>
-                        {singleJob?.drawing_name && (
-                          <p className="text-[11px] text-gray-400 truncate mt-0.5 sm:max-w-[180px]">{singleJob.drawing_name}</p>
-                        )}
-                      </div>
+                  // If no level3 → single job, link directly to process-details
+                  const singleJob = !hasLevel3 && items.length === 1 ? items[0] : null
 
-                      {/* Count + progress bar */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs text-gray-500">
-                          {hasLevel3 ? `${items.length} BU` : `${groupQty} ชิ้น`}
-                        </span>
-                        <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-500 rounded-full transition-all"
-                            style={{ width: `${items.length ? (doneInGroup / items.length) * 100 : 0}%` }}
-                          />
-                        </div>
-                        <span className="text-[11px] text-gray-400">{doneInGroup}/{items.length}</span>
-                      </div>
+                  return (
+                    <div key={level2Code}>
+                      {/* Level 2 row */}
+                      <div className="grid grid-cols-[24px_180px_125px_1fr_90px_90px_110px_340px] items-center gap-3 sm:gap-4 px-3 py-3 sm:px-6 hover:bg-gray-50/70 transition-colors group">
+                        {/* Expand toggle */}
+                        <button
+                          onClick={() => toggle(level2Code)}
+                          className="text-gray-300 hover:text-gray-500 w-6 flex items-center justify-center shrink-0"
+                        >
+                          {isOpen
+                            ? <ChevronDown className="h-4 w-4" />
+                            : <ChevronRight className="h-4 w-4" />}
+                        </button>
 
-                      {/* Process chips */}
-                      <div className="hidden md:flex gap-1.5 flex-wrap flex-1">
-                        {processes.slice(0, 4).map((p) => (
-                          <span key={p} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full">
-                            {p}
+                        {/* Code */}
+                        <div className="min-w-0">
+                          <span className="font-mono font-bold text-sm break-all text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
+                            {level2Code}
                           </span>
-                        ))}
-                        {coatings.slice(0, 2).map((c) => (
-                          <span key={c} className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-2 py-0.5 rounded-full">
-                            {c}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* Due date */}
-                      {minDue && (
-                        <div className="hidden sm:flex items-center gap-1 text-xs text-gray-400 shrink-0">
-                          <Calendar className="h-3.5 w-3.5" />
-                          {formatDate(minDue)}
+                          {singleJob?.drawing_name && (
+                            <p className="text-[11px] text-gray-400 truncate mt-0.5" title={singleJob.drawing_name}>{singleJob.drawing_name}</p>
+                          )}
                         </div>
-                      )}
 
-                      {/* แถวกลุ่ม Level 2 ไม่มีสถานะของตัวเอง สถานะเป็นของ Job ย่อยแต่ละรายการ */}
-                      {!hasLevel3 && <div className="shrink-0">
-                        {singleJob ? (
-                          <StatusChip
-                            status={singleJob.status}
-                            currentProcessName={singleJob.current_process_name}
-                            currentProcessActive={singleJob.current_process_active}
+                        {/* Count + progress bar */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">
+                            {hasLevel3 ? `${items.length} BU` : `${groupQty} ชิ้น`}
+                          </span>
+                          <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden shrink-0">
+                            <div
+                              className="h-full bg-emerald-500 rounded-full transition-all"
+                              style={{ width: `${items.length ? (doneInGroup / items.length) * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] text-gray-400 whitespace-nowrap">{doneInGroup}/{items.length}</span>
+                        </div>
 
-                            onHold={singleJob.on_hold}
-                          />
-                        ) : (
-                          doneInGroup === items.length && items.length > 0
-                            ? <StatusChip status="จบงาน" />
-                            : doneInGroup > 0
-                              ? <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {doneInGroup}/{items.length} เสร็จ
-                                </span>
-                              : <StatusChip
-                                  status={items[0]?.status ?? ''}
-                                  currentProcessName={items[0]?.current_process_name}
-                                  currentProcessActive={items[0]?.current_process_active}
-
-                                  onHold={items[0]?.on_hold}
-                                />
-                        )}
-                      </div>}
-
-                      {/* Action */}
-                      <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0">
-                        {saleClosed ? (
-                          canCloseSale ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => { setCloseSaleError(''); setCloseSaleMode('reopen'); setCloseSaleTarget(level2Code) }}
-                              className="h-8 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 gap-1"
-                            >
-                              <LockKeyhole className="h-3.5 w-3.5" /> เปิดการขายอีกครั้ง
-                            </Button>
-                          ) : (
-                            <span className="inline-flex h-8 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700">
-                              <LockKeyhole className="h-3.5 w-3.5" /> ปิดการขายแล้ว
+                        {/* Process chips */}
+                        <div className="flex gap-1.5 flex-wrap min-w-0 overflow-hidden">
+                          {processes.slice(0, 4).map((p) => (
+                            <span key={p} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                              {p}
                             </span>
-                          )
-                        ) : canCloseSale ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => { setCloseSaleError(''); setCloseSaleMode('close'); setCloseSaleTarget(level2Code) }}
-                            className="h-8 rounded-full text-amber-700 hover:bg-amber-50 hover:text-amber-800 text-xs font-semibold gap-1"
-                          >
-                            <LockKeyhole className="h-3.5 w-3.5" /> ปิดการขาย
-                          </Button>
-                        ) : null}
-                        {!isReadOnly && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handlePrintGroup(level2Code, items)}
-                            disabled={printingGroup !== null}
-                            className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
-                          >
-                            {printingGroup === level2Code
-                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              : <Printer className="h-3.5 w-3.5" />}
-                            {printingGroup === level2Code ? 'กำลังเตรียม...' : 'พิมพ์กลุ่มนี้'}
-                          </Button>
-                        )}
-                        {!isReadOnly && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(level2Code)}`)}
-                            className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
-                          >
-                            <Receipt className="h-3.5 w-3.5" /> ใบเสนอราคา
-                          </Button>
-                        )}
-                        {singleJob ? (
-                          <>
-                            {/* No BU → link directly to process-details */}
-                            {!isReadOnly && (
-                              <Button size="sm" variant="ghost" onClick={() => setEditJob(singleJob)}
-                                className="h-8 rounded-full text-gray-500 hover:bg-gray-100 text-xs gap-1">
-                                <Pencil className="h-3.5 w-3.5" /> แก้ไข
-                              </Button>
-                            )}
-                            {!isReadOnly && (
+                          ))}
+                          {coatings.slice(0, 2).map((c) => (
+                            <span key={c} className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Received date */}
+                        <div className="flex flex-col items-center justify-center text-xs text-center" title={hasMultipleReceived ? `วันรับงานในกลุ่มนี้มีหลายวัน (${receivedDates.map(formatDate).join(', ')})` : 'วันรับงาน'}>
+                          {minReceived ? (
+                            <div className="flex items-center justify-center gap-1 text-blue-700 font-medium whitespace-nowrap">
+                              <Calendar className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                              <span>{formatDate(minReceived)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-300">-</span>
+                          )}
+                          {hasMultipleReceived && minReceived !== maxReceived && (
+                            <span className="text-[9px] text-blue-600 bg-blue-50 border border-blue-100 px-1 rounded font-medium mt-0.5 whitespace-nowrap" title={`เร็วสุด ${formatDate(minReceived)} - ล่าสุด ${formatDate(maxReceived)}`}>
+                              ~ {formatDate(maxReceived)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Due date */}
+                        <div className="flex flex-col items-center justify-center text-xs text-center" title={hasMultipleDue ? `กำหนดส่งในกลุ่มนี้มีหลายวัน (${dueDates.map(formatDate).join(', ')})` : 'กำหนดส่ง'}>
+                          {minDue ? (
+                            <div className="flex items-center justify-center gap-1 text-gray-500 font-medium whitespace-nowrap">
+                              <Calendar className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                              <span>{formatDate(minDue)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-300">-</span>
+                          )}
+                          {hasMultipleDue && minDue !== maxDue && (
+                            <span className="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 px-1 rounded font-medium mt-0.5 whitespace-nowrap" title={`เร็วสุด ${formatDate(minDue)} - ล่าสุด ${formatDate(maxDue)}`}>
+                              ~ {formatDate(maxDue)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* แถวกลุ่ม Level 2 สถานะ */}
+                        <div className="flex items-center justify-center">
+                          {singleJob ? (
+                            <StatusChip
+                              status={singleJob.status}
+                              currentProcessName={singleJob.current_process_name}
+                              currentProcessActive={singleJob.current_process_active}
+                              onHold={singleJob.on_hold}
+                            />
+                          ) : doneInGroup === items.length && items.length > 0 ? (
+                            <StatusChip status="จบงาน" />
+                          ) : doneInGroup > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600 whitespace-nowrap">
+                              <Clock className="h-2.5 w-2.5" />
+                              {doneInGroup}/{items.length} เสร็จ
+                            </span>
+                          ) : (
+                            <StatusChip
+                              status={items[0]?.status ?? ''}
+                              currentProcessName={items[0]?.current_process_name}
+                              currentProcessActive={items[0]?.current_process_active}
+                              onHold={items[0]?.on_hold}
+                            />
+                          )}
+                        </div>
+
+                        {/* Action */}
+                        <div className="flex items-center justify-end gap-1.5 overflow-hidden">
+                          {saleClosed ? (
+                            canCloseSale ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => router.push(`/dashboard/process-details/${level2Code}/qc`)}
-                                className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1"
+                                onClick={() => { setCloseSaleError(''); setCloseSaleMode('reopen'); setCloseSaleTarget(level2Code) }}
+                                className="h-8 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 gap-1 shrink-0"
                               >
-                                <ClipboardCheck className="h-3.5 w-3.5" /> QC
+                                <LockKeyhole className="h-3.5 w-3.5" /> เปิดการขายอีกครั้ง
                               </Button>
-                            )}
+                            ) : (
+                              <span className="inline-flex h-8 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 shrink-0">
+                                <LockKeyhole className="h-3.5 w-3.5" /> ปิดการขายแล้ว
+                              </span>
+                            )
+                          ) : canCloseSale ? (
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => router.push(`/dashboard/process-details/${level2Code}`)}
-                              className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 text-xs font-semibold gap-1"
+                              onClick={() => { setCloseSaleError(''); setCloseSaleMode('close'); setCloseSaleTarget(level2Code) }}
+                              className="h-8 rounded-full text-amber-700 hover:bg-amber-50 hover:text-amber-800 text-xs font-semibold gap-1 shrink-0"
                             >
-                              เปิดใบงาน <ExternalLink className="h-3.5 w-3.5" />
+                              <LockKeyhole className="h-3.5 w-3.5" /> ปิดการขาย
                             </Button>
-                            {!isReadOnly && (
+                          ) : null}
+                          {!isReadOnly && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handlePrintGroup(level2Code, items)}
+                              disabled={printingGroup !== null}
+                              className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1 shrink-0"
+                            >
+                              {printingGroup === level2Code
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <Printer className="h-3.5 w-3.5" />}
+                              {printingGroup === level2Code ? 'กำลังเตรียม...' : 'พิมพ์กลุ่มนี้'}
+                            </Button>
+                          )}
+                          {!isReadOnly && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => router.push(`/dashboard/quotation/${encodeURIComponent(level2Code)}`)}
+                              className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1 shrink-0"
+                            >
+                              <Receipt className="h-3.5 w-3.5" /> ใบเสนอราคา
+                            </Button>
+                          )}
+                          {singleJob ? (
+                            <>
+                              {/* No BU → link directly to process-details */}
+                              {!isReadOnly && (
+                                <Button size="sm" variant="ghost" onClick={() => setEditJob(singleJob)}
+                                  className="h-8 rounded-full text-gray-500 hover:bg-gray-100 text-xs gap-1 shrink-0">
+                                  <Pencil className="h-3.5 w-3.5" /> แก้ไข
+                                </Button>
+                              )}
+                              {!isReadOnly && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => router.push(`/dashboard/process-details/${level2Code}/qc`)}
+                                  className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1 shrink-0"
+                                >
+                                  <ClipboardCheck className="h-3.5 w-3.5" /> QC
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => { setDeleteError(''); setDeleteTarget(singleJob.job_code) }}
-                                className="h-8 w-8 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0"
+                                onClick={() => router.push(`/dashboard/process-details/${level2Code}`)}
+                                className="h-8 rounded-full text-[#7B1A1A] hover:bg-red-50 text-xs font-semibold gap-1 shrink-0"
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                เปิดใบงาน <ExternalLink className="h-3.5 w-3.5" />
                               </Button>
-                            )}
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => toggle(level2Code)}
-                            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1"
-                          >
-                            {isOpen ? 'ย่อ' : `ดู ${items.length} รายการ`}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Level 3 sub-items */}
-                    {isOpen && hasLevel3 && (
-                      <div className="bg-gray-50/40 border-t border-gray-100">
-                        {/* Sub-header */}
-                        <div className="hidden md:grid grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] gap-4 px-12 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                          <span></span>
-                          <span>เลข Job</span>
-                          <span>ชื่อแบบ</span>
-                          <span className="text-center">จำนวน</span>
-                          <span>Process</span>
-                          <span>กำหนดส่ง</span>
-                          <span></span>
+                              {!isReadOnly && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => { setDeleteError(''); setDeleteTarget(singleJob.job_code) }}
+                                  className="h-8 w-8 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0 shrink-0"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => toggle(level2Code)}
+                              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 shrink-0"
+                            >
+                              {isOpen ? 'ย่อ' : `ดู ${items.length} รายการ`}
+                            </button>
+                          )}
                         </div>
+                      </div>
 
-                        {items.map((job, idx) => (
-                          <div
-                            key={job.job_code}
-                            className={`flex flex-col gap-2.5 px-4 py-3 md:grid md:grid-cols-[56px_1.5fr_2.5fr_auto_auto_auto_auto] md:gap-4 md:px-12 md:py-2 md:items-center ${
-                              canCloseSale && job.has_no_process
-                                ? 'bg-amber-50/70 border-l-4 border-l-amber-500'
-                                : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
-                            } hover:bg-red-50/20 transition-colors`}
-                          >
-                            <div className="flex items-center gap-3 md:contents">
-                              {/* Thumbnail */}
-                              <JobThumbnail
-                                job={job}
-                                size={48}
-                                isReadOnly={!canViewFile}
-                                onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
-                              />
-                              <div className="min-w-0 flex-1 md:contents">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="block font-mono text-xs font-semibold text-gray-700 break-all md:break-normal">
-                                    {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
-                                  </span>
+                      {/* Level 3 sub-items */}
+                      {isOpen && hasLevel3 && (
+                        <div className="bg-gray-50/40 border-t border-gray-100">
+                          {/* Sub-header */}
+                          <div className="grid grid-cols-[40px_164px_1fr_55px_115px_90px_90px_110px_340px] items-center gap-3 sm:gap-4 px-3 sm:px-6 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 bg-gray-50/60">
+                            <span></span>
+                            <span>เลข Job</span>
+                            <span>ชื่อแบบ</span>
+                            <span className="text-center">จำนวน</span>
+                            <span>Process</span>
+                            <span className="text-center">วันรับงาน</span>
+                            <span className="text-center">กำหนดส่ง</span>
+                            <span className="text-center">สถานะ</span>
+                            <span className="text-right">จัดการ</span>
+                          </div>
+
+                          {items.map((job, idx) => (
+                            <div
+                              key={job.job_code}
+                              className={`grid grid-cols-[40px_164px_1fr_55px_115px_90px_90px_110px_340px] items-center gap-3 sm:gap-4 px-3 py-2.5 sm:px-6 hover:bg-red-50/20 transition-colors border-b border-gray-100/60 ${
+                                canCloseSale && job.has_no_process
+                                  ? 'bg-amber-50/70 border-l-4 border-l-amber-500'
+                                  : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                              }`}
+                            >
+                              <div className="w-10 flex items-center justify-center">
+                                <JobThumbnail
+                                  job={job}
+                                  size={36}
+                                  isReadOnly={!canViewFile}
+                                  onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
+                                />
+                              </div>
+                              <div className="min-w-0 flex flex-col gap-0.5">
+                                <span className="font-mono text-xs font-semibold text-gray-700 truncate" title={[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}>
+                                  {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
+                                </span>
+                                <div>
                                   {job.is_printed ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full whitespace-nowrap">
                                       <Printer className="h-2.5 w-2.5 text-emerald-600" /> ปริ้นแล้ว
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-full whitespace-nowrap">
                                       <Printer className="h-2.5 w-2.5 text-amber-600" /> ยังไม่ปริ้น
                                     </span>
                                   )}
                                 </div>
-                                <span className="block text-xs text-gray-500 truncate">{job.drawing_name}</span>
                               </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 md:contents">
-                              <div className="md:text-center">
+                              <span className="truncate text-xs text-gray-600 min-w-0" title={job.drawing_name}>
+                                {job.drawing_name || '-'}
+                              </span>
+                              <div className="text-center">
                                 <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
                                 <span className="text-[10px] text-gray-400"> ชิ้น</span>
                               </div>
-                              <div className="flex gap-1 flex-wrap items-center">
+                              <div className="flex items-center gap-1 flex-wrap overflow-hidden">
                                 {canCloseSale && job.has_no_process && (
-                                  <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse whitespace-nowrap">
-                                    <AlertTriangle className="h-3 w-3 text-amber-600" /> รอเพิ่ม Process
+                                  <span className="text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse whitespace-nowrap">
+                                    <AlertTriangle className="h-2.5 w-2.5 text-amber-600" /> รอ Process
                                   </span>
                                 )}
                                 {job.processes.slice(0, 2).map((p, i) => (
@@ -717,152 +765,213 @@ export default function JobListPage() {
                                   </span>
                                 ))}
                                 {job.coating && (
-                                  <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded-full">
+                                  <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
                                     {job.coating}
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[11px] text-gray-500">{formatDate(job.due_date)}</span>
+                              {/* วันรับงาน */}
+                              <div className="flex items-center justify-center gap-1 text-[11px] text-blue-700 font-medium text-center whitespace-nowrap" title="วันรับงาน">
+                                <Calendar className="h-3 w-3 text-blue-500 shrink-0" />
+                                <span>{formatDate(job.received_date)}</span>
+                              </div>
+                              {/* กำหนดส่ง */}
+                              <div className="flex items-center justify-center gap-1 text-[11px] text-gray-500 text-center whitespace-nowrap" title="กำหนดส่ง">
+                                <Calendar className="h-3 w-3 text-amber-500 shrink-0" />
+                                <span>{formatDate(job.due_date)}</span>
+                              </div>
+                              {/* สถานะ */}
+                              <div className="flex items-center justify-center">
                                 <StatusChip
                                   status={job.status}
                                   currentProcessName={job.current_process_name}
                                   currentProcessActive={job.current_process_active}
-
                                   onHold={job.on_hold}
                                 />
                               </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 justify-end">
-                              {!isReadOnly && (
-                                <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
-                                  className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2.5">
-                                  <Pencil className="h-3 w-3" /> แก้ไข
-                                </Button>
-                              )}
-                              {!isReadOnly && (
+                              {/* จัดการ */}
+                              <div className="flex items-center justify-end gap-1">
+                                {!isReadOnly && (
+                                  <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
+                                    className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2 shrink-0">
+                                    <Pencil className="h-3 w-3" /> แก้ไข
+                                  </Button>
+                                )}
+                                {!isReadOnly && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
+                                    className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2 shrink-0"
+                                  >
+                                    <ClipboardCheck className="h-3 w-3" /> QC
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
-                                  className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
+                                  onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
+                                  className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2 shrink-0"
                                 >
-                                  <ClipboardCheck className="h-3 w-3" /> QC
+                                  ใบงาน <ExternalLink className="h-3 w-3" />
                                 </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
-                                className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
-                              >
-                                ใบงาน <ExternalLink className="h-3 w-3" />
-                              </Button>
-                              {!isReadOnly && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
-                                  className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              )}
+                                {!isReadOnly && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
+                                    className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0 shrink-0"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Level 2 expanded (no BU, multiple rows) */}
+                      {isOpen && !hasLevel3 && items.length > 1 && (
+                        <div className="bg-gray-50/40 border-t border-gray-100">
+                          {/* Sub-header */}
+                          <div className="grid grid-cols-[40px_164px_1fr_55px_115px_90px_90px_110px_340px] items-center gap-3 sm:gap-4 px-3 sm:px-6 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 bg-gray-50/60">
+                            <span></span>
+                            <span>เลข Job</span>
+                            <span>ชื่อแบบ</span>
+                            <span className="text-center">จำนวน</span>
+                            <span>Process</span>
+                            <span className="text-center">วันรับงาน</span>
+                            <span className="text-center">กำหนดส่ง</span>
+                            <span className="text-center">สถานะ</span>
+                            <span className="text-right">จัดการ</span>
                           </div>
-                        ))}
-                      </div>
-                    )}
 
-                    {/* Level 2 expanded (no BU, multiple rows) */}
-                    {isOpen && !hasLevel3 && items.length > 1 && (
-                      <div className="bg-gray-50/40 border-t border-gray-100">
-                        {items.map((job, idx) => (
-                          <div
-                            key={job.job_code}
-                            className={`flex flex-wrap items-center gap-x-3 gap-y-2 md:gap-4 px-4 py-3 md:px-12 md:py-2 ${
-                              canCloseSale && job.has_no_process
-                                ? 'bg-amber-50/70 border-l-4 border-l-amber-500'
-                                : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
-                            } hover:bg-red-50/20 transition-colors`}
-                          >
-                            <JobThumbnail
-                              job={job}
-                              size={48}
-                              isReadOnly={!canViewFile}
-                              onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
-                            />
-                            <div className="flex items-center gap-1.5 flex-wrap md:w-48 md:shrink-0">
-                              <span className="font-mono text-xs font-semibold text-gray-700 break-all md:break-normal">
-                                {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
-                              </span>
-                              {job.is_printed ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                  <Printer className="h-2.5 w-2.5 text-emerald-600" /> ปริ้นแล้ว
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                  <Printer className="h-2.5 w-2.5 text-amber-600" /> ยังไม่ปริ้น
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-xs text-gray-500 flex-1 min-w-[8rem] truncate">{job.drawing_name}</span>
-                            {canCloseSale && job.has_no_process && (
-                              <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse whitespace-nowrap">
-                                <AlertTriangle className="h-3 w-3 text-amber-600" /> รอเพิ่ม Process
-                              </span>
-                            )}
-                            <StatusChip
-                              status={job.status}
-                              currentProcessName={job.current_process_name}
-                              currentProcessActive={job.current_process_active}
-
-                              onHold={job.on_hold}
-                            />
-                            {!isReadOnly && (
-                              <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
-                                className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2.5">
-                                <Pencil className="h-3 w-3" /> แก้ไข
-                              </Button>
-                            )}
-                            {!isReadOnly && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
-                                className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2.5"
-                              >
-                                <ClipboardCheck className="h-3 w-3" /> QC
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
-                              className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5"
+                          {items.map((job, idx) => (
+                            <div
+                              key={job.job_code}
+                              className={`grid grid-cols-[40px_164px_1fr_55px_115px_90px_90px_110px_340px] items-center gap-3 sm:gap-4 px-3 py-2.5 sm:px-6 hover:bg-red-50/20 transition-colors border-b border-gray-100/60 ${
+                                canCloseSale && job.has_no_process
+                                  ? 'bg-amber-50/70 border-l-4 border-l-amber-500'
+                                  : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                              }`}
                             >
-                              ใบงาน <ExternalLink className="h-3 w-3" />
-                            </Button>
-                            {!isReadOnly && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
-                                className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                              <div className="w-10 flex items-center justify-center">
+                                <JobThumbnail
+                                  job={job}
+                                  size={36}
+                                  isReadOnly={!canViewFile}
+                                  onPreview={(a, atts) => setPreview({ url: a.file_url, name: a.file_name, attachments: atts })}
+                                />
+                              </div>
+                              <div className="min-w-0 flex flex-col gap-0.5">
+                                <span className="font-mono text-xs font-semibold text-gray-700 truncate" title={[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}>
+                                  {[job.job_code, job.job_note?.trim()].filter(Boolean).join('-')}
+                                </span>
+                                <div>
+                                  {job.is_printed ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full whitespace-nowrap">
+                                      <Printer className="h-2.5 w-2.5 text-emerald-600" /> ปริ้นแล้ว
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-full whitespace-nowrap">
+                                      <Printer className="h-2.5 w-2.5 text-amber-600" /> ยังไม่ปริ้น
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="truncate text-xs text-gray-600 min-w-0" title={job.drawing_name}>
+                                {job.drawing_name || '-'}
+                              </span>
+                              <div className="text-center">
+                                <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
+                                <span className="text-[10px] text-gray-400"> ชิ้น</span>
+                              </div>
+                              <div className="flex items-center gap-1 flex-wrap overflow-hidden">
+                                {canCloseSale && job.has_no_process && (
+                                  <span className="text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse whitespace-nowrap">
+                                    <AlertTriangle className="h-2.5 w-2.5 text-amber-600" /> รอ Process
+                                  </span>
+                                )}
+                                {job.processes.slice(0, 2).map((p, i) => (
+                                  <span key={i} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    {p.process}
+                                  </span>
+                                ))}
+                                {job.coating && (
+                                  <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    {job.coating}
+                                  </span>
+                                )}
+                              </div>
+                              {/* วันรับงาน */}
+                              <div className="flex items-center justify-center gap-1 text-[11px] text-blue-700 font-medium text-center whitespace-nowrap" title="วันรับงาน">
+                                <Calendar className="h-3 w-3 text-blue-500 shrink-0" />
+                                <span>{formatDate(job.received_date)}</span>
+                              </div>
+                              {/* กำหนดส่ง */}
+                              <div className="flex items-center justify-center gap-1 text-[11px] text-gray-500 text-center whitespace-nowrap" title="กำหนดส่ง">
+                                <Calendar className="h-3 w-3 text-amber-500 shrink-0" />
+                                <span>{formatDate(job.due_date)}</span>
+                              </div>
+                              {/* สถานะ */}
+                              <div className="flex items-center justify-center">
+                                <StatusChip
+                                  status={job.status}
+                                  currentProcessName={job.current_process_name}
+                                  currentProcessActive={job.current_process_active}
+                                  onHold={job.on_hold}
+                                />
+                              </div>
+                              {/* จัดการ */}
+                              <div className="flex items-center justify-end gap-1">
+                                {!isReadOnly && (
+                                  <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
+                                    className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2 shrink-0">
+                                    <Pencil className="h-3 w-3" /> แก้ไข
+                                  </Button>
+                                )}
+                                {!isReadOnly && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}/qc`)}
+                                    className="h-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-semibold gap-1 px-2 shrink-0"
+                                  >
+                                    <ClipboardCheck className="h-3 w-3" /> QC
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
+                                  className="h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2 shrink-0"
+                                >
+                                  ใบงาน <ExternalLink className="h-3 w-3" />
+                                </Button>
+                                {!isReadOnly && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
+                                    className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0 shrink-0"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
       )}
 
       {printError && (
