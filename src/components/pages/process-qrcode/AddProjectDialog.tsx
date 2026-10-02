@@ -530,7 +530,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         onEscapeKeyDown={(e) => {
           if (saving) e.preventDefault()
         }}
-        className="sm:max-w-3xl rounded-2xl p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col scrollbar-hide relative overflow-hidden"
+        className="sm:max-w-3xl rounded-2xl p-6 bg-white border-0 font-sans max-h-[90vh] flex flex-col scrollbar-hide overflow-hidden"
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
