@@ -26,7 +26,9 @@ function getToken() {
 
 interface ExportRow {
   job_code: string
+  job_note?: string
   dwg_name: string
+  quantity: number
   received_date: string | null
   due_date: string | null
   status: string
@@ -143,6 +145,29 @@ export function ExportJobsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ล็อกไม่ให้ <main> ด้านนอกเกิด scrollbar ซ้อน เพื่อให้หน้าจอพอดีและเลื่อนเฉพาะตารางด้านล่าง
+  useEffect(() => {
+    const mainEl = document.querySelector('main.flex-1') as HTMLElement | null
+    if (!mainEl) return
+
+    const originalOverflow = mainEl.style.overflow
+    const originalPaddingBottom = mainEl.style.paddingBottom
+    const originalPaddingTop = mainEl.style.paddingTop
+    const originalHeight = mainEl.style.height
+
+    mainEl.style.overflow = 'hidden'
+    mainEl.style.paddingTop = '12px'
+    mainEl.style.paddingBottom = '12px'
+    mainEl.style.height = 'calc(100vh - 4rem)'
+
+    return () => {
+      mainEl.style.overflow = originalOverflow
+      mainEl.style.paddingTop = originalPaddingTop
+      mainEl.style.paddingBottom = originalPaddingBottom
+      mainEl.style.height = originalHeight
+    }
+  }, [])
+
   const clearFilters = () => {
     setFrom('')
     setTo('')
@@ -181,6 +206,7 @@ export function ExportJobsPage() {
       const base: Record<string, string | number> = {
         'Job': r.job_code,
         'DWG': r.dwg_name,
+        'จำนวนชิ้นงาน': r.quantity ?? 1,
         'วันรับงาน': formatDate(r.received_date),
         'วันกำหนดส่งมอบ': formatDate(r.due_date),
         'ลำดับ': r.index,
@@ -205,12 +231,12 @@ export function ExportJobsPage() {
   }
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="flex flex-col h-full w-full font-sans gap-2.5 overflow-hidden">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Export ตารางงาน</h1>
-          <p className="text-sm text-gray-500 mt-0.5">เลือกตัวกรองแล้วดูตาราง หรือส่งออกเป็น Excel</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">เลือกตัวกรองแล้วดูตาราง หรือส่งออกเป็น Excel</p>
         </div>
         <Button
           onClick={handleExportExcel}
@@ -223,8 +249,8 @@ export function ExportJobsPage() {
       </div>
 
       {/* Filters */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      <div className="shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm p-3 sm:p-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7">
           <div>
             <label htmlFor="export-job-search" className="text-xs font-semibold text-gray-600 mb-1 block">เลข Job</label>
             <Input
@@ -301,9 +327,9 @@ export function ExportJobsPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 sm:px-5 py-3 bg-[#fde047]">
-          <h2 className="text-base font-bold text-gray-900 tracking-wide">ตารางงาน</h2>
+      <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 sm:px-5 py-2.5 bg-[#fde047]">
+          <h2 className="text-sm sm:text-base font-bold text-gray-900 tracking-wide">ตารางงาน</h2>
           {searched && (
             <span className="text-xs font-semibold text-gray-700">
               {rows.length} แถว {rows.length > 0 && `· รวมเวลาทั้งหมด ${totalMinutes.toLocaleString()} นาที`}
@@ -311,14 +337,14 @@ export function ExportJobsPage() {
           )}
         </div>
 
-        {error && <p className="px-5 py-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="shrink-0 px-5 py-4 text-sm text-red-600">{error}</p>}
 
         {!error && rows.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+          <div className="shrink-0 flex flex-wrap gap-2 px-4 sm:px-5 py-2 border-b border-gray-100 bg-gray-50/60 max-h-24 overflow-y-auto">
             {processSummary.map((s) => (
               <span
                 key={s.process}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-0.5 text-xs"
               >
                 <span className="font-semibold text-gray-700">{s.process}</span>
                 <span className="text-gray-500">{s.minutes.toLocaleString()} นาที</span>
@@ -328,61 +354,68 @@ export function ExportJobsPage() {
         )}
 
         {!error && !searched && (
-          <p className="px-5 py-8 text-center text-sm text-gray-400">เลือกตัวกรองแล้วกด &quot;ค้นหา&quot; เพื่อแสดงตาราง</p>
+          <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-gray-400">
+            เลือกตัวกรองแล้วกด &quot;ค้นหา&quot; เพื่อแสดงตาราง
+          </div>
         )}
 
         {!error && searched && rows.length === 0 && (
-          <p className="px-5 py-8 text-center text-sm text-gray-400">ไม่พบข้อมูลตามตัวกรองที่เลือก</p>
+          <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-gray-400">
+            ไม่พบข้อมูลตามตัวกรองที่เลือก
+          </div>
         )}
 
         {!error && rows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-max border-collapse" style={{ fontSize: '12px' }}>
-              <thead>
+          <div className="flex-1 min-h-0 overflow-auto">
+            <table className="w-full min-w-max border-separate border-spacing-0" style={{ fontSize: '12px' }}>
+              <thead className="sticky top-0 z-20">
                 <tr style={{ backgroundColor: '#a5f3fc' }}>
-                  <th className="sticky left-0 z-10 bg-[#a5f3fc] border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-30">Job</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-35">DWG</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-24">วันรับงาน</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-24">วันกำหนดส่งมอบ</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-10">ลำดับ</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-25">กระบวนการ</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16 leading-snug">
+                  <th className="sticky left-0 top-0 z-30 bg-[#a5f3fc] border-t border-b border-r border-l border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-36 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.12)]">Job</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-35">DWG</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16">จำนวนชิ้นงาน</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-24">วันรับงาน</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-24">วันกำหนดส่งมอบ</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-10">ลำดับ</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-25">กระบวนการ</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16 leading-snug">
                     เป้าหมาย<br /><span className="font-normal text-[10px]">(HH:MM)</span>
                   </th>
                   {canSeeSkill && (
-                    <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">SKILL</th>
+                    <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-12">SKILL</th>
                   )}
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-20">รวมเวลา</th>
-                  <th className="border border-slate-300 text-center font-bold text-red-700 px-2 py-1.5 min-w-28 leading-snug">
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-20">รวมเวลา</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-red-700 px-2 py-1.5 min-w-28 leading-snug">
                     ค่าความเสียหาย<br /><span className="font-normal text-[10px]">(บาท)</span>
                   </th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-40">หมายเหตุ</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-32">ส่วนต่างเวลา</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-40">พนักงาน</th>
-                  <th className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-24">สถานะ</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-40">หมายเหตุ</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-32">ส่วนต่างเวลา</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-40">พนักงาน</th>
+                  <th className="sticky top-0 z-20 bg-[#a5f3fc] border-t border-b border-r border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-24">สถานะ</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => {
                   const comparison = compareTime(r.target_time, r.elapsed_time, r.completed)
+                  const rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50'
                   return (
-                  <tr key={`${r.job_code}-${r.index}`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
-                    <td className={`sticky left-0 z-10 border border-slate-300 px-2 py-1.5 font-semibold text-slate-700 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>{r.job_code}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-slate-600">{r.dwg_name || '—'}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{formatDate(r.received_date)}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{formatDate(r.due_date)}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.index}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-slate-700">{r.process || '—'}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{normalizeTargetTime(r.target_time)}</td>
+                  <tr key={`${r.job_code}-${r.index}`} className={rowBg}>
+                    <td className={`sticky left-0 z-10 border-b border-r border-l border-slate-300 px-2 py-1.5 font-semibold text-slate-700 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.12)] ${rowBg}`}>{r.job_code}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-slate-600">{r.dwg_name || '—'}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center font-medium text-slate-700">{r.quantity ?? 1}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center text-slate-600">{formatDate(r.received_date)}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center text-slate-600">{formatDate(r.due_date)}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.index}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-slate-700">{r.process || '—'}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center text-slate-600">{normalizeTargetTime(r.target_time)}</td>
                     {canSeeSkill && (
-                      <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.skill || '—'}</td>
+                      <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.skill || '—'}</td>
                     )}
-                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.elapsed_time || '00:00:00'}</td>
-                    <td className="border border-slate-300 bg-red-50/30 px-2 py-1.5 text-right font-medium text-slate-700">
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.elapsed_time || '00:00:00'}</td>
+                    <td className="border-b border-r border-slate-300 bg-red-50/30 px-2 py-1.5 text-right font-medium text-slate-700">
                       {normalizeDamageCost(r.damage_cost).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-slate-600">{r.remark?.trim() || '—'}</td>
-                    <td className={`border border-slate-300 px-2 py-1.5 text-center font-semibold ${
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-slate-600">{r.remark?.trim() || '—'}</td>
+                    <td className={`border-b border-r border-slate-300 px-2 py-1.5 text-center font-semibold ${
                       comparison.kind === 'overtime'
                         ? 'bg-red-100 text-red-700'
                         : comparison.kind === 'within'
@@ -392,8 +425,8 @@ export function ExportJobsPage() {
                       <div>{comparison.difference}</div>
                       <div className="text-[10px] font-medium">{comparison.label}</div>
                     </td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-slate-700">{r.workers || '—'}</td>
-                    <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.status || '—'}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-slate-700">{r.workers || '—'}</td>
+                    <td className="border-b border-r border-slate-300 px-2 py-1.5 text-center text-slate-600">{r.status || '—'}</td>
                   </tr>
                   )
                 })}

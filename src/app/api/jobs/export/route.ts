@@ -27,7 +27,9 @@ interface ProcessRow {
 
 interface ProjectDoc {
   project_id: string
+  job_note?: string
   dwg_name?: string
+  quantity?: number | string
   received_date?: Date | string
   due_date?: Date | string
   status?: string
@@ -41,7 +43,9 @@ interface WorkerDoc {
 
 export interface ExportRow {
   job_code: string
+  job_note?: string
   dwg_name: string
+  quantity: number
   received_date: Date | string | null
   due_date: Date | string | null
   status: string
@@ -85,11 +89,17 @@ export async function GET(req: NextRequest) {
       match.received_date = range
     }
     if (status) match.status = status
-    if (job) match.project_id = { $regex: job.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
+    if (job) {
+      const escaped = job.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      match.$or = [
+        { project_id: { $regex: escaped, $options: 'i' } },
+        { job_note: { $regex: escaped, $options: 'i' } },
+      ]
+    }
 
     const projects = await db.collection<ProjectDoc>('projects')
       .find(match)
-      .project<ProjectDoc>({ project_id: 1, dwg_name: 1, received_date: 1, due_date: 1, status: 1, processes: 1 })
+      .project<ProjectDoc>({ project_id: 1, job_note: 1, dwg_name: 1, quantity: 1, received_date: 1, due_date: 1, status: 1, processes: 1 })
       .sort({ project_id: 1 })
       .toArray()
 
@@ -126,6 +136,11 @@ export async function GET(req: NextRequest) {
         continue
       }
 
+      const note = typeof p.job_note === 'string' ? p.job_note.trim() : ''
+      const fullJobCode = [p.project_id, note].filter(Boolean).join('-')
+      const parsedQty = Number(p.quantity)
+      const quantity = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1
+
       const procs = Array.isArray(p.processes) ? p.processes : []
       procs.forEach((row, i) => {
         if (processFilter && row.process !== processFilter) return
@@ -134,8 +149,10 @@ export async function GET(req: NextRequest) {
           .filter((w) => w.worker_id)
           .map((w) => nameByCode.get(String(w.worker_id)) ?? `#${w.worker_id}`)
         rows.push({
-          job_code: p.project_id,
+          job_code: fullJobCode,
+          job_note: note,
           dwg_name: p.dwg_name ?? '',
+          quantity,
           received_date: p.received_date ?? null,
           due_date: p.due_date ?? null,
           status: p.status ?? '',
