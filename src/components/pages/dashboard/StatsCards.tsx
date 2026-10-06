@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Cpu, ClipboardCheck, CheckCircle2, Clock, Loader2 } from 'lucide-react'
+import { Cpu, ClipboardCheck, CheckCircle2, Clock, Loader2, Package, ListTree } from 'lucide-react'
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -13,6 +13,8 @@ interface Stats {
   idle: number
   totalProcesses: number
   completedProcesses: number
+  pieceCount: number
+  subjobCount: number
 }
 
 export function StatsCards() {
@@ -24,12 +26,14 @@ export function StatsCards() {
       const token = getToken()
       const h = { Authorization: `Bearer ${token}` }
       try {
-        const [rtRes, sumRes] = await Promise.all([
+        const [rtRes, sumRes, statsRes] = await Promise.all([
           fetch('/api/realtime', { headers: h }),
           fetch('/api/jobs/process-summary', { headers: h }),
+          fetch('/api/dashboard/stats', { headers: h }),
         ])
         const rt = rtRes.ok ? await rtRes.json() : null
         const sum = sumRes.ok ? await sumRes.json() : []
+        const dashboard = statsRes.ok ? await statsRes.json() : null
 
         const totalProcesses = Array.isArray(sum)
           ? sum.reduce((a: number, b: { job_count: number }) => a + b.job_count, 0)
@@ -43,6 +47,8 @@ export function StatsCards() {
           idle: rt?.idle ?? 0,
           totalProcesses,
           completedProcesses,
+          pieceCount: dashboard?.piece_count ?? 0,
+          subjobCount: dashboard?.subjob_count ?? 0,
         })
       } catch { /* ignore */ }
       finally { setLoading(false) }
@@ -89,10 +95,26 @@ export function StatsCards() {
       icon: Clock,
       color: 'text-blue-700 bg-blue-50 border-blue-100',
     },
+    {
+      title: 'จำนวนชิ้นงานทั้งหมด',
+      value: loading ? 'โ€”' : String(stats?.pieceCount ?? 0),
+      unit: 'ชิ้น',
+      subtext: 'รวมจาก Job ย่อยทั้งหมดในระบบ',
+      icon: Package,
+      color: 'text-orange-700 bg-orange-50 border-orange-100',
+    },
+    {
+      title: 'จำนวน Job ย่อยทั้งหมด',
+      value: loading ? 'โ€”' : String(stats?.subjobCount ?? 0),
+      unit: 'รายการ',
+      subtext: 'นับจาก Job ย่อยที่มีอยู่ในระบบ',
+      icon: ListTree,
+      color: 'text-indigo-700 bg-indigo-50 border-indigo-100',
+    },
   ]
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-sans">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 font-sans">
       {cards.map((card) => (
         <div
           key={card.title}

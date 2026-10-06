@@ -198,6 +198,17 @@ export function ExportJobsPage() {
       .sort((a, b) => b.minutes - a.minutes)
   }, [rows])
 
+  const exportSummary = useMemo(() => {
+    const uniqueJobs = new Map<string, number>()
+    for (const row of rows) {
+      if (!uniqueJobs.has(row.job_code)) uniqueJobs.set(row.job_code, row.quantity ?? 1)
+    }
+    return {
+      jobCount: uniqueJobs.size,
+      pieceCount: [...uniqueJobs.values()].reduce((sum, quantity) => sum + quantity, 0),
+    }
+  }, [rows])
+
   const handleExportExcel = async () => {
     if (rows.length === 0) return
     const XLSX = await import('xlsx')
@@ -223,7 +234,22 @@ export function ExportJobsPage() {
       base['สถานะ'] = r.status
       return base
     })
-    const ws = XLSX.utils.json_to_sheet(data)
+    const uniqueJobs = new Map<string, number>()
+    for (const row of rows) {
+      if (!uniqueJobs.has(row.job_code)) uniqueJobs.set(row.job_code, row.quantity ?? 1)
+    }
+    const totalPieces = [...uniqueJobs.values()].reduce((sum, quantity) => sum + quantity, 0)
+    const summaryRows: (string | number)[][] = [
+      ['สรุปข้อมูล Export', 'จำนวน Job ย่อยทั้งหมด', uniqueJobs.size, 'จำนวนชิ้นงานทั้งหมด', totalPieces],
+      [],
+    ]
+    const headers = Object.keys(data[0] ?? {})
+    const detailRows = data.map((row) => headers.map((header) => row[header] ?? ''))
+    const ws = XLSX.utils.aoa_to_sheet([
+      ...summaryRows,
+      headers,
+      ...detailRows,
+    ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'ตารางงาน')
     const stamp = new Date().toISOString().slice(0, 10)
@@ -330,8 +356,9 @@ export function ExportJobsPage() {
       <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="shrink-0 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 sm:px-5 py-2.5 bg-[#fde047]">
           <h2 className="text-sm sm:text-base font-bold text-gray-900 tracking-wide">ตารางงาน</h2>
+          {searched && <span className="text-xs font-semibold text-gray-700">Job ย่อย {exportSummary.jobCount.toLocaleString()} รายการ · ชิ้นงาน {exportSummary.pieceCount.toLocaleString()} ชิ้น · {rows.length.toLocaleString()} แถว · รวมเวลา {totalMinutes.toLocaleString()} นาที</span>}
           {searched && (
-            <span className="text-xs font-semibold text-gray-700">
+            <span className="hidden text-xs font-semibold text-gray-700">
               {rows.length} แถว {rows.length > 0 && `· รวมเวลาทั้งหมด ${totalMinutes.toLocaleString()} นาที`}
             </span>
           )}

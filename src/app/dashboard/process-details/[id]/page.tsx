@@ -1309,6 +1309,11 @@ export default function ProcessDetailsPage() {
     const { mode, row, col, processName } = actionModal
     const current = processListRef.current
 
+    if (mode === 'stop' && !reason?.trim()) {
+      showToast('warning', 'กรุณาเลือกเหตุผลการหยุดงาน', 'ยังไม่บันทึกเวลาหยุดงาน')
+      return
+    }
+
     if (mode === 'start') {
       if (current[row]?.on_hold) {
         showToast('warning', 'กระบวนการนี้กำลัง HOLD', 'กรุณาปลด HOLD ก่อนเริ่มงาน')
@@ -1364,6 +1369,10 @@ export default function ProcessDetailsPage() {
   // ยืนยันหยุดงานที่ค้างไว้จากการสแกนบาร์โค้ดโดยตรง (หลังเลือกเหตุผลใน StopReasonModal แล้ว)
   const commitPendingStop = useCallback((reason: string) => {
     if (!pendingStop) return
+    if (!reason.trim()) {
+      showToast('warning', 'กรุณาเลือกเหตุผลการหยุดงาน', 'ยังไม่บันทึกเวลาหยุดงาน')
+      return
+    }
     const { rowIndex, workerIdStr, workerName, processName, nowTime } = pendingStop
     const current = processListRef.current
     const next = [...current]

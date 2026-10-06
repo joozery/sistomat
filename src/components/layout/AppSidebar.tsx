@@ -22,6 +22,7 @@ import {
   Activity,
   Settings,
   FileSpreadsheet,
+  Trash2,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -37,6 +38,7 @@ interface MenuItem {
   badge?: string | number
   adminOnly?: boolean
   hiddenForUser?: boolean
+  superadminOnly?: boolean
 }
 
 const mainMenuItems: MenuItem[] = [
@@ -44,6 +46,8 @@ const mainMenuItems: MenuItem[] = [
   { label: 'การจัดการผู้ใช้งาน', path: '/dashboard/user-management', icon: Users, adminOnly: true },
   { label: 'จัดการ QR Code', path: '/dashboard/process-qrcode', icon: QrCode },
 ]
+
+const trashMenuItem: MenuItem = { label: 'ถังขยะ / กู้คืนข้อมูล', path: '/dashboard/trash', icon: Trash2, superadminOnly: true }
 
 const managementMenuItems: MenuItem[] = [
   { label: 'ติดตาม Real-time', path: '/dashboard/realtime', icon: Radio },
@@ -54,6 +58,7 @@ const managementMenuItems: MenuItem[] = [
   { label: 'ประวัติกิจกรรม', path: '/dashboard/activity-log', icon: Activity, hiddenForUser: true },
   { label: 'ตั้งค่าระบบ', path: '/dashboard/settings', icon: Settings, adminOnly: true },
 ]
+managementMenuItems.splice(managementMenuItems.length - 1, 0, trashMenuItem)
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -90,7 +95,7 @@ export function AppSidebar() {
 
   const renderMenuSection = (items: MenuItem[]) => (
     <SidebarMenu className="gap-1.5">
-      {items.filter((item) => (!item.adminOnly || isAdmin) && (!item.hiddenForUser || !isUser)).map((item) => {
+      {items.filter((item) => (!item.adminOnly || isAdmin) && (!item.superadminOnly || role?.trim().toLowerCase() === 'superadmin') && (!item.hiddenForUser || !isUser)).map((item) => {
         const isActive =
           item.path === '/dashboard'
             ? pathname === '/dashboard'

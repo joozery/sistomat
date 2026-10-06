@@ -3,6 +3,7 @@ import { getClientPromise } from '@/lib/mongodb'
 import { getEffectiveElapsedSeconds } from '@/lib/process-time'
 import { summarizeProjectProgress, type ProgressJob } from '@/lib/project-progress'
 import jwt from 'jsonwebtoken'
+import { purgeExpiredTrash } from '@/lib/trash'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
 
     const client = await getClientPromise()
     const db = client.db('sistomat')
+    await purgeExpiredTrash(db)
 
     const { searchParams } = new URL(request.url)
     const process  = searchParams.get('process')

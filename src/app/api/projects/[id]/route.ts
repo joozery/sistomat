@@ -4,6 +4,7 @@ import { emitRealtimeUpdate } from '@/lib/socket-server'
 import { createNotification } from '@/lib/notify'
 import jwt from 'jsonwebtoken'
 import { parseJobMarker, type JobMarker } from '@/lib/job-markers'
+import { filesFromSnapshots, TRASH_RETENTION_DAYS } from '@/lib/trash'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
@@ -222,8 +223,8 @@ export async function DELETE(
     const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const prefixPattern = new RegExp(`^(${uniqueVariants.map(escapeRegExp).join('|')})(-|$)`)
 
-    const [projectResult] = await Promise.all([
-      db.collection('projects').deleteMany({
+    const [projectDocs, jobDocs] = await Promise.all([
+      db.collection('projects').find({
         $or: [
           { project_id: { $in: uniqueVariants } },
           { project_id: { $regex: prefixPattern } },
@@ -231,8 +232,8 @@ export async function DELETE(
           { level2: { $in: uniqueVariants } },
           { level3: { $in: uniqueVariants } },
         ],
-      }),
-      db.collection('jobs').deleteMany({
+      }).toArray(),
+      db.collection('jobs').find({
         $or: [
           { job_code: { $in: uniqueVariants } },
           { job_code: { $regex: prefixPattern } },
@@ -240,12 +241,31 @@ export async function DELETE(
           { level2: { $in: uniqueVariants } },
           { level3: { $in: uniqueVariants } },
         ],
-      }),
+      }).toArray(),
     ])
 
-    if (projectResult.deletedCount === 0) {
+    if (projectDocs.length === 0 && jobDocs.length === 0) {
       return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })
     }
+
+    const deletedAt = new Date()
+    const purgeAt = new Date(deletedAt.getTime() + TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+    const actor = (() => {
+      try { return jwt.verify(token, JWT_SECRET) as { username?: string } } catch { return undefined }
+    })()
+    await db.collection('deleted_projects').insertOne({
+      project_id: cleanId,
+      projects: projectDocs,
+      jobs: jobDocs,
+      files: filesFromSnapshots([...projectDocs, ...jobDocs] as Record<string, unknown>[]),
+      deleted_at: deletedAt,
+      purge_at: purgeAt,
+      deleted_by: actor?.username ?? '',
+    })
+    await Promise.all([
+      db.collection('projects').deleteMany({ _id: { $in: projectDocs.map((doc) => doc._id) } }),
+      db.collection('jobs').deleteMany({ _id: { $in: jobDocs.map((doc) => doc._id) } }),
+    ])
 
     // notify realtime page clients immediately
     emitRealtimeUpdate()
