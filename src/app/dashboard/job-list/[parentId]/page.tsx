@@ -82,6 +82,29 @@ interface Job {
   sale_closed_at?: string | null
 }
 
+function compareJobCodes(a: string, b: string) {
+  const aParts = a.split('-')
+  const bParts = b.split('-')
+  const length = Math.max(aParts.length, bParts.length)
+
+  for (let i = 0; i < length; i++) {
+    const left = aParts[i] ?? ''
+    const right = bParts[i] ?? ''
+    const leftIsNumber = /^\d+$/.test(left)
+    const rightIsNumber = /^\d+$/.test(right)
+
+    if (leftIsNumber && rightIsNumber) {
+      const difference = Number(left) - Number(right)
+      if (difference !== 0) return difference
+    } else {
+      const difference = left.localeCompare(right)
+      if (difference !== 0) return difference
+    }
+  }
+
+  return 0
+}
+
 interface PrintableJob {
   jobId: string
   dwgName: string
@@ -343,6 +366,7 @@ export default function JobListPage() {
           data.push(j)
         }
       }
+      data.sort((a, b) => compareJobCodes(a.job_code, b.job_code))
       setJobs(data)
       // auto-expand all level2 groups
       const allKeys = new Set<string>(data.map((j: Job) => j.level2 ?? j.job_code))

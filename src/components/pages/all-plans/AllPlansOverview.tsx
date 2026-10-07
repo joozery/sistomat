@@ -79,6 +79,10 @@ export function AllPlansOverview() {
   }, [summaryDateFrom, summaryDateTo])
 
   const filteredSummary = summary.filter((s) => statusFilter === 'all' || planStatus(s) === statusFilter)
+  const detailQuery = new URLSearchParams()
+  if (summaryDateFrom) detailQuery.set('from', summaryDateFrom)
+  if (summaryDateTo) detailQuery.set('to', summaryDateTo)
+  const detailQueryString = detailQuery.toString()
 
   const allStats = [
     { key: 'all',       label: 'กระบวนการทั้งหมด', value: summary.length,                                              icon: LayoutGrid,   color: 'text-gray-700',    bg: 'bg-gray-100'    },
@@ -181,7 +185,7 @@ export function AllPlansOverview() {
               return (
                 <Link
                   key={s.process}
-                  href={`/dashboard/all-plans/${encodeURIComponent(s.process)}`}
+                  href={`/dashboard/all-plans/${encodeURIComponent(s.process)}${detailQueryString ? `?${detailQueryString}` : ''}`}
                   className={`relative block overflow-hidden rounded-2xl bg-gradient-to-br ${c.from} to-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 text-left w-full`}
                 >
                   {/* Deco circle */}

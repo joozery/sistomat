@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle, Search, Calendar, X, ExternalLink, Loader2, ChevronLeft, ChevronRight, ArrowLeft, Box,
 } from 'lucide-react'
@@ -13,10 +13,11 @@ import {
 
 export function ProcessJobsPage({ processName }: { processName: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [search, setSearch] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get('from') ?? '')
+  const [dateTo, setDateTo] = useState(() => searchParams.get('to') ?? '')
   const [page, setPage] = useState(1)
   const [jobs, setJobs] = useState<Job[]>([])
   const [total, setTotal] = useState(0)
