@@ -28,6 +28,7 @@ interface BuRow {
   level3: string        // level3 (auto or manual)
   level3Touched: boolean
   jobNote: string
+  sender: string
   quantity: string
 }
 
@@ -267,6 +268,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
       level3: `${jobCode.trim()}-${String(startSuffix + i).padStart(2, '0')}`,
       level3Touched: false,
       jobNote: '',
+      sender: '',
       quantity: '1',
     }))
     setRows(prev => assignBuCodes(buRows.map(row => {
@@ -383,6 +385,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
           body: JSON.stringify({
             job_code: fullCode,
             job_note: r.jobNote.trim(),
+            sender: r.sender.trim(),
             drawing_name: r.drawingName.trim(),
             quantity: Number(r.quantity) || 1,
             received_date: receivedDate,
@@ -653,7 +656,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                         <Input value={r.drawingName} onChange={(e) => updateRow(r.id, { drawingName: e.target.value })} className="rounded-lg h-9 text-sm border-gray-200" />
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
                             <Hash className="h-3 w-3" /> Level 2 (Job)
@@ -688,6 +691,15 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                             placeholder="เช่น ตัดแมท"
                             value={r.jobNote}
                             onChange={(e) => updateRow(r.id, { jobNote: e.target.value })}
+                          className="rounded-lg h-9 text-sm border-gray-200"
+                        />
+                      </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-semibold text-gray-600">ผู้สั่งงาน</Label>
+                          <Input
+                            placeholder="ชื่อผู้สั่งงาน"
+                            value={r.sender}
+                            onChange={(e) => updateRow(r.id, { sender: e.target.value })}
                             className="rounded-lg h-9 text-sm border-gray-200"
                           />
                         </div>

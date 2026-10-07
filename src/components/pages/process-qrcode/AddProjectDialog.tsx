@@ -46,6 +46,7 @@ interface JobRowInput {
   level3: string
   level3Touched: boolean
   jobNote: string
+  sender: string
   quantity: string
 }
 
@@ -271,6 +272,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         level3: '',
         level3Touched: false,
         jobNote: '',
+        sender: '',
         quantity: '1',
       })).map(row => {
         const old = prev.find(item => item.id === row.id)
@@ -483,6 +485,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
           body: JSON.stringify({
             job_code: fullJobCode,
             job_note: r.jobNote.trim(),
+            sender: r.sender.trim(),
             drawing_name: r.drawingName.trim(),
             quantity: Number(r.quantity) || 1,
             received_date: form.receivedDate,
@@ -752,7 +755,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
                             <Hash className="h-3 w-3" /> หมายเลข JOB
@@ -787,6 +790,15 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                             placeholder="เช่น ตัดแมท"
                             value={r.jobNote}
                             onChange={(e) => updateRow(r.id, { jobNote: e.target.value })}
+                          className="rounded-lg h-9 text-sm border-gray-200"
+                        />
+                      </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] font-semibold text-gray-600">ผู้สั่งงาน</Label>
+                          <Input
+                            placeholder="ชื่อผู้สั่งงาน"
+                            value={r.sender}
+                            onChange={(e) => updateRow(r.id, { sender: e.target.value })}
                             className="rounded-lg h-9 text-sm border-gray-200"
                           />
                         </div>

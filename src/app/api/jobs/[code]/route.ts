@@ -37,6 +37,7 @@ export async function PATCH(
   const drawingName = typeof body.drawing_name === 'string' ? body.drawing_name.trim() : ''
   if (!drawingName) return NextResponse.json({ message: 'กรุณากรอกชื่อแบบ' }, { status: 400 })
   const jobNote = typeof body.job_note === 'string' ? body.job_note.trim() : ''
+  const sender = typeof body.sender === 'string' ? body.sender.trim() : ''
   const quantity = Number(body.quantity)
   if (!Number.isSafeInteger(quantity) || quantity < 1) {
     return NextResponse.json({ message: 'จำนวนชิ้นงานต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป' }, { status: 400 })
@@ -108,6 +109,7 @@ export async function PATCH(
       level3,
       dwg_name: drawingName,
       job_note: jobNote,
+      sender,
       quantity,
     }
     const jobSet: Record<string, unknown> = {
@@ -118,6 +120,7 @@ export async function PATCH(
       level3,
       drawing_name: drawingName,
       job_note: jobNote,
+      sender,
       quantity,
       remaining: quantity - completed,
     }

@@ -220,17 +220,17 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                 </th>
               ))}
 
-              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-24 leading-snug">
+              {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-24 leading-snug">
                 รวมเวลา<br />
                 <span className="font-normal text-[10px]">(ชม.)</span>
-              </th>
-              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-red-700 px-2 py-1.5 w-28 leading-snug">
+              </th>}
+              {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-red-700 px-2 py-1.5 w-28 leading-snug">
                 ค่าความเสียหาย<br />
                 <span className="font-normal text-[10px]">(บาท)</span>
-              </th>
-              <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[100px]">
+              </th>}
+              {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[100px]">
                 หมายเหตุ
-              </th>
+              </th>}
               {!isReadOnly && (onInsertRow || onDeleteRow) && (
                 <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 w-16">
                   จัดการ
@@ -484,6 +484,8 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                   })}
 
                   {/* รวมเวลา */}
+                  {!isReadOnly && (
+                  <>
                   <td 
                     className="border border-slate-300 text-center font-bold px-2"
                     style={{ 
@@ -533,6 +535,9 @@ export function ProcessTable({ processList, processOptions, activeRowIndex, acti
                   </td>
 
                   {/* แทรกแถว / ลบ */}
+                  </>
+                  )}
+
                   {!isReadOnly && (onInsertRow || onDeleteRow) && (
                     <td className="border border-slate-300 p-0 text-center">
                       <div className="flex items-center justify-center gap-0.5">

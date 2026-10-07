@@ -56,6 +56,7 @@ interface Job {
   _id?: string
   job_code: string
   job_note?: string
+  sender?: string
   level1: string
   level2: string | null
   level3: string | null
@@ -770,9 +771,12 @@ export default function JobListPage() {
                                   )}
                                 </div>
                               </div>
-                              <span className="truncate text-xs text-gray-600 min-w-0" title={job.drawing_name}>
-                                {job.drawing_name || '-'}
-                              </span>
+                              <div className="min-w-0 flex flex-col">
+                                <span className="truncate text-xs text-gray-600" title={job.drawing_name}>
+                                  {job.drawing_name || '-'}
+                                </span>
+                                {job.sender && <span className="truncate text-[11px] text-gray-400" title={job.sender}>ผู้สั่งงาน: {job.sender}</span>}
+                              </div>
                               <div className="text-center">
                                 <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
                                 <span className="text-[10px] text-gray-400"> ชิ้น</span>
@@ -904,9 +908,12 @@ export default function JobListPage() {
                                   )}
                                 </div>
                               </div>
-                              <span className="truncate text-xs text-gray-600 min-w-0" title={job.drawing_name}>
-                                {job.drawing_name || '-'}
-                              </span>
+                              <div className="min-w-0 flex flex-col">
+                                <span className="truncate text-xs text-gray-600" title={job.drawing_name}>
+                                  {job.drawing_name || '-'}
+                                </span>
+                                {job.sender && <span className="truncate text-[11px] text-gray-400" title={job.sender}>ผู้สั่งงาน: {job.sender}</span>}
+                              </div>
                               <div className="text-center">
                                 <span className="text-xs font-bold text-gray-700">{job.quantity}</span>
                                 <span className="text-[10px] text-gray-400"> ชิ้น</span>

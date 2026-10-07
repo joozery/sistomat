@@ -15,6 +15,7 @@ interface Attachment {
 interface EditableJob {
   job_code: string
   job_note?: string
+  sender?: string
   drawing_name: string
   quantity: number
   received_date?: string | Date | null
@@ -62,6 +63,7 @@ export function EditJobDialog({ job, onClose, onSuccess }: {
   const [code, setCode] = useState(job.job_code)
   const [name, setName] = useState(job.drawing_name)
   const [note, setNote] = useState(job.job_note ?? '')
+  const [sender, setSender] = useState(job.sender ?? '')
   const [quantity, setQuantity] = useState(String(job.quantity))
   const [receivedDate, setReceivedDate] = useState(() => toDateInputValue(job.received_date))
   const [dueDate, setDueDate] = useState(() => toDateInputValue(job.due_date))
@@ -104,6 +106,7 @@ export function EditJobDialog({ job, onClose, onSuccess }: {
           job_code: code.trim().toUpperCase(),
           drawing_name: name.trim(),
           job_note: note.trim(),
+          sender: sender.trim(),
           quantity: parsedQuantity,
           received_date: receivedDate.trim(),
           due_date: dueDate.trim(),
@@ -144,6 +147,10 @@ export function EditJobDialog({ job, onClose, onSuccess }: {
           <div className="space-y-1.5">
             <Label htmlFor="edit-job-quantity">จำนวนชิ้นงาน</Label>
             <Input id="edit-job-quantity" type="number" min={1} step={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={saving} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-job-sender">ผู้สั่งงาน</Label>
+            <Input id="edit-job-sender" value={sender} onChange={(event) => setSender(event.target.value)} disabled={saving} placeholder="ชื่อผู้สั่งงาน" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">

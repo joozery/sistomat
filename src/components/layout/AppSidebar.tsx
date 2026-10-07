@@ -153,20 +153,18 @@ export function AppSidebar() {
       {/* Header */}
       <SidebarHeader className="px-4 py-4 border-b border-gray-100/60 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-4">
         <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
-          <Link href="/dashboard" className="flex flex-col items-start min-w-0 group-data-[collapsible=icon]:hidden">
+          <Link href="/dashboard" className="flex flex-col items-center min-w-0 w-full group-data-[collapsible=icon]:hidden">
+            <span className="text-4xl font-extrabold tracking-tight text-gray-900 truncate max-w-[225px] leading-none text-center">
+              {subName || 'SISTOMAT'}
+            </span>
             <Image
               src="/logo.svg"
               alt="Sistomat"
-              width={160}
-              height={52}
-              className="h-10 w-auto object-contain"
+              width={100}
+              height={33}
+              className="h-5 w-auto object-contain mt-2"
               priority
             />
-            {subName ? (
-              <span className="text-[11px] font-semibold text-gray-500 tracking-wide truncate max-w-[190px] mt-1 pl-0.5">
-                {subName}
-              </span>
-            ) : null}
           </Link>
 
           {/* Compact Logo Mark for Icon Mode */}
