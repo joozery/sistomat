@@ -26,7 +26,7 @@ function decodeToken(req: NextRequest): JwtPayload | null {
 // Parse job_code → level1 / level2 / level3 (falls back to a flat code when it
 // doesn't match the JX-NNNN-NNN convention, since real job codes vary a lot)
 function parseJobCode(code: string) {
-  const m = code.match(/^([A-Z]+-\d{3,4})(-\d{3})?(-\d{2})?$/)
+  const m = code.match(/^([A-Z]+-\d{3,4})(-\d{3})?(-\d{2,3})?$/)
   if (m) {
     return {
       level1: m[1],

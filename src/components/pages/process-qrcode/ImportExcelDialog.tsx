@@ -59,7 +59,7 @@ function parseLevels(jobCode: string): { level1: string; level2: string | null; 
   // Strip Thai/English suffixes like _Modify, _ตัดแมท
   const clean = jobCode.replace(/_[A-Za-zก-๙\s]+.*$/, '')
   // Pattern: J[X]-NNNN, J[X]-NNNN-NNN, J[X]-NNNN-NNN-NN
-  const m = clean.match(/^(J[A-Z]-\d{3,4})(-\d{3})?(-\d{2})?$/)
+  const m = clean.match(/^(J[A-Z]-\d{3,4})(-\d{3})?(-\d{2,3})?$/)
   if (!m) return { level1: jobCode, level2: null, level3: null }
   const l1 = m[1]
   const l2base = m[2] ? l1 + m[2] : null

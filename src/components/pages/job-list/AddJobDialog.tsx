@@ -63,7 +63,7 @@ function normalizeJobCode(code: string) {
 
 function suggestLevel2(parentId: string, existingCodes: string[], closedLevel2Codes: Set<string>): string {
   const escapedParent = parentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const level2Pattern = new RegExp(`^${escapedParent}-(\\d{3})(?:-\\d{2})?$`)
+  const level2Pattern = new RegExp(`^${escapedParent}-(\\d{3})(?:-\\d{2,3})?$`)
   const nums = existingCodes
     .map((code) => code.match(level2Pattern)?.[1])
     .filter((value): value is string => Boolean(value))
@@ -81,7 +81,7 @@ function nextLevel3Suffix(level2: string, existingCodes: string[]): number {
   const prefix = normalizeBuCode(level2)
   if (!prefix) return 1
   const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`^${escaped}-(\\d{2})$`)
+  const re = new RegExp(`^${escaped}-(\\d{2,3})$`)
   const nums = existingCodes
     .map((c) => normalizeBuCode(c).match(re)?.[1])
     .filter(Boolean).map(Number)

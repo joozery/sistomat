@@ -27,7 +27,7 @@ export async function PATCH(
   const { code } = await params
   const body = await req.json()
   const newCode = typeof body.job_code === 'string' ? body.job_code.trim().toUpperCase() : ''
-  const match = newCode.match(/^([A-Z]+-\d{3,4})(?:-(\d{3}))?(?:-(\d{2}))?$/)
+  const match = newCode.match(/^([A-Z]+-\d{3,4})(?:-(\d{3}))?(?:-(\d{2,3}))?$/)
   if (!match || (match[3] && !match[2])) {
     return NextResponse.json({ message: 'รูปแบบเลข Job ไม่ถูกต้อง' }, { status: 400 })
   }

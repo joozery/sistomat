@@ -10,6 +10,9 @@ interface BuNumberRow {
   level3Touched: boolean
 }
 
+const BU_SUFFIX_PATTERN = /^\d{2,3}$/
+const MAX_BU_SUFFIX = 999
+
 // Only the first row of a group controls its sequence. Incomplete input is
 // retained while typing; other groups are never renumbered.
 export function changeBuCode<T extends BuNumberRow>(rows: T[], id: string, value: string, existingCodes: string[]): T[] {
@@ -21,7 +24,7 @@ export function changeBuCode<T extends BuNumberRow>(rows: T[], id: string, value
   if (rows.slice(0, index).some(row => normalizeBuCode(row.jobCode) === base)) return updated
   if (!code.startsWith(`${base}-`)) return updated
   const suffix = code.slice(base.length + 1)
-  if (!/^\d{2}$/.test(suffix) || Number(suffix) < 1) return updated
+  if (!BU_SUFFIX_PATTERN.test(suffix) || Number(suffix) < 1 || Number(suffix) > MAX_BU_SUFFIX) return updated
   const used = new Set(existingCodes.map(normalizeBuCode))
   let next = Number(suffix)
   return updated.map(row => {
@@ -37,8 +40,9 @@ export function validateBuCodes(rows: BuNumberRow[], existingCodes: string[]): s
   const used = new Set(existingCodes.map(normalizeBuCode))
   for (const row of rows) {
     const code = normalizeBuCode(row.level3 || row.jobCode)
-    if (row.level3.trim() && (!/^[A-Z]+-\d{3,4}-\d{3}-\d{2}$/.test(code) || code.endsWith('-00') || !code.startsWith(`${normalizeBuCode(row.jobCode)}-`))) {
-      return `เลข BU ไม่ถูกต้อง: ${code} กรุณาใช้เลข 01–99 ภายใต้ Job ของแถวนี้`
+    const suffix = code.slice(normalizeBuCode(row.jobCode).length + 1)
+    if (row.level3.trim() && (!/^[A-Z]+-\d{3,4}-\d{3}-\d{2,3}$/.test(code) || !BU_SUFFIX_PATTERN.test(suffix) || Number(suffix) < 1 || Number(suffix) > MAX_BU_SUFFIX || !code.startsWith(`${normalizeBuCode(row.jobCode)}-`))) {
+      return `เลข BU ไม่ถูกต้อง: ${code} กรุณาใช้เลข 01–999 ภายใต้ Job ของแถวนี้`
     }
     if (used.has(code)) return `เลข ${code} มีอยู่แล้ว กรุณาเปลี่ยนเลข BU`
     used.add(code)
@@ -53,7 +57,7 @@ export function assignBuCodes<T extends BuNumberRow>(rows: T[], existingCodes: s
     const first = result.find(row => normalizeBuCode(row.jobCode) === base)!
     if (!/^[A-Z]+-\d{3,4}-\d{3}$/.test(base)) continue
     const suffixes = existingCodes.map(normalizeBuCode)
-      .filter(code => code.startsWith(`${base}-`) && /^\d{2}$/.test(code.slice(base.length + 1)))
+      .filter(code => code.startsWith(`${base}-`) && BU_SUFFIX_PATTERN.test(code.slice(base.length + 1)))
       .map(code => Number(code.slice(base.length + 1)))
     const start = Math.max(0, ...suffixes) + 1
     const seed = first.level3Touched && normalizeBuCode(first.level3).startsWith(`${base}-`)
