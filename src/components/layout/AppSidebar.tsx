@@ -23,6 +23,7 @@ import {
   Settings,
   FileSpreadsheet,
   Trash2,
+  DatabaseBackup,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -39,6 +40,7 @@ interface MenuItem {
   adminOnly?: boolean
   hiddenForUser?: boolean
   superadminOnly?: boolean
+  itOnly?: boolean
 }
 
 const mainMenuItems: MenuItem[] = [
@@ -48,6 +50,7 @@ const mainMenuItems: MenuItem[] = [
 ]
 
 const trashMenuItem: MenuItem = { label: 'ถังขยะ / กู้คืนข้อมูล', path: '/dashboard/trash', icon: Trash2, superadminOnly: true }
+const backupMenuItem: MenuItem = { label: 'Backup ระบบ', path: '/dashboard/backup', icon: DatabaseBackup, itOnly: true }
 
 const managementMenuItems: MenuItem[] = [
   { label: 'ติดตาม Real-time', path: '/dashboard/realtime', icon: Radio },
@@ -66,6 +69,7 @@ export function AppSidebar() {
   const { subName } = useSystemName()
   const isAdmin = role === 'Admin' || role === 'superadmin'
   const isUser = role === 'User' || role === 'ช่าง'
+  const isIT = role?.trim().toUpperCase() === 'IT'
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
@@ -95,7 +99,7 @@ export function AppSidebar() {
 
   const renderMenuSection = (items: MenuItem[]) => (
     <SidebarMenu className="gap-1.5">
-      {items.filter((item) => (!item.adminOnly || isAdmin) && (!item.superadminOnly || role?.trim().toLowerCase() === 'superadmin') && (!item.hiddenForUser || !isUser)).map((item) => {
+      {items.filter((item) => (!item.itOnly || isIT) && (!isIT || item.itOnly) && (!item.adminOnly || isAdmin) && (!item.superadminOnly || role?.trim().toLowerCase() === 'superadmin') && (!item.hiddenForUser || !isUser)).map((item) => {
         const isActive =
           item.path === '/dashboard'
             ? pathname === '/dashboard'
@@ -192,6 +196,7 @@ export function AppSidebar() {
             การจัดการ & รายงาน
           </p>
           {renderMenuSection(managementMenuItems)}
+          {isIT && renderMenuSection([backupMenuItem])}
         </div>
 
         {/* System Status / Feature Highlight Card */}

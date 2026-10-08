@@ -4,10 +4,12 @@ import { AppNavbar } from '@/components/layout/AppNavbar'
 import { GlobalBarcodeScanner } from '@/components/layout/GlobalBarcodeScanner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TechnicianDesktopGuard } from '@/components/layout/TechnicianDesktopGuard'
+import { ItOnlyGuard } from '@/components/layout/ItOnlyGuard'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <TechnicianDesktopGuard>
+    <ItOnlyGuard>
+      <TechnicianDesktopGuard>
       <TooltipProvider>
         <SidebarProvider>
           <AppSidebar />
@@ -20,6 +22,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <GlobalBarcodeScanner />
         </SidebarProvider>
       </TooltipProvider>
-    </TechnicianDesktopGuard>
+      </TechnicianDesktopGuard>
+    </ItOnlyGuard>
   )
 }

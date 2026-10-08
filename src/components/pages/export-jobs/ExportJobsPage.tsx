@@ -28,6 +28,7 @@ interface ExportRow {
   job_code: string
   job_note?: string
   dwg_name: string
+  sender: string
   quantity: number
   received_date: string | null
   due_date: string | null
@@ -41,6 +42,7 @@ interface ExportRow {
   remark?: string | null
   workers: string
   completed: boolean
+  coating: string
 }
 
 interface TimeComparison {
@@ -67,6 +69,12 @@ function formatDate(value: string | null): string {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function templateDate(value: string | null): Date | '' {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date
 }
 
 function normalizeDamageCost(value: number | string | null | undefined): number {
@@ -107,6 +115,7 @@ export function ExportJobsPage() {
   const [status, setStatus] = useState('all')
   const [process, setProcess] = useState('all')
   const [worker, setWorker] = useState('all')
+  const [exportFormat, setExportFormat] = useState<'process' | 'job'>('process')
 
   const [rows, setRows] = useState<ExportRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -209,7 +218,7 @@ export function ExportJobsPage() {
     }
   }, [rows])
 
-  const handleExportExcel = async () => {
+  const handleExportProcessExcel = async () => {
     if (rows.length === 0) return
     const XLSX = await import('xlsx')
     const data = rows.map((r) => {
@@ -256,6 +265,78 @@ export function ExportJobsPage() {
     XLSX.writeFile(wb, `ตารางงาน-${stamp}.xlsx`)
   }
 
+  const handleExportJobExcel = async () => {
+    if (rows.length === 0) return
+    const XLSX = await import('xlsx')
+    const grouped = new Map<string, ExportRow[]>()
+    for (const row of rows) {
+      const list = grouped.get(row.job_code) ?? []
+      list.push(row)
+      grouped.set(row.job_code, list)
+    }
+
+    const response = await fetch('/work-schedule-2026-template.xlsx')
+    if (!response.ok) throw new Error('ไม่พบไฟล์ Template ตารางงาน')
+    const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array', cellDates: true })
+    const sheet = workbook.Sheets['ต.ค.69'] ?? workbook.Sheets[workbook.SheetNames[0]]
+    if (!sheet) throw new Error('ไม่พบชีตสำหรับ Export งานเป็น Job')
+
+    const setCell = (address: string, value: string | number | Date) => {
+      const previous = sheet[address] ?? {}
+      const type = value instanceof Date ? 'd' : typeof value === 'number' ? 'n' : 's'
+      sheet[address] = { ...previous, t: type, v: value }
+    }
+
+    let rowNumber = 4
+    let sequence = 1
+    for (const jobRows of grouped.values()) {
+      const first = jobRows[0]
+      const remarks = [...new Set(jobRows.map((row) => row.remark?.trim() ?? '').filter(Boolean))]
+      setCell(`A${rowNumber}`, sequence++)
+      setCell(`B${rowNumber}`, templateDate(first.received_date))
+      setCell(`C${rowNumber}`, templateDate(first.due_date))
+      setCell(`D${rowNumber}`, first.job_code)
+      setCell(`E${rowNumber}`, first.dwg_name || '')
+      setCell(`F${rowNumber}`, first.quantity ?? 1)
+      setCell(`G${rowNumber}`, first.sender || '')
+      setCell(`H${rowNumber}`, '')
+      setCell(`I${rowNumber}`, '')
+      setCell(`J${rowNumber}`, first.coating || '')
+      setCell(`K${rowNumber}`, remarks.join(' / '))
+      rowNumber += 1
+    }
+
+    const lastDataRow = Math.max(3, rowNumber - 1)
+    sheet['!ref'] = `A1:K${lastDataRow}`
+    sheet['!autofilter'] = { ref: `A3:K${lastDataRow}` }
+    sheet['!margins'] = { left: 0.2, right: 0.2, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
+
+    const minWidths = [7, 12, 12, 20, 24, 10, 18, 18, 18, 18, 20]
+    const maxWidths = [9, 14, 14, 30, 38, 12, 24, 26, 34, 26, 34]
+    const widths = minWidths.map((minimum, columnIndex) => {
+      let longest = 0
+      for (let rowIndex = 0; rowIndex < lastDataRow; rowIndex += 1) {
+        const cell = sheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
+        const value = cell?.v instanceof Date ? '00/00/0000' : String(cell?.v ?? '')
+        longest = Math.max(longest, value.length)
+      }
+      const previous = sheet['!cols']?.[columnIndex] ?? {}
+      return { ...previous, width: Math.min(maxWidths[columnIndex], Math.max(minimum, longest + 2)) }
+    })
+    sheet['!cols'] = widths
+
+    const outputSheetName = 'สเปชใหม่'
+    workbook.SheetNames = [outputSheetName]
+    workbook.Sheets = { [outputSheetName]: sheet }
+
+    const stamp = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(workbook, `ตารางงานแบบจ๊อบ-${stamp}.xlsx`, { cellDates: true })
+  }
+
+  const handleExportExcel = () => {
+    void (exportFormat === 'job' ? handleExportJobExcel() : handleExportProcessExcel())
+  }
+
   return (
     <div className="flex flex-col h-full w-full font-sans gap-2.5 overflow-hidden">
       {/* Header */}
@@ -264,14 +345,25 @@ export function ExportJobsPage() {
           <h1 className="text-xl font-bold text-gray-900">Export ตารางงาน</h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">เลือกตัวกรองแล้วดูตาราง หรือส่งออกเป็น Excel</p>
         </div>
-        <Button
-          onClick={handleExportExcel}
-          disabled={rows.length === 0}
-          className="gap-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-9 px-4"
-        >
-          <FileSpreadsheet className="h-4 w-4" />
-          Export Excel
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={exportFormat} onValueChange={(value) => setExportFormat(value as 'process' | 'job')}>
+            <SelectTrigger className="h-9 w-[190px] rounded-full text-xs">
+              <SelectValue placeholder="รูปแบบการ Export" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="process">การออกขั้นตอนการทำงาน</SelectItem>
+              <SelectItem value="job">การนำออกเป็นจ๊อบ</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={handleExportExcel}
+            disabled={rows.length === 0}
+            className="gap-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-9 px-4"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Export Excel
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

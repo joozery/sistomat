@@ -199,7 +199,7 @@ export function AllPlansOverview() {
                           {s.process}
                         </span>
                         <p className="mt-1.5 text-sm font-semibold text-gray-700">
-                          {s.job_count.toLocaleString()} แบบ · {s.total_qty.toLocaleString()} ชิ้น
+                          {s.job_count.toLocaleString()} ขั้นตอน · {s.total_qty.toLocaleString()} ชิ้น
                         </p>
                       </div>
                       {showBadge && (

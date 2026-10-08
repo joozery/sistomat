@@ -29,11 +29,13 @@ interface ProjectDoc {
   project_id: string
   job_note?: string
   dwg_name?: string
+  sender?: string
   quantity?: number | string
   received_date?: Date | string
   due_date?: Date | string
   status?: string
   processes?: ProcessRow[]
+  coating?: string
 }
 
 interface WorkerDoc {
@@ -45,6 +47,7 @@ export interface ExportRow {
   job_code: string
   job_note?: string
   dwg_name: string
+  sender: string
   quantity: number
   received_date: Date | string | null
   due_date: Date | string | null
@@ -58,6 +61,7 @@ export interface ExportRow {
   remark: string
   workers: string
   completed: boolean
+  coating: string
 }
 
 export async function GET(req: NextRequest) {
@@ -99,7 +103,7 @@ export async function GET(req: NextRequest) {
 
     const projects = await db.collection<ProjectDoc>('projects')
       .find(match)
-      .project<ProjectDoc>({ project_id: 1, job_note: 1, dwg_name: 1, quantity: 1, received_date: 1, due_date: 1, status: 1, processes: 1 })
+      .project<ProjectDoc>({ project_id: 1, job_note: 1, dwg_name: 1, sender: 1, quantity: 1, received_date: 1, due_date: 1, status: 1, processes: 1, coating: 1 })
       .sort({ project_id: 1 })
       .toArray()
 
@@ -152,6 +156,7 @@ export async function GET(req: NextRequest) {
           job_code: fullJobCode,
           job_note: note,
           dwg_name: p.dwg_name ?? '',
+          sender: p.sender ?? '',
           quantity,
           received_date: p.received_date ?? null,
           due_date: p.due_date ?? null,
@@ -165,6 +170,7 @@ export async function GET(req: NextRequest) {
           remark: row.remark ?? '',
           workers: workerNames.join(', '),
           completed: Boolean(row.next_confirmed_at),
+          coating: p.coating ?? '',
         })
       })
     }

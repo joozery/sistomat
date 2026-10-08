@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import * as XLSX from 'xlsx'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -32,6 +33,8 @@ import {
   Printer,
   Pencil,
   LockKeyhole,
+  Download,
+  Upload,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { EditJobDialog } from '@/components/pages/job-list/EditJobDialog'
@@ -129,6 +132,27 @@ function formatPrintDate(d: string) {
   try {
     return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch { return d }
+}
+
+function toExcelDate(value?: string | null) {
+  if (!value) return ''
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/)
+  if (match) return match[1]
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
+}
+
+function fromExcelDate(value: unknown): string {
+  if (typeof value === 'number') {
+    const parsed = XLSX.SSF.parse_date_code(value)
+    if (parsed) return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+  }
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  const iso = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/)
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
+  const date = new Date(text)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
 }
 
 function normalizeStatus(s: string) {
@@ -280,6 +304,93 @@ export default function JobListPage() {
   const [printError, setPrintError] = useState('')
   const [printJobs, setPrintJobs] = useState<PrintableJob[]>([])
   const [printPreviewGroup, setPrintPreviewGroup] = useState<string | null>(null)
+  const excelInputRef = useRef<HTMLInputElement>(null)
+  const [excelBusy, setExcelBusy] = useState(false)
+  const [selectedLevel2Codes, setSelectedLevel2Codes] = useState<Set<string>>(new Set())
+
+  function toggleLevel2Selection(level2Code: string) {
+    setSelectedLevel2Codes((previous) => {
+      const next = new Set(previous)
+      if (next.has(level2Code)) next.delete(level2Code)
+      else next.add(level2Code)
+      return next
+    })
+  }
+
+  function selectAllLevel2Groups() {
+    setSelectedLevel2Codes(new Set(jobs.map((job) => job.level2 ?? job.job_code)))
+  }
+
+  function clearSelectedLevel2Groups() {
+    setSelectedLevel2Codes(new Set())
+  }
+
+  function handleExportExcel() {
+    const selectedJobs = jobs.filter((job) => selectedLevel2Codes.has(job.level2 ?? job.job_code))
+    if (selectedJobs.length === 0) {
+      window.alert('กรุณาเลือกกลุ่ม Job Level 2 ที่ต้องการ Export ก่อน')
+      return
+    }
+    const rows = selectedJobs.map((job) => ({
+      'เลข Job': job.job_code,
+      'ชื่อแบบ (ตรวจสอบ)': job.drawing_name || '',
+      'ผู้สั่งงาน': job.sender || '',
+      'จำนวนชิ้นงาน': job.quantity,
+      'วันที่รับงาน': toExcelDate(job.received_date),
+      'วันที่ส่งมอบ': toExcelDate(job.due_date),
+    }))
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    worksheet['!cols'] = [
+      { wch: 20 }, { wch: 32 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+    ]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'แก้ไขข้อมูล Job')
+    XLSX.writeFile(workbook, `job-update-${parentId}.xlsx`)
+  }
+
+  async function handleImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (selectedLevel2Codes.size === 0) {
+      window.alert('กรุณาเลือกกลุ่ม Job Level 2 ที่ต้องการอัปเดตก่อน')
+      return
+    }
+    if (!window.confirm(`ยืนยันนำเข้าข้อมูลจากไฟล์ ${file.name} เพื่ออัปเดต ${selectedLevel2Codes.size} กลุ่ม Job Level 2 ที่เลือกหรือไม่?`)) return
+
+    setExcelBusy(true)
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+      const rows = rawRows.map((row) => ({
+        job_code: String(row['เลข Job'] ?? '').trim(),
+        drawing_name: String(row['ชื่อแบบ (ตรวจสอบ)'] ?? '').trim(),
+        sender: String(row['ผู้สั่งงาน'] ?? '').trim(),
+        quantity: Number(row['จำนวนชิ้นงาน']),
+        received_date: fromExcelDate(row['วันที่รับงาน']),
+        due_date: fromExcelDate(row['วันที่ส่งมอบ']),
+      }))
+      if (rows.length === 0) throw new Error('ไม่พบข้อมูลในไฟล์ Excel')
+      const isOptionalDate = (value: string) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value)
+      if (rows.some((row) => !row.job_code || !Number.isSafeInteger(row.quantity) || row.quantity < 1 || !isOptionalDate(row.received_date) || !isOptionalDate(row.due_date))) {
+        throw new Error('ข้อมูลในไฟล์ไม่ครบหรือรูปแบบไม่ถูกต้อง กรุณาใช้ไฟล์ที่ Export จากหน้านี้')
+      }
+      const response = await fetch('/api/jobs/bulk-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+        body: JSON.stringify({ parent_id: parentId, level2_codes: [...selectedLevel2Codes], rows }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'อัปเดตข้อมูลไม่สำเร็จ')
+      await loadJobs()
+      window.alert(`อัปเดตข้อมูลสำเร็จ ${result.updated} Job โดยไม่เปลี่ยนไฟล์และ Process เดิม`)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'นำเข้า Excel ไม่สำเร็จ')
+    } finally {
+      setExcelBusy(false)
+    }
+  }
 
   function handlePrintGroup(groupCode: string, groupJobs: Job[]) {
     if (groupJobs.length === 0) return
@@ -369,6 +480,7 @@ export default function JobListPage() {
       }
       data.sort((a, b) => compareJobCodes(a.job_code, b.job_code))
       setJobs(data)
+      setSelectedLevel2Codes((previous) => new Set([...previous].filter((code) => data.some((job) => (job.level2 ?? job.job_code) === code))) )
       // auto-expand all level2 groups
       const allKeys = new Set<string>(data.map((j: Job) => j.level2 ?? j.job_code))
       setExpanded(allKeys)
@@ -411,13 +523,43 @@ export default function JobListPage() {
         </Button>
         <div className="flex items-center gap-2">
           {!isReadOnly && (
-            <Button
-              onClick={() => setAddOpen(true)}
-              className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
-            >
-              <Plus className="h-4 w-4" />
-              เพิ่ม Job ย่อย
-            </Button>
+            <>
+              <input ref={excelInputRef} type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" />
+              <Button
+                variant="outline"
+                onClick={selectedLevel2Codes.size === byLevel2.size ? clearSelectedLevel2Groups : selectAllLevel2Groups}
+                disabled={excelBusy || jobs.length === 0}
+                className="h-9 rounded-full border-gray-200 px-3 text-xs font-semibold text-gray-700"
+              >
+                {selectedLevel2Codes.size === byLevel2.size ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+              </Button>
+              <span className="text-xs text-gray-400 whitespace-nowrap">เลือก {selectedLevel2Codes.size}/{byLevel2.size} กลุ่ม</span>
+              <Button
+                variant="outline"
+                onClick={handleExportExcel}
+                disabled={excelBusy || selectedLevel2Codes.size === 0}
+                className="gap-2 rounded-full h-9 border-gray-200 text-gray-700 px-3 text-xs font-semibold"
+              >
+                <Download className="h-4 w-4" />
+                Export Excel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => excelInputRef.current?.click()}
+                disabled={excelBusy || selectedLevel2Codes.size === 0}
+                className="gap-2 rounded-full h-9 border-gray-200 text-gray-700 px-3 text-xs font-semibold"
+              >
+                <Upload className="h-4 w-4" />
+                {excelBusy ? 'กำลังอัปเดต...' : 'Import Excel'}
+              </Button>
+              <Button
+                onClick={() => setAddOpen(true)}
+                className="gap-2 rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-4 text-xs font-semibold shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                เพิ่ม Job ย่อย
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -526,6 +668,15 @@ export default function JobListPage() {
 
                         {/* Code */}
                         <div className="min-w-0">
+                          {!isReadOnly && (
+                            <input
+                              type="checkbox"
+                              checked={selectedLevel2Codes.has(level2Code)}
+                              onChange={() => toggleLevel2Selection(level2Code)}
+                              aria-label={`เลือกกลุ่ม ${level2Code}`}
+                              className="mr-2 h-3.5 w-3.5 align-middle accent-[#7B1A1A]"
+                            />
+                          )}
                           <span className="font-mono font-bold text-sm break-all text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                             {level2Code}
                           </span>
