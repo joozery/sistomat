@@ -64,6 +64,26 @@ export interface ExportRow {
   coating: string
 }
 
+function compareJobCodes(a: string, b: string) {
+  const aParts = a.match(/[A-Za-z]+|\d+/g) ?? [a]
+  const bParts = b.match(/[A-Za-z]+|\d+/g) ?? [b]
+  const length = Math.max(aParts.length, bParts.length)
+  for (let i = 0; i < length; i += 1) {
+    const left = aParts[i] ?? ''
+    const right = bParts[i] ?? ''
+    const leftNumber = /^\d+$/.test(left)
+    const rightNumber = /^\d+$/.test(right)
+    if (leftNumber && rightNumber) {
+      const difference = Number(left) - Number(right)
+      if (difference !== 0) return difference
+    } else {
+      const difference = left.localeCompare(right, undefined, { sensitivity: 'base' })
+      if (difference !== 0) return difference
+    }
+  }
+  return 0
+}
+
 export async function GET(req: NextRequest) {
   const token = getToken(req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -76,6 +96,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
+  const dateField = searchParams.get('dateField') === 'due' ? 'due_date' : 'received_date'
   const job = searchParams.get('job')?.trim()
   const status = searchParams.get('status')
   const processFilter = searchParams.get('process')
@@ -87,10 +108,11 @@ export async function GET(req: NextRequest) {
 
     const match: Record<string, unknown> = { processes: { $exists: true, $ne: [] } }
     if (from || to) {
-      const range: Record<string, Date> = {}
-      if (from) range.$gte = new Date(from)
-      if (to) range.$lte = new Date(`${to}T23:59:59.999Z`)
-      match.received_date = range
+      const dateAsDate = { $convert: { input: `$${dateField}`, to: 'date', onError: null, onNull: null } }
+      const dateConditions: Record<string, unknown>[] = [{ $ne: [dateAsDate, null] }]
+      if (from) dateConditions.push({ $gte: [dateAsDate, new Date(`${from}T00:00:00.000Z`)] })
+      if (to) dateConditions.push({ $lte: [dateAsDate, new Date(`${to}T23:59:59.999Z`)] })
+      match.$expr = { $and: dateConditions }
     }
     if (status) match.status = status
     if (job) {
@@ -104,8 +126,9 @@ export async function GET(req: NextRequest) {
     const projects = await db.collection<ProjectDoc>('projects')
       .find(match)
       .project<ProjectDoc>({ project_id: 1, job_note: 1, dwg_name: 1, sender: 1, quantity: 1, received_date: 1, due_date: 1, status: 1, processes: 1, coating: 1 })
-      .sort({ project_id: 1 })
       .toArray()
+
+    projects.sort((a, b) => compareJobCodes(String(a.project_id), String(b.project_id)))
 
     // รวบรวมรหัสโปรเจกต์หลักที่ยังคงมีอยู่จริงในระบบ เพื่อคัดกรองไม่ให้ Job กำพร้าที่ถูกลบไปแล้วหลุดมาแสดง
     const activeParents = await db

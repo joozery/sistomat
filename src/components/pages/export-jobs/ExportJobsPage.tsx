@@ -111,6 +111,7 @@ export function ExportJobsPage() {
 
   const [from, setFrom] = useState(() => searchParams.get('from') ?? '')
   const [to, setTo] = useState(() => searchParams.get('to') ?? '')
+  const [dateField, setDateField] = useState<'received' | 'due'>(() => searchParams.get('dateField') === 'due' ? 'due' : 'received')
   const [job, setJob] = useState('')
   const [status, setStatus] = useState('all')
   const [process, setProcess] = useState('all')
@@ -129,6 +130,7 @@ export function ExportJobsPage() {
       const params = new URLSearchParams()
       if (from) params.set('from', from)
       if (to) params.set('to', to)
+      params.set('dateField', dateField)
       if (job.trim()) params.set('job', job.trim())
       if (status !== 'all') params.set('status', status)
       if (process !== 'all') params.set('process', process)
@@ -140,13 +142,15 @@ export function ExportJobsPage() {
       if (!res.ok) throw new Error('load failed')
       const data: ExportRow[] = await res.json()
       setRows(data)
+      return data
     } catch {
       setError('โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่')
+      return null
     } finally {
       setLoading(false)
       setSearched(true)
     }
-  }, [from, to, job, status, process, worker])
+  }, [from, to, dateField, job, status, process, worker])
 
   // เข้ามาจาก deep-link ที่มี from/to (เช่นจากหน้าสรุปรายเดือน) → ค้นหาให้เลยโดยไม่ต้องกดปุ่มเอง
   useEffect(() => {
@@ -180,6 +184,7 @@ export function ExportJobsPage() {
   const clearFilters = () => {
     setFrom('')
     setTo('')
+    setDateField('received')
     setJob('')
     setStatus('all')
     setProcess('all')
@@ -218,10 +223,10 @@ export function ExportJobsPage() {
     }
   }, [rows])
 
-  const handleExportProcessExcel = async () => {
-    if (rows.length === 0) return
+  const handleExportProcessExcel = async (exportRows: ExportRow[] = rows) => {
+    if (exportRows.length === 0) return
     const XLSX = await import('xlsx')
-    const data = rows.map((r) => {
+    const data = exportRows.map((r) => {
       const comparison = compareTime(r.target_time, r.elapsed_time, r.completed)
       const base: Record<string, string | number> = {
         'Job': r.job_code,
@@ -244,7 +249,7 @@ export function ExportJobsPage() {
       return base
     })
     const uniqueJobs = new Map<string, number>()
-    for (const row of rows) {
+    for (const row of exportRows) {
       if (!uniqueJobs.has(row.job_code)) uniqueJobs.set(row.job_code, row.quantity ?? 1)
     }
     const totalPieces = [...uniqueJobs.values()].reduce((sum, quantity) => sum + quantity, 0)
@@ -265,11 +270,11 @@ export function ExportJobsPage() {
     XLSX.writeFile(wb, `ตารางงาน-${stamp}.xlsx`)
   }
 
-  const handleExportJobExcel = async () => {
-    if (rows.length === 0) return
+  const handleExportJobExcel = async (exportRows: ExportRow[] = rows) => {
+    if (exportRows.length === 0) return
     const XLSX = await import('xlsx')
     const grouped = new Map<string, ExportRow[]>()
-    for (const row of rows) {
+    for (const row of exportRows) {
       const list = grouped.get(row.job_code) ?? []
       list.push(row)
       grouped.set(row.job_code, list)
@@ -333,8 +338,11 @@ export function ExportJobsPage() {
     XLSX.writeFile(workbook, `ตารางงานแบบจ๊อบ-${stamp}.xlsx`, { cellDates: true })
   }
 
-  const handleExportExcel = () => {
-    void (exportFormat === 'job' ? handleExportJobExcel() : handleExportProcessExcel())
+  const handleExportExcel = async () => {
+    const latestRows = await fetchRows()
+    if (!latestRows?.length) return
+    if (exportFormat === 'job') await handleExportJobExcel(latestRows)
+    else await handleExportProcessExcel(latestRows)
   }
 
   return (
@@ -357,7 +365,7 @@ export function ExportJobsPage() {
           </Select>
           <Button
             onClick={handleExportExcel}
-            disabled={rows.length === 0}
+            disabled={loading}
             className="gap-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-9 px-4"
           >
             <FileSpreadsheet className="h-4 w-4" />
@@ -368,7 +376,7 @@ export function ExportJobsPage() {
 
       {/* Filters */}
       <div className="shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm p-3 sm:p-4">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-8">
           <div>
             <label htmlFor="export-job-search" className="text-xs font-semibold text-gray-600 mb-1 block">เลข Job</label>
             <Input
@@ -381,7 +389,17 @@ export function ExportJobsPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600 mb-1 block">วันที่รับงาน (จาก)</label>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">กรองตามวันที่</label>
+            <Select value={dateField} onValueChange={(value) => setDateField(value as 'received' | 'due')}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="received">วันที่รับงาน</SelectItem>
+                <SelectItem value="due">วันที่ส่งงาน</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">วันที่ (จาก)</label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 text-xs" />
           </div>
           <div>

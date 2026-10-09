@@ -390,7 +390,7 @@ export default function PrintPreviewPage() {
                     <td style={td({ color: isQcFnR ? '#7B1A1A' : '#000', fontWeight: isQcFnR ? 'bold' : 'normal', backgroundColor: isQcFnR ? '#fef08a' : '#fff' })}>
                       {rowR?.process || '\u00A0'}
                     </td>
-                    <td style={td()}>{'\u00A0'}</td>
+                    <td style={td()}>{[rowL.remark, rowR?.remark].map((remark) => remark?.trim()).filter(Boolean).join(' / ') || '\u00A0'}</td>
                   </tr>
                 )
               })}

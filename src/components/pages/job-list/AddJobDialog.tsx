@@ -146,6 +146,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
 
   // Step 3 BU rows
   const [rows, setRows] = useState<BuRow[]>([])
+  const [batchSender, setBatchSender] = useState('')
   const [syncCode, setSyncCode] = useState(false)
   const [existingCodes, setExistingCodes] = useState<string[]>([])
   const [loadedCodeKey, setLoadedCodeKey] = useState<string | null>(null)
@@ -217,7 +218,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
       currentJobCode: '',
     })
     setJobCode(''); setReceivedDate(''); setDueDate('')
-    setFiles([]); setFileError(''); setRows([]); setSyncCode(false); setExistingCodes([])
+    setFiles([]); setFileError(''); setRows([]); setBatchSender(''); setSyncCode(false); setExistingCodes([])
     setUploadingFileName(''); setUploadIndex(0); setUploadProgress(0)
   }
 
@@ -268,7 +269,7 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
       level3: `${jobCode.trim()}-${String(startSuffix + i).padStart(2, '0')}`,
       level3Touched: false,
       jobNote: '',
-      sender: '',
+      sender: batchSender,
       quantity: '1',
     }))
     setRows(prev => assignBuCodes(buRows.map(row => {
@@ -630,6 +631,21 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                 )}
               </div>
 
+              <div className="rounded-xl border border-[#7B1A1A]/20 bg-red-50/40 p-3 space-y-1.5">
+                <Label className="text-[11px] font-semibold text-gray-700">ผู้สั่งงาน (ใช้กับทุก Job ในรอบนี้)</Label>
+                <Input
+                  placeholder="ชื่อผู้สั่งงาน"
+                  value={batchSender}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setBatchSender(value)
+                    setRows(prev => prev.map(row => ({ ...row, sender: value })))
+                  }}
+                  className="rounded-lg h-9 text-sm border-gray-200 bg-white"
+                />
+                <p className="text-[11px] text-gray-500">ชื่อจะถูกบันทึกให้ Job ย่อยทุกตัวที่เพิ่มในรอบนี้</p>
+              </div>
+
               <p className="text-xs text-gray-500">แก้ BU แถวแรกของกลุ่มเพื่อรันแถวถัดไปอัตโนมัติ โดยข้ามเลขที่ใช้แล้ว{checkingCodes ? ' — กำลังตรวจเลขเดิม...' : ''}</p>
               <div className="space-y-3">
                 {rows.map((r, rowIdx) => {
@@ -694,15 +710,6 @@ export function AddJobDialog({ open, onOpenChange, parentId, onSuccess }: AddJob
                           className="rounded-lg h-9 text-sm border-gray-200"
                         />
                       </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] font-semibold text-gray-600">ผู้สั่งงาน</Label>
-                          <Input
-                            placeholder="ชื่อผู้สั่งงาน"
-                            value={r.sender}
-                            onChange={(e) => updateRow(r.id, { sender: e.target.value })}
-                            className="rounded-lg h-9 text-sm border-gray-200"
-                          />
-                        </div>
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-semibold text-gray-600">จำนวน</Label>
                           <Input

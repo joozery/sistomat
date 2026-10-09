@@ -136,6 +136,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
   const [files, setFiles] = useState<File[]>([])
   const [fileError, setFileError] = useState('')
   const [rows, setRows] = useState<JobRowInput[]>([])
+  const [batchSender, setBatchSender] = useState('')
   const [syncJobCode, setSyncJobCode] = useState(false)
   const [existingCodes, setExistingCodes] = useState<string[]>([])
   const [loadedCodeKey, setLoadedCodeKey] = useState<string | null>(null)
@@ -195,6 +196,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
     setFiles([])
     setFileError('')
     setRows([])
+    setBatchSender('')
     setSyncJobCode(false)
     setSaveError('')
     setSavePhase('idle')
@@ -272,7 +274,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
         level3: '',
         level3Touched: false,
         jobNote: '',
-        sender: '',
+        sender: batchSender,
         quantity: '1',
       })).map(row => {
         const old = prev.find(item => item.id === row.id)
@@ -726,6 +728,21 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                 )}
               </div>
 
+              <div className="rounded-xl border border-[#7B1A1A]/20 bg-red-50/40 p-3 space-y-1.5">
+                <Label className="text-[11px] font-semibold text-gray-700">ผู้สั่งงาน (ใช้กับทุก Job ในรอบนี้)</Label>
+                <Input
+                  placeholder="ชื่อผู้สั่งงาน"
+                  value={batchSender}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setBatchSender(value)
+                    setRows(prev => prev.map(row => ({ ...row, sender: value })))
+                  }}
+                  className="rounded-lg h-9 text-sm border-gray-200 bg-white"
+                />
+                <p className="text-[11px] text-gray-500">ชื่อจะถูกบันทึกให้ Job ย่อยทุกตัวที่เพิ่มในรอบนี้</p>
+              </div>
+
               <p className="text-xs text-gray-500">แก้ BU แถวแรกของกลุ่มเพื่อรันแถวถัดไปอัตโนมัติ โดยข้ามเลขที่ใช้แล้ว{checkingCodes ? ' — กำลังตรวจเลขเดิม...' : ''}</p>
               <div className="space-y-3">
                 {rows.map((r, rowIdx) => {
@@ -793,15 +810,6 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
                           className="rounded-lg h-9 text-sm border-gray-200"
                         />
                       </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] font-semibold text-gray-600">ผู้สั่งงาน</Label>
-                          <Input
-                            placeholder="ชื่อผู้สั่งงาน"
-                            value={r.sender}
-                            onChange={(e) => updateRow(r.id, { sender: e.target.value })}
-                            className="rounded-lg h-9 text-sm border-gray-200"
-                          />
-                        </div>
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-semibold text-gray-600">จำนวน</Label>
                           <Input

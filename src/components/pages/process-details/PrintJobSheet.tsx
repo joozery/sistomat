@@ -94,7 +94,7 @@ export function PrintJobSheet({ jobId, jobNote, quantity, receivedDate, dueDate,
                 <td style={td({ color: isQcFnL ? '#7B1A1A' : '#000', fontWeight: isQcFnL ? 'bold' : 'normal', backgroundColor: isQcFnL ? '#fef08a' : '#fff' })}>{rowL.process || '\u00A0'}</td>
                 <td style={tdc({ borderLeft: '2px solid #333' })}>{rowR?.process ? i + 11 : '\u00A0'}</td>
                 <td style={td({ color: isQcFnR ? '#7B1A1A' : '#000', fontWeight: isQcFnR ? 'bold' : 'normal', backgroundColor: isQcFnR ? '#fef08a' : '#fff' })}>{rowR?.process || '\u00A0'}</td>
-                <td style={td()}>{'\u00A0'}</td>
+                <td style={td()}>{[rowL.remark, rowR?.remark].map((remark) => remark?.trim()).filter(Boolean).join(' / ') || '\u00A0'}</td>
               </tr>
             })}
           </tbody>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight, RefreshCw } from 'lucide-react'
+import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight, RefreshCw, CalendarDays, X } from 'lucide-react'
 import { ProjectTable } from '@/components/pages/process-qrcode/ProjectTable'
 import { AddProjectDialog } from '@/components/pages/process-qrcode/AddProjectDialog'
 import { ImportExcelDialog } from '@/components/pages/process-qrcode/ImportExcelDialog'
@@ -45,6 +45,9 @@ export default function ProcessQRCodePage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [processFilter, setProcessFilter] = useState<string | null>(null)
+  const [dateType, setDateType] = useState<'received' | 'due'>('received')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -131,6 +134,10 @@ export default function ProcessQRCodePage() {
 
   const filtered = projects.filter((p) => {
     if (processFilter && !p.progress?.active_steps?.some((step) => step.process === processFilter)) return false
+    const selectedDate = dateType === 'received' ? p.received_date : p.due_date
+    const dateKey = selectedDate ? selectedDate.slice(0, 10) : ''
+    if (dateFrom && (!dateKey || dateKey < dateFrom)) return false
+    if (dateTo && (!dateKey || dateKey > dateTo)) return false
     if (!search) return true
     const term = normalize(search)
     if (normalize(p.project_id).includes(term)) return true
@@ -302,6 +309,54 @@ export default function ProcessQRCodePage() {
             )}
           </div>
         )}
+      </section>
+
+      <section className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5 shadow-sm" aria-label="ตัวกรองวันที่">
+        <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+          <div className="flex items-center gap-2 lg:pb-2">
+            <CalendarDays className="h-4 w-4 text-[#7B1A1A]" />
+            <span className="text-sm font-semibold text-gray-700">กรองตามวันที่</span>
+          </div>
+          <label className="space-y-1.5">
+            <span className="block text-[11px] font-semibold text-gray-500">ประเภทวันที่</span>
+            <select
+              value={dateType}
+              onChange={(e) => { setDateType(e.target.value as 'received' | 'due'); setCurrentPage(1) }}
+              className="h-9 min-w-36 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#7B1A1A]"
+            >
+              <option value="received">วันที่รับงาน</option>
+              <option value="due">กำหนดส่ง</option>
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="block text-[11px] font-semibold text-gray-500">ตั้งแต่วันที่</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1) }}
+              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#7B1A1A]"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="block text-[11px] font-semibold text-gray-500">ถึงวันที่</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1) }}
+              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#7B1A1A]"
+            />
+          </label>
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1) }}
+              className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-gray-200 px-3 text-xs font-medium text-gray-500 hover:border-[#7B1A1A]/40 hover:text-[#7B1A1A]"
+            >
+              <X className="h-3.5 w-3.5" /> ล้างวันที่
+            </button>
+          )}
+          <span className="text-xs text-gray-400 lg:pb-2">พบ {filtered.length} รายการ</span>
+        </div>
       </section>
 
       <ProjectTable
