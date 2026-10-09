@@ -294,6 +294,8 @@ export default function JobListPage() {
   const [editJob, setEditJob] = useState<Job | null>(null)
   const [preview, setPreview] = useState<{ url: string; name: string; attachments?: Attachment[] } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteTargetIsLevel2, setDeleteTargetIsLevel2] = useState(false)
+  const [deleteTargetChildCount, setDeleteTargetChildCount] = useState(0)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [closeSaleTarget, setCloseSaleTarget] = useState<string | null>(null)
@@ -425,6 +427,13 @@ export default function JobListPage() {
     } finally {
       setDeleting(false)
     }
+  }
+
+  function openDeleteDialog(code: string, isLevel2 = false, childCount = 0) {
+    setDeleteError('')
+    setDeleteTarget(code)
+    setDeleteTargetIsLevel2(isLevel2)
+    setDeleteTargetChildCount(childCount)
   }
 
   async function handleConfirmCloseSale() {
@@ -855,7 +864,7 @@ export default function JobListPage() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => { setDeleteError(''); setDeleteTarget(singleJob.job_code) }}
+                                  onClick={() => openDeleteDialog(singleJob.job_code)}
                                   className="h-8 w-8 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0 shrink-0"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
@@ -863,12 +872,26 @@ export default function JobListPage() {
                               )}
                             </>
                           ) : (
+                            <>
                             <button
                               onClick={() => toggle(level2Code)}
                               className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 shrink-0"
                             >
                               {isOpen ? 'ย่อ' : `ดู ${items.length} รายการ`}
                             </button>
+                            {!isReadOnly && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openDeleteDialog(level2Code, true, items.length)}
+                                className="h-8 w-8 rounded-full p-0 text-gray-400 hover:bg-red-50 hover:text-red-600 shrink-0"
+                                title="ลบ Job Level 2 พร้อมงานย่อย"
+                                aria-label={`ลบ ${level2Code} พร้อมงานย่อย`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -998,7 +1021,7 @@ export default function JobListPage() {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
+                                    onClick={() => openDeleteDialog(job.job_code)}
                                     className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0 shrink-0"
                                   >
                                     <Trash2 className="h-3 w-3" />
@@ -1135,7 +1158,7 @@ export default function JobListPage() {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    onClick={() => { setDeleteError(''); setDeleteTarget(job.job_code) }}
+                                    onClick={() => openDeleteDialog(job.job_code)}
                                     className="h-7 w-7 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 p-0 shrink-0"
                                   >
                                     <Trash2 className="h-3 w-3" />
@@ -1181,7 +1204,7 @@ export default function JobListPage() {
         />
       )}
 
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) { setDeleteTarget(null); setDeleteError('') } }}>
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) { setDeleteTarget(null); setDeleteTargetIsLevel2(false); setDeleteTargetChildCount(0); setDeleteError('') } }}>
         <DialogContent className="sm:max-w-sm rounded-2xl p-6 bg-white border-0 font-sans">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -1192,6 +1215,11 @@ export default function JobListPage() {
               ต้องการลบ Job <span className="font-mono font-bold text-gray-700">{deleteTarget}</span> ใช่หรือไม่?
               การลบไม่สามารถย้อนกลับได้
             </DialogDescription>
+            {deleteTargetIsLevel2 && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                จะลบ Job Level 2 พร้อมงานย่อยทั้งหมด {deleteTargetChildCount} รายการ และข้อมูลจะถูกย้ายไปที่ Trash
+              </p>
+            )}
           </DialogHeader>
 
           {deleteError && (
@@ -1202,7 +1230,7 @@ export default function JobListPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => { setDeleteTarget(null); setDeleteError('') }}
+              onClick={() => { setDeleteTarget(null); setDeleteTargetIsLevel2(false); setDeleteTargetChildCount(0); setDeleteError('') }}
               disabled={deleting}
               className="rounded-full h-9 border-gray-200"
             >

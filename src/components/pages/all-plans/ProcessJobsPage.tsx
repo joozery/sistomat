@@ -11,6 +11,25 @@ import {
   type Job, PAGE_SIZE, colorFor, formatDateShort, getToken, secondsToHours,
 } from './shared'
 
+function jobStatusClass(status: string, isOvertime: boolean) {
+  switch (status.trim().toUpperCase()) {
+    case 'กำลังดำเนินการ':
+      return 'bg-blue-50 text-blue-700'
+    case 'รับงาน':
+    case 'จบงาน':
+    case 'ครบ':
+    case 'รับแล้ว':
+      return 'bg-emerald-50 text-emerald-700'
+    case 'ไม่รับงาน':
+    case 'REJECT':
+      return 'bg-red-50 text-red-700'
+    case 'ยกเลิก':
+      return 'bg-gray-100 text-gray-600'
+    default:
+      return isOvertime ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
+  }
+}
+
 export function ProcessJobsPage({ processName }: { processName: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -126,7 +145,6 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
             </div>
             <div className="divide-y divide-gray-50">
               {jobs.map((job, idx) => {
-                const done = job.status === 'ครบ' || job.status === 'รับแล้ว'
                 // สถานะล่าช้าอิง overtime โดยไม่อิงวันที่กำหนดส่ง
                 const late = job.is_overtime
                 // มือถือ: flex-wrap เรียงด้วย order (บรรทัด 1 รหัส+สถานะ, 2 ชื่อแบบ, 3 รายละเอียด+ปุ่ม) / md ขึ้นไป: grid 7 คอลัมน์
@@ -157,9 +175,7 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
                     <span className={`order-6 md:order-none text-[11px] font-medium whitespace-nowrap ${late ? 'text-red-500' : 'text-gray-500'}`}>
                       {formatDateShort(job.due_date)}
                     </span>
-                    <span className={`order-2 md:order-none text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
-                      done ? 'bg-emerald-50 text-emerald-700' : late ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
-                    }`}>{job.status || '-'}</span>
+                    <span className={`order-2 md:order-none text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${jobStatusClass(job.status, late)}`}>{job.status || '-'}</span>
                     <Button size="sm" variant="ghost"
                       onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
                       className="order-7 ml-auto md:order-none md:ml-0 h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">

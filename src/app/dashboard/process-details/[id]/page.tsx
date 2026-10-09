@@ -658,6 +658,7 @@ export default function ProcessDetailsPage() {
   const [awaitingFinishDecision, setAwaitingFinishDecision] = useState(false)
   const awaitingFinishDecisionRef = useRef(false)
   useEffect(() => { awaitingFinishDecisionRef.current = awaitingFinishDecision }, [awaitingFinishDecision])
+  const [reopeningFinishDecision, setReopeningFinishDecision] = useState(false)
 
   // Blocked workers
   const blockedCodesRef = useRef<Set<number>>(new Set())
@@ -871,6 +872,33 @@ export default function ProcessDetailsPage() {
     }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
     showToast('success', title, subtitle)
   }, [id, showToast])
+
+  const reopenFinishDecision = useCallback(async () => {
+    const current = projectRef.current
+    if (!current || current.status !== 'ไม่รับงาน' || reopeningFinishDecision) return
+    if (!window.confirm('ต้องการย้อนกลับไปเลือก รับงาน / ไม่รับงาน อีกครั้งใช่หรือไม่? ข้อมูล Process เดิมจะยังคงอยู่')) return
+
+    const flags = { ...current.flags, awaiting_finish_decision: true }
+    setReopeningFinishDecision(true)
+    try {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ status: 'กำลังดำเนินการ', flags }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || 'ย้อนสถานะไม่สำเร็จ')
+      }
+      setProject(prev => prev ? { ...prev, status: 'กำลังดำเนินการ', flags } : prev)
+      setAwaitingFinishDecision(true)
+      showToast('success', 'ย้อนกลับไปเลือกผลสำเร็จ', 'สามารถเลือก รับงาน หรือ ไม่รับงาน ได้อีกครั้ง')
+    } catch (error) {
+      showToast('error', 'ย้อนสถานะไม่สำเร็จ', error instanceof Error ? error.message : '')
+    } finally {
+      setReopeningFinishDecision(false)
+    }
+  }, [id, reopeningFinishDecision, showToast])
 
   useEffect(() => {
     const handleLocalScan = (e: any) => {
@@ -1561,6 +1589,17 @@ export default function ProcessDetailsPage() {
           <span className="text-[11px] text-gray-400 hidden sm:block">
             สถานะ: <span className="font-semibold text-gray-600">{project.status === 'ยกเลิก' ? 'REJECT' : project.status}</span>
           </span>
+          {project.status === 'ไม่รับงาน' && role === 'superadmin' && (
+            <Button
+              variant="outline"
+              onClick={() => void reopenFinishDecision()}
+              disabled={reopeningFinishDecision}
+              className="h-8 gap-1.5 rounded-full border-orange-200 px-3 text-xs font-semibold text-orange-700 hover:bg-orange-50"
+            >
+              {reopeningFinishDecision ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              ย้อนกลับไปเลือกผล
+            </Button>
+          )}
         </div>
       </div>
 
