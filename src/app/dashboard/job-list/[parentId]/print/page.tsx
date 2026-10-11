@@ -109,7 +109,7 @@ export default function GroupPrintPage() {
         <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white"><ArrowLeft className="h-4 w-4" /> กลับ</button>
         <div className="flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo2.png" alt="Sistomat" className="h-8 w-auto" />
+          <img src="/logo-sis.png" alt="Sistomat" className="h-8 w-auto" />
           <span className="font-bold text-indigo-100">ตัวอย่างก่อนปริ้น — {group}</span>
         </div>
         <button

@@ -281,7 +281,7 @@ export default function PrintPreviewPage() {
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo2.png" alt="Sistomat" style={{ height: '32px', width: 'auto' }} />
+          <img src="/logo-sis.png" alt="Sistomat" style={{ height: '32px', width: 'auto' }} />
           <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#e0e0ff' }}>
             ตัวอย่างก่อนปริ้น — JOB {displayJobId}
           </span>
