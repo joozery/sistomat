@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  AlertTriangle, Search, Calendar, X, ExternalLink, Loader2, ChevronLeft, ChevronRight, ArrowLeft, Box,
+  AlertTriangle, Search, X, ExternalLink, Loader2, ChevronLeft, ChevronRight, ArrowLeft, Box,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ThaiDateInput } from '@/components/ui/thai-date-input'
 import {
   type Job, PAGE_SIZE, colorFor, formatDateShort, getToken, secondsToHours,
 } from './shared'
@@ -15,6 +16,8 @@ function jobStatusClass(status: string, isOvertime: boolean) {
   switch (status.trim().toUpperCase()) {
     case 'กำลังดำเนินการ':
       return 'bg-blue-50 text-blue-700'
+    case 'รอรับงาน':
+      return 'bg-amber-50 text-amber-700'
     case 'รับงาน':
     case 'จบงาน':
     case 'ครบ':
@@ -98,17 +101,15 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
         </div>
         <div className="flex items-center gap-2 min-w-0 sm:contents">
           <div className="relative flex-1 min-w-0 sm:flex-none sm:shrink-0">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-            <input type="date" value={dateFrom}
+            <ThaiDateInput value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
-              className="w-full min-w-0 pl-9 pr-2 h-9 rounded-full border border-gray-200 text-xs sm:text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
+              className="w-full min-w-0 pr-2 h-9 rounded-full border border-gray-200 text-xs sm:text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
           </div>
           <span className="text-gray-300 text-xs shrink-0">—</span>
           <div className="relative flex-1 min-w-0 sm:flex-none sm:shrink-0">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-            <input type="date" value={dateTo}
+            <ThaiDateInput value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
-              className="w-full min-w-0 pl-9 pr-2 h-9 rounded-full border border-gray-200 text-xs sm:text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
+              className="w-full min-w-0 pr-2 h-9 rounded-full border border-gray-200 text-xs sm:text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
           </div>
         </div>
         {(search || dateFrom || dateTo) && (

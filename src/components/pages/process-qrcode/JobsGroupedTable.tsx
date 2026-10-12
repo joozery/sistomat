@@ -58,7 +58,7 @@ interface JobsGroupedTableProps {
 function formatDate(d: string) {
   if (!d) return '-'
   try {
-    return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch {
     return d
   }

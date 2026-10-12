@@ -98,7 +98,7 @@ export function PlanProgressCards({ plans }: PlanProgressCardsProps) {
                     </div>
                     <div className="flex items-center gap-1 text-[11px] text-gray-400">
                       <CalendarDays className="h-3 w-3" />
-                      <span>ครบกำหนด {new Date(plan.dueDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      <span>ครบกำหนด {new Date(plan.dueDate).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                     </div>
                     <p className="text-[11px] text-gray-400">{plan.jobs} งาน</p>
                   </div>

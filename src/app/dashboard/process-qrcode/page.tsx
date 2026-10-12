@@ -6,6 +6,7 @@ import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight, RefreshCw, Cal
 import { ProjectTable } from '@/components/pages/process-qrcode/ProjectTable'
 import { AddProjectDialog } from '@/components/pages/process-qrcode/AddProjectDialog'
 import { ImportExcelDialog } from '@/components/pages/process-qrcode/ImportExcelDialog'
+import { ThaiDateInput } from '@/components/ui/thai-date-input'
 
 const API_URL = '/api/projects'
 const ITEMS_PER_PAGE = 10
@@ -330,8 +331,7 @@ export default function ProcessQRCodePage() {
           </label>
           <label className="space-y-1.5">
             <span className="block text-[11px] font-semibold text-gray-500">ตั้งแต่วันที่</span>
-            <input
-              type="date"
+            <ThaiDateInput
               value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1) }}
               className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#7B1A1A]"
@@ -339,8 +339,7 @@ export default function ProcessQRCodePage() {
           </label>
           <label className="space-y-1.5">
             <span className="block text-[11px] font-semibold text-gray-500">ถึงวันที่</span>
-            <input
-              type="date"
+            <ThaiDateInput
               value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1) }}
               className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#7B1A1A]"

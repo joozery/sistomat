@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { FileSpreadsheet, Loader2, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ThaiDateInput } from '@/components/ui/thai-date-input'
 import {
   Select,
   SelectContent,
@@ -400,11 +401,11 @@ export function ExportJobsPage() {
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">วันที่ (จาก)</label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 text-xs" />
+            <ThaiDateInput value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 text-xs" />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">ถึง</label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 text-xs" />
+            <ThaiDateInput value={to} onChange={(e) => setTo(e.target.value)} className="h-9 text-xs" />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">สถานะ</label>

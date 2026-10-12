@@ -150,7 +150,7 @@ export default function ProfilePage() {
   }
 
   const initials = user.username.charAt(0).toUpperCase()
-  const joinDate = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+  const joinDate = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
   return (
     <div className="space-y-6 font-sans">

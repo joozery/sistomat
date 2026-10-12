@@ -14,5 +14,5 @@ export function timeAgo(date: Date | string): string {
   if (diffDay === 1) return 'เมื่อวานนี้'
   if (diffDay < 7) return `${diffDay} วันที่แล้ว`
 
-  return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }

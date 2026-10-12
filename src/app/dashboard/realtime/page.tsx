@@ -385,10 +385,10 @@ function IdleRow({ ev, idx }: { ev: RealtimeEvent; idx: number }) {
         <span className="text-[11px] text-gray-400 truncate block max-w-[200px]">{ev.process || '—'}</span>
       </td>
       <td className="md:px-3 md:py-3 md:w-36 text-xs text-gray-500 whitespace-nowrap">
-        <span className="md:hidden text-gray-400">กำหนดส่ง </span>{ev.due_date ? new Date(ev.due_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+        <span className="md:hidden text-gray-400">กำหนดส่ง </span>{ev.due_date ? new Date(ev.due_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
       </td>
       <td className="md:px-3 md:py-3 md:w-36 text-xs text-gray-500 whitespace-nowrap">
-        <span className="md:hidden text-gray-400">รับงาน </span>{ev.received_date ? new Date(ev.received_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+        <span className="md:hidden text-gray-400">รับงาน </span>{ev.received_date ? new Date(ev.received_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
       </td>
       <td className="hidden md:table-cell pr-4 py-3 w-10 text-right">
         <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-amber-500 transition-colors" />

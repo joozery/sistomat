@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 
 type TrashItem = { _id: string; project_id: string; deleted_at: string; purge_at: string; project_count: number; job_count: number; files: { file_name: string }[] }
-const formatDate = (value: string) => new Date(value).toLocaleString('th-TH')
+const formatDate = (value: string) => new Date(value).toLocaleString('th-TH', {
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+})
 
 export default function TrashPage() {
   const { role } = useCurrentUser()

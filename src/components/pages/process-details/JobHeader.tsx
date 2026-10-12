@@ -155,12 +155,12 @@ export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrin
               return (
                 <div key={type} className={`mt-2 rounded-lg border px-3 py-2 text-sm break-words whitespace-pre-wrap ${color}`}>
                   <p role="status"><span className="font-bold">มีการ {label} รอบ {history.length}</span>: {latest.reason}</p>
-                  <p className="text-xs">{new Date(latest.created_at).toLocaleString('th-TH')}</p>
+                  <p className="text-xs">{new Date(latest.created_at).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
                   {canViewHoldHistory && history.length > 1 && (
                     <details className="mt-2 text-xs">
                       <summary className="cursor-pointer">ประวัติ {label} ก่อนหน้า ({history.length - 1} รอบ)</summary>
                       {history.slice(0, -1).map((entry, index) => (
-                        <p key={entry.id} className="mt-1">รอบ {index + 1}: {entry.reason} — {new Date(entry.created_at).toLocaleString('th-TH')}</p>
+                        <p key={entry.id} className="mt-1">รอบ {index + 1}: {entry.reason} — {new Date(entry.created_at).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
                       ))}
                     </details>
                   )}

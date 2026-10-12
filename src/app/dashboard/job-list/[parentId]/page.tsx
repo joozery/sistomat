@@ -123,7 +123,7 @@ interface PrintableJob {
 function formatDate(d?: string | null) {
   if (!d) return '-'
   try {
-    return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch { return d }
 }
 
@@ -200,6 +200,14 @@ function StatusChip({
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-700">
         <XCircle className="h-2.5 w-2.5" />
         {s}
+      </span>
+    )
+  }
+  if (s === 'รอรับงาน') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700">
+        <Clock className="h-2.5 w-2.5" />
+        รอรับงาน
       </span>
     )
   }

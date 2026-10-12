@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   CheckCircle2, Clock, AlertCircle, AlertTriangle, LayoutGrid, CalendarDays, TrendingUp, Timer,
-  Calendar, X, Loader2, Box,
+  X, Loader2, Box,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { ThaiDateInput } from '@/components/ui/thai-date-input'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 import {
   type ProcessSummary, STATUS_CONFIG, colorFor, formatDate, getToken, planStatus,
@@ -130,17 +131,15 @@ export function AllPlansOverview() {
 
           <span className="text-xs font-semibold text-gray-400 mr-1 basis-full sm:basis-auto">กำหนดส่ง</span>
           <div className="relative shrink-0">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-            <input type="date" value={summaryDateFrom}
+            <ThaiDateInput value={summaryDateFrom}
               onChange={(e) => updateFilters({ from: e.target.value })}
-              className="pl-8 pr-2 h-8 sm:h-7 rounded-full border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
+              className="pr-2 h-8 sm:h-7 rounded-full border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
           </div>
           <span className="text-gray-300 text-xs">—</span>
           <div className="relative shrink-0">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-            <input type="date" value={summaryDateTo}
+            <ThaiDateInput value={summaryDateTo}
               onChange={(e) => updateFilters({ to: e.target.value })}
-              className="pl-8 pr-2 h-8 sm:h-7 rounded-full border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
+              className="pr-2 h-8 sm:h-7 rounded-full border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
           </div>
           {(summaryDateFrom || summaryDateTo) && (
             <button onClick={() => updateFilters({ from: '', to: '' })}

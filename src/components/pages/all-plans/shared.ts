@@ -40,13 +40,13 @@ export function getToken() {
 
 export function formatDate(d: string) {
   if (!d) return '-'
-  try { return new Date(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) }
+  try { return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) }
   catch { return d }
 }
 
 export function formatDateShort(d: string) {
   if (!d) return '-'
-  try { return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit' }) }
+  try { return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }) }
   catch { return d }
 }
 

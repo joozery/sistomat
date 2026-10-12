@@ -89,7 +89,7 @@ export function UpcomingDeadlines({ plans }: UpcomingDeadlinesProps) {
                       : `${days} วัน`}
                   </div>
                   <p className="text-[10px] text-gray-400">
-                    {new Date(plan.dueDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {new Date(plan.dueDate).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </p>
                 </div>
               </div>

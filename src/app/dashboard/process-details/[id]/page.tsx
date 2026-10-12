@@ -99,7 +99,7 @@ const COMMAND_BARCODES: CommandBarcodeSpec[] = [
     value: 'FN_GOOD', label: 'FN Good - FN', desc: 'จบงาน', status: '', accent: 'blue', icon: CheckCircle2,
     detail: [
       'สแกนเมื่องานผลิตเสร็จสมบูรณ์แล้ว',
-      'ระบบจะเด้ง popup ให้เลือกต่อว่าลูกค้า "รับงาน" (Acpt - FN) หรือ "ไม่รับงาน" (Cancel - FN) — ไม่บันทึกสถานะทันที',
+      'ระบบจะเปลี่ยนสถานะเป็น "รอรับงาน" สีเหลือง แล้วให้เลือกต่อว่าลูกค้า "รับงาน" (Acpt - FN) หรือ "ไม่รับงาน" (Cancel - FN)',
     ],
   },
   {
@@ -127,7 +127,7 @@ const FINISH_DECISION_BARCODES = COMMAND_BARCODES.filter(
   (c) => c.value === 'ACPT_FN' || c.value === 'CANCEL_FN'
 )
 
-// สถานะที่ปิดงานจริง (ตัดสินใจแล้ว) — ต่างจาก FN_GOOD ที่แค่ "งานเสร็จ" แต่ยังไม่รู้ผลว่าลูกค้ารับหรือไม่
+// สถานะที่ปิดงานจริง (ตัดสินใจแล้ว) — FN_GOOD จะตั้งสถานะพักไว้เป็น "รอรับงาน" ก่อน
 const FINISH_STATUS_MAP: Record<string, { status: string; title: string; subtitle: string }> = {
   'CANCEL_FN': { status: 'ไม่รับงาน', title: 'จบงานแต่ไม่รับงาน', subtitle: 'บันทึกสถานะ: ไม่รับงาน' },
   'ACPT_FN': { status: 'รับงาน', title: 'รับงาน — จบงาน', subtitle: 'บันทึกสถานะ: รับงาน' },
@@ -398,7 +398,7 @@ function ActionModal({
         <div className="text-center mb-5 py-4 rounded-2xl bg-gray-50 border border-gray-100">
           <p className="text-5xl font-bold tabular-nums text-gray-900 tracking-tight leading-none">{clockDisplay}</p>
           <p className="text-xs text-gray-400 mt-2">
-            {new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'long', year: 'numeric' })}
+            {new Date().toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </p>
         </div>
 
@@ -1017,7 +1017,7 @@ export default function ProcessDetailsPage() {
       }
 
       // ── สถานะจบงาน: CANCEL_FN / FN_GOOD / ACPT_FN ──
-      // FN_GOOD = งานผลิตเสร็จแล้ว แต่ยังไม่รู้ว่าลูกค้าจะรับงานหรือไม่ → สลับการ์ดบาร์โค้ดด้านล่างเป็น ACPT_FN / CANCEL_FN แทนการปิดสถานะทันที (ไม่มี popup)
+      // FN_GOOD = งานผลิตเสร็จแล้ว แต่ยังไม่รู้ว่าลูกค้าจะรับงานหรือไม่ → ตั้งสถานะรอรับงาน แล้วสลับการ์ดเป็น ACPT_FN / CANCEL_FN
       if (rawUpper === 'FN_GOOD') {
         e.preventDefault()
         const currentIdx = list.findIndex((row) => !row.next_confirmed_at)
@@ -1031,13 +1031,20 @@ export default function ProcessDetailsPage() {
           return
         }
         const newFlags = { ...projectRef.current?.flags, awaiting_finish_decision: true }
+        const previousProject = projectRef.current
         setAwaitingFinishDecision(true)
-        setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
-        fetch(`/api/projects/${id}`, {
+        setProject((prev) => prev ? { ...prev, status: 'รอรับงาน', flags: newFlags } : prev)
+        void fetch(`/api/projects/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-          body: JSON.stringify({ flags: newFlags }),
-        }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
+          body: JSON.stringify({ status: 'รอรับงาน', flags: newFlags }),
+        }).then((response) => {
+          if (!response.ok) throw new Error('finish decision update failed')
+        }).catch(() => {
+          setAwaitingFinishDecision(false)
+          if (previousProject) setProject(previousProject)
+          showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณาสแกน FN_GOOD อีกครั้ง')
+        })
         return
       }
       if (FINISH_STATUS_MAP[rawUpper]) {
@@ -1587,7 +1594,7 @@ export default function ProcessDetailsPage() {
             </div>
           )}
           <span className="text-[11px] text-gray-400 hidden sm:block">
-            สถานะ: <span className="font-semibold text-gray-600">{project.status === 'ยกเลิก' ? 'REJECT' : project.status}</span>
+            สถานะ: <span className={`font-semibold ${project.status === 'รอรับงาน' ? 'text-amber-700' : 'text-gray-600'}`}>{project.status === 'ยกเลิก' ? 'REJECT' : project.status}</span>
           </span>
           {project.status === 'ไม่รับงาน' && role === 'superadmin' && (
             <Button
@@ -1680,8 +1687,8 @@ export default function ProcessDetailsPage() {
           ) : (
             <>
           {awaitingFinishDecision && (
-            <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-2.5">
-              <p className="text-xs font-medium text-blue-800">
+            <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-2.5">
+              <p className="text-xs font-medium text-amber-800">
                 งานผลิตเสร็จแล้ว — สแกน <span className="font-bold">Acpt-FN</span> ถ้าลูกค้ารับงาน หรือ <span className="font-bold">Cancel-FN</span> ถ้าไม่รับงาน
               </p>
               <button
@@ -1689,14 +1696,14 @@ export default function ProcessDetailsPage() {
                 onClick={() => {
                   setAwaitingFinishDecision(false)
                   const newFlags = { ...projectRef.current?.flags, awaiting_finish_decision: false }
-                  setProject((prev) => prev ? { ...prev, flags: newFlags } : prev)
+                  setProject((prev) => prev ? { ...prev, status: 'กำลังดำเนินการ', flags: newFlags } : prev)
                   fetch(`/api/projects/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-                    body: JSON.stringify({ flags: newFlags }),
+                    body: JSON.stringify({ status: 'กำลังดำเนินการ', flags: newFlags }),
                   }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', ''))
                 }}
-                className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
               >
                 ยกเลิก
               </button>

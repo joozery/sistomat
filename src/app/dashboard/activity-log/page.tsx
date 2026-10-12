@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ThaiDateInput } from '@/components/ui/thai-date-input'
 
 interface ActivityLog {
   _id: string
@@ -52,7 +53,7 @@ function formatDateTime(iso: string) {
   try {
     const d = new Date(iso)
     return d.toLocaleString('th-TH', {
-      day: '2-digit', month: '2-digit', year: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     })
   } catch { return iso }
@@ -150,8 +151,7 @@ export default function ActivityLogPage() {
 
           <div className="min-w-0 sm:min-w-[130px]">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">จากวันที่</label>
-            <Input
-              type="date"
+            <ThaiDateInput
               value={filterFrom}
               onChange={(e) => setFilterFrom(e.target.value)}
               className="h-8 min-w-0 text-xs rounded-lg border-gray-200"
@@ -160,8 +160,7 @@ export default function ActivityLogPage() {
 
           <div className="min-w-0 sm:min-w-[130px]">
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">ถึงวันที่</label>
-            <Input
-              type="date"
+            <ThaiDateInput
               value={filterTo}
               onChange={(e) => setFilterTo(e.target.value)}
               className="h-8 min-w-0 text-xs rounded-lg border-gray-200"
