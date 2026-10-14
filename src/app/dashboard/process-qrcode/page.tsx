@@ -35,6 +35,8 @@ interface MatchedJob {
   drawing_name?: string
   quantity?: number
   status?: string
+  received_date?: string
+  due_date?: string
 }
 
 export default function ProcessQRCodePage() {

@@ -48,6 +48,8 @@ interface MatchedJob {
   quantity?: number
   status?: string
   is_printed?: boolean
+  received_date?: string
+  due_date?: string
 }
 
 interface ProjectTableProps {
@@ -288,6 +290,14 @@ export function ProjectTable({
             {job.quantity != null && (
               <span className="text-gray-400 shrink-0">{job.quantity} ชิ้น</span>
             )}
+            <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded-full shrink-0">
+              <Calendar className="h-2.5 w-2.5 text-gray-400" />
+              รับงาน {formatDate(job.received_date ?? '')}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded-full shrink-0">
+              <Calendar className="h-2.5 w-2.5 text-gray-400" />
+              ส่งมอบ {formatDate(job.due_date ?? '')}
+            </span>
             {job.is_printed ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full shrink-0">
                 <Printer className="h-2.5 w-2.5 text-emerald-600" /> ปริ้นแล้ว
