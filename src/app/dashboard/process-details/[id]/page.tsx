@@ -66,6 +66,14 @@ type CommandBarcodeSpec = {
 
 const COMMAND_BARCODES: CommandBarcodeSpec[] = [
   {
+    value: 'CANCEL_JOB', label: 'ยกเลิกงานทั้งใบ', desc: 'ยกเลิกใบงานและล็อกการทำงานทั้งหมด', status: 'ยกเลิกงาน', accent: 'red', icon: Ban,
+    detail: [
+      'ใช้ยกเลิกใบงานก่อนเริ่มงานหรือระหว่างทำงาน',
+      'ระบบจะหยุดเวลาคนที่กำลังทำงาน เก็บเหตุผล ผู้ยกเลิก และวันเวลา',
+      'หลังยกเลิกจะทำงานต่อไม่ได้จนกว่า Superadmin จะเปิดกลับ',
+    ],
+  },
+  {
     value: 'ACPT_FN', label: 'Acpt - FN', desc: 'รับงาน — จบงาน', status: 'รับงาน', accent: 'violet', icon: PackageCheck,
     detail: [
       'ใช้เมื่อพนักงานรับงานและทำเสร็จในขั้นตอนเดียว โดยไม่ต้องยืนยันทีละกระบวนการด้วย CMD_NEXT',
@@ -569,6 +577,49 @@ function StopReasonModal({
 }
 
 
+function CancelJobModal({
+  onConfirm,
+  onCancel,
+  saving,
+}: {
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+  saving: boolean
+}) {
+  const [reason, setReason] = useState('')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm font-sans" onClick={saving ? undefined : onCancel}>
+      <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="text-center mb-5">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 border border-red-200 mb-3">
+            <Ban className="h-5 w-5 text-red-700" />
+          </div>
+          <h2 className="text-base font-bold text-gray-800">ยืนยันยกเลิกงานทั้งใบ</h2>
+          <p className="text-xs text-gray-500 mt-1">หลังยกเลิกจะไม่สามารถดำเนินการต่อได้</p>
+        </div>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="กรุณาระบุเหตุผลการยกเลิก"
+          autoFocus
+          rows={4}
+          className="w-full rounded-xl border border-gray-200 p-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 resize-none"
+        />
+        <div className="flex gap-3 mt-5">
+          <button type="button" onClick={onCancel} disabled={saving} className="flex-1 h-11 rounded-full border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+            ยกเลิก
+          </button>
+          <button type="button" onClick={() => reason.trim() && onConfirm(reason.trim())} disabled={saving || !reason.trim()} className="flex-1 h-11 rounded-full bg-red-700 hover:bg-red-800 text-white text-sm font-bold disabled:opacity-50">
+            {saving ? 'กำลังบันทึก...' : 'ยืนยันยกเลิกงาน'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 interface ProjectAttachment {
   file_url: string
   file_name: string
@@ -579,6 +630,16 @@ interface ProjectFlags {
   has_reject?: boolean
   has_hold?: boolean
   awaiting_finish_decision?: boolean
+  cancelled?: boolean
+}
+
+interface CancellationInfo {
+  reason: string
+  cancelled_by: string
+  cancelled_at: string
+  previous_status?: string
+  reopened_by?: string
+  reopened_at?: string
 }
 
 interface ProjectData {
@@ -596,6 +657,7 @@ interface ProjectData {
   file_name?: string
   attachments?: ProjectAttachment[]
   flags?: ProjectFlags
+  cancellation?: CancellationInfo
 }
 
 function formatThaiDate(iso: string) {
@@ -642,6 +704,8 @@ export default function ProcessDetailsPage() {
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null)
   const [activeWorkerSlot, setActiveWorkerSlot] = useState<{ row: number; col: number } | null>(null)
   const [actionModal, setActionModal] = useState<{ mode: 'start' | 'stop'; row: number; col: number; workerId: string; processName: string } | null>(null)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelSaving, setCancelSaving] = useState(false)
   // สแกนหยุดงานผ่านบาร์โค้ดโดยตรง (ไม่ผ่าน ActionModal) — รอเลือกเหตุผลก่อนถึงจะบันทึกจริง
   const [pendingStop, setPendingStop] = useState<{ rowIndex: number; workerIdStr: string; workerName: string; processName: string; nowTime: string } | null>(null)
   const actionModalRef = useRef<typeof actionModal>(null)
@@ -659,6 +723,7 @@ export default function ProcessDetailsPage() {
   const awaitingFinishDecisionRef = useRef(false)
   useEffect(() => { awaitingFinishDecisionRef.current = awaitingFinishDecision }, [awaitingFinishDecision])
   const [reopeningFinishDecision, setReopeningFinishDecision] = useState(false)
+  const [reopeningCancellation, setReopeningCancellation] = useState(false)
 
   // Blocked workers
   const blockedCodesRef = useRef<Set<number>>(new Set())
@@ -873,6 +938,72 @@ export default function ProcessDetailsPage() {
     showToast('success', title, subtitle)
   }, [id, showToast])
 
+  const cancelJob = useCallback(async (reason: string) => {
+    setCancelSaving(true)
+    try {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ cancel_job: { reason } }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || 'ยกเลิกใบงานไม่สำเร็จ')
+      const nextProject = projectRef.current ? {
+        ...projectRef.current,
+        status: data.status,
+        processes: data.processes ?? projectRef.current.processes,
+        cancellation: data.cancellation,
+        flags: { ...projectRef.current.flags, cancelled: true, awaiting_finish_decision: false },
+      } : null
+      if (nextProject) {
+        projectRef.current = nextProject
+        setProject(nextProject)
+        const mapped = (nextProject.processes ?? []).map((p: any) => ({
+          ...p,
+          workers: (p.workers ?? []).slice(0, 4),
+        }))
+        processListRef.current = mapped
+        setProcessList(mapped)
+      }
+      setCancelDialogOpen(false)
+      setAwaitingFinishDecision(false)
+      showToast('success', 'ยกเลิกใบงานสำเร็จ', reason)
+    } catch (error) {
+      showToast('error', 'ยกเลิกใบงานไม่สำเร็จ', error instanceof Error ? error.message : '')
+    } finally {
+      setCancelSaving(false)
+    }
+  }, [id, showToast])
+
+  const reopenCancellation = useCallback(async () => {
+    if (role.trim().toLowerCase() !== 'superadmin' || reopeningCancellation) return
+    if (!window.confirm('ต้องการเปิดใบงานที่ยกเลิกแล้วกลับมาใช้งานหรือไม่? ประวัติการยกเลิกจะยังคงอยู่')) return
+    setReopeningCancellation(true)
+    try {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ reopen_cancel: true }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || 'เปิดใบงานกลับมาใช้งานไม่สำเร็จ')
+      const next = projectRef.current ? {
+        ...projectRef.current,
+        status: data.status || 'กำลังดำเนินการ',
+        flags: { ...projectRef.current.flags, cancelled: false },
+      } : null
+      if (next) {
+        projectRef.current = next
+        setProject(next)
+      }
+      showToast('success', 'เปิดใบงานกลับมาใช้งานแล้ว', 'ประวัติการยกเลิกยังคงอยู่')
+    } catch (error) {
+      showToast('error', 'เปิดใบงานกลับมาใช้งานไม่สำเร็จ', error instanceof Error ? error.message : '')
+    } finally {
+      setReopeningCancellation(false)
+    }
+  }, [id, reopeningCancellation, role, showToast])
+
   const reopenFinishDecision = useCallback(async () => {
     const current = projectRef.current
     if (!current || current.status !== 'ไม่รับงาน' || reopeningFinishDecision) return
@@ -907,8 +1038,14 @@ export default function ProcessDetailsPage() {
       const list = processListRef.current
       const rawUpper = raw.toUpperCase()
 
+      if (projectRef.current?.status === 'ยกเลิกงาน') {
+        e.preventDefault()
+        showToast('warning', 'ใบงานนี้ถูกยกเลิกแล้ว', 'ไม่สามารถสแกนหรือดำเนินการต่อได้')
+        return
+      }
+
       // ── รอตัดสินใจ FN Good อยู่ → บล็อกทุกอย่างจนกว่าจะเลือก Acpt-FN / Cancel-FN ──
-      if (awaitingFinishDecisionRef.current && rawUpper !== 'ACPT_FN' && rawUpper !== 'CANCEL_FN') {
+      if (awaitingFinishDecisionRef.current && rawUpper !== 'ACPT_FN' && rawUpper !== 'CANCEL_FN' && rawUpper !== 'CANCEL_JOB') {
         e.preventDefault()
         showToast('warning', 'รอการตัดสินใจ FN Good', 'ต้องสแกน Acpt-FN หรือ Cancel-FN ก่อนทำงานต่อ')
         return
@@ -916,7 +1053,7 @@ export default function ProcessDetailsPage() {
 
       // ── CMD_CANCEL/RESET/NEXT ทำงานได้แม้ modal เปิด ──
       // ── ถ้า modal เปิดอยู่ → modal จัดการ scan เอง ──
-      const isCmd = rawUpper === 'CMD_CANCEL' || rawUpper === 'CMD_RESET' || rawUpper === 'CMD_NEXT'
+      const isCmd = rawUpper === 'CMD_CANCEL' || rawUpper === 'CMD_RESET' || rawUpper === 'CMD_NEXT' || rawUpper === 'CANCEL_JOB'
         || rawUpper === 'CANCEL_FN' || rawUpper === 'FN_GOOD' || rawUpper === 'ACPT_FN'
         || rawUpper === 'CMD_HOLD' || rawUpper === 'CMD_REVERSE' || rawUpper === 'CMD_REJECT'
       if (!isCmd && actionModalRef.current) {
@@ -956,6 +1093,23 @@ export default function ProcessDetailsPage() {
           body: JSON.stringify({ processes: cancelNext }),
         }).catch(() => showToast('error', 'บันทึกไม่สำเร็จ', 'กรุณากด "บันทึกข้อมูลใบงาน"'))
         showToast('success', `ยกเลิกเรียบร้อย — ${loggedWorker.name}`, `ลบ entry ออกจาก "${canceledProcess}"`)
+        return
+      }
+
+      if (rawUpper === 'CANCEL_JOB') {
+        e.preventDefault()
+        const normalizedRole = role.trim().toLowerCase()
+        if (!['admin', 'administrator', 'superadmin'].includes(normalizedRole)) {
+          showToast('error', 'ไม่มีสิทธิ์ยกเลิกใบงานทั้งใบ', 'ให้ Admin หรือ Superadmin ดำเนินการ')
+          return
+        }
+        if (projectRef.current?.status === 'ยกเลิกงาน') {
+          showToast('warning', 'ใบงานนี้ถูกยกเลิกแล้ว', 'ไม่สามารถดำเนินการซ้ำได้')
+          return
+        }
+        setActionModal(null)
+        setPendingStop(null)
+        setCancelDialogOpen(true)
         return
       }
 
@@ -1289,7 +1443,7 @@ export default function ProcessDetailsPage() {
 
     document.addEventListener('onBarcodeScan', handleLocalScan)
     return () => document.removeEventListener('onBarcodeScan', handleLocalScan)
-  }, [activeRowIndex, id, applyFinishStatus, saveHold, showToast])
+  }, [activeRowIndex, id, applyFinishStatus, role, saveHold, showToast])
 
   const handleWorkerChange = (index: number, workerIndex: number, field: keyof WorkerLog, value: string) => {
     setProcessList((prev) => {
@@ -1499,11 +1653,18 @@ export default function ProcessDetailsPage() {
   }
 
   // ── Main ──
-  const isJobFinished = ['รับงาน', 'ไม่รับงาน', 'จบงาน', 'ยกเลิก', 'REJECT'].includes(project.status)
+  const isJobFinished = ['รับงาน', 'ไม่รับงาน', 'จบงาน', 'ยกเลิก', 'ยกเลิกงาน', 'REJECT'].includes(project.status)
 
   return (
     <>
     <ScanToast toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
+    {cancelDialogOpen && (
+      <CancelJobModal
+        saving={cancelSaving}
+        onCancel={() => { if (!cancelSaving) setCancelDialogOpen(false) }}
+        onConfirm={(reason) => void cancelJob(reason)}
+      />
+    )}
     {holdTarget && (
       <HoldReasonDialog
         processName={holdTarget.process}
@@ -1581,6 +1742,17 @@ export default function ProcessDetailsPage() {
         </Button>
 
         <div className="flex items-center gap-3">
+          {project.status === 'ยกเลิกงาน' && role === 'superadmin' && (
+            <Button
+              variant="outline"
+              onClick={() => void reopenCancellation()}
+              disabled={reopeningCancellation}
+              className="h-8 gap-1.5 rounded-full border-red-200 px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
+            >
+              {reopeningCancellation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              เปิดใบงานกลับ
+            </Button>
+          )}
           {saveState === 'success' && (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold animate-in fade-in-0">
               <CheckCircle2 className="h-4 w-4" />
@@ -1636,6 +1808,7 @@ export default function ProcessDetailsPage() {
             hasHold={!!project.flags?.has_hold}
             activeHolds={processList.filter(row => row.on_hold && !row.next_confirmed_at).map(row => ({ process: row.process, reason: row.hold_reason }))}
             pastHolds={processList.flatMap(row => getPastHolds(row).map(hold => ({ ...hold, process: row.process })))}
+            cancellation={project.cancellation}
           />
 
           {role === 'superadmin' && processList.every(p => !p.process?.trim()) && (
@@ -1655,6 +1828,7 @@ export default function ProcessDetailsPage() {
           <ProcessTable
             processList={processList}
             processOptions={processOptions}
+            disabled={project.status === 'ยกเลิกงาน'}
             activeRowIndex={activeRowIndex}
             activeWorkerSlot={activeWorkerSlot}
             onRowClick={(idx) => { setActiveRowIndex(idx); setActiveWorkerSlot(null) }}

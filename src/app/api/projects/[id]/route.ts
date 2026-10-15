@@ -82,16 +82,94 @@ export async function PUT(
   try {
     const token = getToken(req)
     if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    jwt.verify(token, JWT_SECRET)
+    const auth = jwt.verify(token, JWT_SECRET) as { role?: string; username?: string }
 
     const { id } = await params
     const body = await req.json()
-    const { processes, status, qc, flags } = body
+    const { processes, status, qc, flags, cancel_job: cancelJob, reopen_cancel: reopenCancel } = body
     const marker = body.marker === undefined ? undefined : parseJobMarker(body.marker)
     if (marker === null) return NextResponse.json({ message: 'กรุณาระบุเหตุผล Reject / Rework ไม่เกิน 500 ตัวอักษร' }, { status: 400 })
 
     const client = await getClientPromise()
     const db = client.db('sistomat')
+
+    const currentProject = await db.collection('projects').findOne({ project_id: id })
+    if (!currentProject) {
+      return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })
+    }
+
+    const normalizedRole = String(auth.role ?? '').trim().toLowerCase()
+    const canManageCancellation = ['admin', 'administrator', 'superadmin'].includes(normalizedRole)
+
+    if (cancelJob !== undefined) {
+      if (!canManageCancellation) return NextResponse.json({ message: 'ไม่มีสิทธิ์ยกเลิกใบงานทั้งใบ' }, { status: 403 })
+      const reason = typeof cancelJob?.reason === 'string' ? cancelJob.reason.trim() : ''
+      if (!reason) return NextResponse.json({ message: 'กรุณาระบุเหตุผลการยกเลิก' }, { status: 400 })
+      if (currentProject.status === 'ยกเลิกงาน') {
+        return NextResponse.json({ message: 'ใบงานนี้ถูกยกเลิกแล้ว' }, { status: 409 })
+      }
+
+      const cancelledAt = new Date().toISOString()
+      const stoppedProcesses = Array.isArray(currentProject.processes)
+        ? currentProject.processes.map((process: Record<string, unknown>) => ({
+            ...process,
+            workers: Array.isArray(process.workers)
+              ? process.workers.map((worker: Record<string, unknown>) => (
+                  worker.worker_id && worker.start_time && !worker.stop_time
+                    ? { ...worker, stop_time: cancelledAt, stop_reason: 'ยกเลิกใบงาน' }
+                    : worker
+                ))
+              : process.workers,
+          }))
+        : currentProject.processes
+
+      const cancellation = {
+        reason,
+        cancelled_by: auth.username ?? '',
+        cancelled_at: cancelledAt,
+        previous_status: String(currentProject.status ?? 'กำลังดำเนินการ'),
+      }
+      await db.collection('projects').updateOne(
+        { project_id: id },
+        { $set: {
+          status: 'ยกเลิกงาน',
+          processes: stoppedProcesses,
+          cancellation,
+          'flags.cancelled': true,
+          'flags.awaiting_finish_decision': false,
+          updated_at: new Date(),
+        } },
+      )
+      await db.collection('jobs').updateMany({ job_code: id }, { $set: { status: 'ยกเลิกงาน', cancellation } })
+      emitRealtimeUpdate()
+      return NextResponse.json({ message: 'ยกเลิกใบงานสำเร็จ', status: 'ยกเลิกงาน', processes: stoppedProcesses, cancellation })
+    }
+
+    if (reopenCancel === true) {
+      if (normalizedRole !== 'superadmin') return NextResponse.json({ message: 'เฉพาะ Superadmin เท่านั้นที่เปิดใบงานที่ยกเลิกแล้วได้' }, { status: 403 })
+      if (currentProject.status !== 'ยกเลิกงาน') return NextResponse.json({ message: 'ใบงานนี้ไม่ได้อยู่ในสถานะยกเลิกงาน' }, { status: 409 })
+      const previousStatus = typeof currentProject.cancellation?.previous_status === 'string'
+        ? currentProject.cancellation.previous_status
+        : 'กำลังดำเนินการ'
+      const reopenedAt = new Date().toISOString()
+      await db.collection('projects').updateOne(
+        { project_id: id },
+        { $set: {
+          status: previousStatus === 'ยกเลิกงาน' ? 'กำลังดำเนินการ' : previousStatus,
+          'flags.cancelled': false,
+          'cancellation.reopened_by': auth.username ?? '',
+          'cancellation.reopened_at': reopenedAt,
+          updated_at: new Date(),
+        } },
+      )
+      await db.collection('jobs').updateMany({ job_code: id }, { $set: { status: previousStatus === 'ยกเลิกงาน' ? 'กำลังดำเนินการ' : previousStatus, 'cancellation.reopened_by': auth.username ?? '', 'cancellation.reopened_at': reopenedAt } })
+      emitRealtimeUpdate()
+      return NextResponse.json({ message: 'เปิดใบงานกลับมาใช้งานสำเร็จ', status: previousStatus === 'ยกเลิกงาน' ? 'กำลังดำเนินการ' : previousStatus })
+    }
+
+    if (currentProject.status === 'ยกเลิกงาน') {
+      return NextResponse.json({ message: 'ใบงานนี้ถูกยกเลิกแล้ว ไม่สามารถแก้ไขหรือดำเนินการต่อได้' }, { status: 409 })
+    }
 
     if (marker) {
       // Append atomically, retaining previous rounds and unrelated flags.
@@ -108,12 +186,7 @@ export async function PUT(
       return NextResponse.json({ flags: result.flags, marker_history: result.marker_history })
     }
 
-    const before = await db
-      .collection('projects')
-      .findOne(
-        { project_id: id },
-        { projection: { dwg_name: 1, processes: 1 } }
-      )
+    const before = currentProject
 
     const update: Record<string, unknown> = { updated_at: new Date() }
     if (processes !== undefined) update.processes = processes

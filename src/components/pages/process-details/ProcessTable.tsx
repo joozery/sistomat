@@ -127,6 +127,7 @@ export interface ProcessRow {
 interface ProcessTableProps {
   processList: ProcessRow[]
   processOptions: string[]
+  disabled?: boolean
   onChange: (index: number, field: keyof ProcessRow, value: string) => void
   onWorkerChange: (rowIndex: number, workerIndex: number, field: keyof WorkerLog, value: string) => void
   activeRowIndex?: number | null
@@ -147,19 +148,19 @@ const workerColors = [
   { header: '#fbcfe8', subHeader: '#fce7f3', cell: '#fdf2f8' },
 ]
 
-export function ProcessTable({ processList, processOptions, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
+export function ProcessTable({ processList, processOptions, disabled = false, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   const canSeeSkill = role !== 'User' && role !== 'ช่าง'
   // role "User" และ "ช่าง" ดูตารางนี้ได้อย่างเดียว แก้ไข/กดปุ่มอะไรไม่ได้เลย — สแกนบาร์โค้ดจริงยังทำงานได้ปกติ
   // เพราะไม่ได้ขึ้นกับปุ่มบนหน้าจอ (GlobalBarcodeScanner ดักที่ keystroke ไม่ใช่การคลิก)
-  const isReadOnly = role === 'User' || role === 'ช่าง'
+  const isReadOnly = disabled || role === 'User' || role === 'ช่าง'
   // ช่างต้องใช้ flow เดียวกับ Admin ได้ — คลิกช่องรหัสพนักงานเพื่อเข้าโหมดสแกน, สแกนบาร์โค้ดกรอกรหัส,
   // กด "+ เริ่ม/+ หยุด" (ซึ่งเปิด modal บังคับสแกนยืนยันตัวตนอยู่แล้ว) — จำกัดเฉพาะ role User เท่านั้นที่กดอะไรไม่ได้เลย
-  const canSelectRow = role !== 'User'
+  const canSelectRow = !disabled && role !== 'User'
   // ช่างต้องยืนยันการหยุดงานด้วยการสแกนบาร์โค้ดพนักงานเดิมเท่านั้น
   // ปุ่มหยุดบนหน้าจอสงวนไว้สำหรับ Admin/Superadmin
-  const canClickStop = role !== 'User' && role !== 'ช่าง'
+  const canClickStop = !disabled && role !== 'User' && role !== 'ช่าง'
   const [overtimeUnits, setOvertimeUnits] = useState<Record<number, OvertimeUnit>>({})
 
   return (

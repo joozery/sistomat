@@ -203,6 +203,14 @@ function StatusChip({
       </span>
     )
   }
+  if (s === 'ยกเลิกงาน') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold bg-red-100 text-red-800">
+        <XCircle className="h-2.5 w-2.5" />
+        ยกเลิกงาน
+      </span>
+    )
+  }
   if (s === 'รอรับงาน') {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700">

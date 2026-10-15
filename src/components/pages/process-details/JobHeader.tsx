@@ -37,9 +37,10 @@ interface JobHeaderProps {
   hasHold?: boolean
   activeHolds?: { process: string; reason?: string }[]
   pastHolds?: { process: string; reason?: string; round: number; held_at: string | null; released_at: string | null }[]
+  cancellation?: { reason: string; cancelled_by: string; cancelled_at: string; reopened_by?: string; reopened_at?: string }
 }
 
-export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrinted, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasReject, hasHold, markerHistory = [], activeHolds = [], pastHolds = [] }: JobHeaderProps) {
+export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrinted, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasReject, hasHold, markerHistory = [], activeHolds = [], pastHolds = [], cancellation }: JobHeaderProps) {
   const fullJobId = [id, jobNote?.trim()].filter(Boolean).join('-')
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
@@ -140,6 +141,15 @@ export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrin
                 <span className="font-bold">HOLD — {hold.process}</span>: {hold.reason || 'ไม่ได้ระบุเหตุผล'}
               </div>
             ))}
+            {cancellation && (
+              <div className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 break-words">
+                <p role="status" className="font-bold">ยกเลิกงาน: {cancellation.reason}</p>
+                <p className="text-xs mt-0.5">ผู้ยกเลิก: {cancellation.cancelled_by || '-'} · {new Date(cancellation.cancelled_at).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                {cancellation.reopened_at && (
+                  <p className="text-xs mt-0.5 text-orange-700">เปิดกลับโดย: {cancellation.reopened_by || '-'} · {new Date(cancellation.reopened_at).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                )}
+              </div>
+            )}
             {canViewHoldHistory && pastHolds.map((hold, index) => (
               <div key={index} className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 break-words whitespace-pre-wrap">
                 <span className="font-semibold">เคยมีการ Hold — {hold.process} รอบ {hold.round}</span>: {hold.reason || 'ไม่ได้ระบุเหตุผล'} <span className="text-xs">(ปลดแล้ว)</span>

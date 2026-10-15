@@ -81,6 +81,9 @@ export async function PATCH(
     const db = (await getClientPromise()).db('sistomat')
     const job = await db.collection('jobs').findOne({ job_code: code })
     if (!job) return NextResponse.json({ message: 'ไม่พบ Job' }, { status: 404 })
+    if (job.status === 'ยกเลิกงาน') {
+      return NextResponse.json({ message: 'ใบงานนี้ถูกยกเลิกแล้ว ไม่สามารถแก้ไขต่อได้' }, { status: 409 })
+    }
     const completed = Number(job.completed) || 0
     if (quantity < completed) {
       return NextResponse.json({ message: `จำนวนชิ้นงานต้องไม่น้อยกว่าจำนวนที่เสร็จแล้ว (${completed})` }, { status: 400 })
