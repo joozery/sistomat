@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { getEffectiveElapsedSeconds } from '@/lib/process-time'
 import { summarizeProjectProgress, type ProgressJob } from '@/lib/project-progress'
+import { isRowCompleted } from '@/lib/workers'
 import jwt from 'jsonwebtoken'
 import { purgeExpiredTrash } from '@/lib/trash'
 
@@ -58,16 +59,18 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const process  = searchParams.get('process')
+    const statusFilter = searchParams.get('status') ?? 'all'
     const search   = searchParams.get('search')
     const dateFrom = searchParams.get('dateFrom')
     const dateTo   = searchParams.get('dateTo')
     const pageNum  = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-    const limit    = Math.min(200, parseInt(searchParams.get('limit') ?? '50', 10))
+    const limit    = Math.min(10000, parseInt(searchParams.get('limit') ?? '50', 10))
 
     // ── Mode: filter by process name → paginated response for all-plans detail ──
     if (process) {
       const overtimeSettingDoc = await db.collection('settings').findOne({ key: 'overtime_threshold' })
       const defaultGraceMinutes = Number(overtimeSettingDoc?.grace_minutes ?? 0)
+      const shouldFilterStatus = ['on-track', 'at-risk', 'completed'].includes(statusFilter)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filter: Record<string, any> = {
         'processes.process': {
@@ -93,7 +96,10 @@ export async function GET(request: NextRequest) {
       }
       const skip = (pageNum - 1) * limit
       const [docs, total] = await Promise.all([
-        db.collection('projects').find(filter).sort({ due_date: 1, project_id: 1 }).skip(skip).limit(limit).toArray(),
+        db.collection('projects').find(filter).sort({ due_date: 1, project_id: 1 })
+          .skip(shouldFilterStatus ? 0 : skip)
+          .limit(shouldFilterStatus ? 0 : limit)
+          .toArray(),
         db.collection('projects').countDocuments(filter),
       ])
       const jobs = docs.map((p) => {
@@ -112,6 +118,11 @@ export async function GET(request: NextRequest) {
           overtimeSeconds = Math.max(0, elapsedSecs - (targetSecs + graceMinutes * 60))
         }
 
+        const completed = proc ? isRowCompleted({
+          workers: proc.workers ?? [],
+          next_confirmed_at: proc.next_confirmed_at,
+        }) : false
+
         return {
           _id: p._id.toString(),
           job_code:     p.project_id ?? '',
@@ -123,9 +134,23 @@ export async function GET(request: NextRequest) {
           elapsed_time: proc ? secondsToHMS(elapsedSecs) : '',
           overtime_seconds: overtimeSeconds,
           is_overtime: overtimeSeconds > 0,
+          completed,
         }
       })
-      return NextResponse.json({ jobs, total, page: pageNum, limit })
+      const filteredJobs = shouldFilterStatus
+        ? jobs.filter((job) => statusFilter === 'at-risk'
+          ? job.is_overtime
+          : statusFilter === 'completed'
+            ? !job.is_overtime && job.completed
+            : !job.is_overtime && !job.completed)
+        : jobs
+      const pagedJobs = shouldFilterStatus ? filteredJobs.slice(skip, skip + limit) : filteredJobs
+      return NextResponse.json({
+        jobs: pagedJobs,
+        total: shouldFilterStatus ? filteredJobs.length : total,
+        page: pageNum,
+        limit,
+      })
     }
 
     // ── Default mode: return plain array (backward compatible for process-qrcode) ──

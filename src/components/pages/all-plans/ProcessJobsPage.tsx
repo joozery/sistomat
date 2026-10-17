@@ -40,19 +40,21 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState(() => searchParams.get('from') ?? '')
   const [dateTo, setDateTo] = useState(() => searchParams.get('to') ?? '')
+  const statusFilter = searchParams.get('status') ?? 'all'
   const [page, setPage] = useState(1)
   const [jobs, setJobs] = useState<Job[]>([])
   const [total, setTotal] = useState(0)
   const [jobsLoading, setJobsLoading] = useState(true)
 
   // queries projects collection for accuracy
-  const loadJobs = useCallback(async (proc: string, q: string, from: string, to: string, pg: number) => {
+  const loadJobs = useCallback(async (proc: string, q: string, from: string, to: string, pg: number, status: string) => {
     setJobsLoading(true)
     try {
       const params = new URLSearchParams({ process: proc, page: String(pg), limit: String(PAGE_SIZE) })
       if (q)    params.set('search', q)
       if (from) params.set('dateFrom', from)
       if (to)   params.set('dateTo', to)
+      if (status !== 'all') params.set('status', status)
       const res = await fetch(`/api/projects?${params}`, { headers: { Authorization: `Bearer ${getToken()}` } })
       const json = await res.json()
       setJobs(json.jobs ?? [])
@@ -62,8 +64,8 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
   }, [])
 
   useEffect(() => {
-    loadJobs(processName, search, dateFrom, dateTo, page)
-  }, [processName, search, dateFrom, dateTo, page, loadJobs])
+    loadJobs(processName, search, dateFrom, dateTo, page, statusFilter)
+  }, [processName, search, dateFrom, dateTo, statusFilter, page, loadJobs])
 
   const goBack = () => {
     // ย้อนกลับไปหน้าภาพรวมพร้อมตัวกรองเดิม (อยู่ใน URL) ถ้าเข้ามาตรง ๆ ไม่มีประวัติให้กลับ ก็ไปหน้าภาพรวมเลย

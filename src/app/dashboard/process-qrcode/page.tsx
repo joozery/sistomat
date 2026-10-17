@@ -7,6 +7,7 @@ import { ProjectTable } from '@/components/pages/process-qrcode/ProjectTable'
 import { AddProjectDialog } from '@/components/pages/process-qrcode/AddProjectDialog'
 import { ImportExcelDialog } from '@/components/pages/process-qrcode/ImportExcelDialog'
 import { ThaiDateInput } from '@/components/ui/thai-date-input'
+import { compareNatural } from '@/lib/natural-sort'
 
 const API_URL = '/api/projects'
 const ITEMS_PER_PAGE = 10
@@ -115,7 +116,7 @@ export default function ProcessQRCodePage() {
         })
         const json = await res.json()
         const jobs: MatchedJob[] = Array.isArray(json) ? json : (json.jobs ?? [])
-        setMatchedJobs(jobs)
+        setMatchedJobs([...jobs].sort((a, b) => compareNatural(a.job_code, b.job_code)))
       } catch {
         setMatchedJobs([])
       }
@@ -151,7 +152,7 @@ export default function ProcessQRCodePage() {
     ? filtered.flatMap((project) => (project.progress?.active_jobs ?? [])
       .filter((job) => job.process === processFilter)
       .map((job) => ({ ...job, projectId: project.project_id })))
-      .sort((a, b) => a.job_code.localeCompare(b.job_code))
+      .sort((a, b) => compareNatural(a.job_code, b.job_code))
     : []
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE))
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)

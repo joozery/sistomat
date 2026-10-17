@@ -81,6 +81,7 @@ export function AllPlansOverview() {
 
   const filteredSummary = summary.filter((s) => statusFilter === 'all' || planStatus(s) === statusFilter)
   const detailQuery = new URLSearchParams()
+  if (statusFilter !== 'all') detailQuery.set('status', statusFilter)
   if (summaryDateFrom) detailQuery.set('from', summaryDateFrom)
   if (summaryDateTo) detailQuery.set('to', summaryDateTo)
   const detailQueryString = detailQuery.toString()

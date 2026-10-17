@@ -86,6 +86,8 @@ interface Job {
   sale_closed_at?: string | null
 }
 
+type ExportMode = 'edit' | 'update' | 'both'
+
 function compareJobCodes(a: string, b: string) {
   const aParts = a.split('-')
   const bParts = b.split('-')
@@ -325,6 +327,7 @@ export default function JobListPage() {
   const excelInputRef = useRef<HTMLInputElement>(null)
   const [excelBusy, setExcelBusy] = useState(false)
   const [selectedLevel2Codes, setSelectedLevel2Codes] = useState<Set<string>>(new Set())
+  const [exportMode, setExportMode] = useState<ExportMode>('both')
 
   function toggleLevel2Selection(level2Code: string) {
     setSelectedLevel2Codes((previous) => {
@@ -357,13 +360,31 @@ export default function JobListPage() {
       'วันที่รับงาน': toExcelDate(job.received_date),
       'วันที่ส่งมอบ': toExcelDate(job.due_date),
     }))
-    const worksheet = XLSX.utils.json_to_sheet(rows)
-    worksheet['!cols'] = [
+    const displayRows = selectedJobs.map((job) => ({
+      'เลข JOB': job.job_code,
+      'PROCESS': job.current_process_name || (isJobDone(job.status) ? 'เสร็จแล้ว' : '-'),
+      'สถานะ': normalizeStatus(job.status),
+      'จำนวน': job.quantity,
+    }))
+    const displayWorksheet = XLSX.utils.json_to_sheet(displayRows)
+    displayWorksheet['!cols'] = [
+      { wch: 20 }, { wch: 36 }, { wch: 20 }, { wch: 12 },
+    ]
+    const editWorksheet = XLSX.utils.json_to_sheet(rows)
+    editWorksheet['!cols'] = [
       { wch: 20 }, { wch: 32 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
     ]
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'แก้ไขข้อมูล Job')
-    XLSX.writeFile(workbook, `job-update-${parentId}.xlsx`)
+    if (exportMode === 'edit' || exportMode === 'both') {
+      const editWorkbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(editWorkbook, editWorksheet, 'แก้ไขข้อมูล Job')
+      XLSX.writeFile(editWorkbook, `แก้ไขข้อมูล-${parentId}.xlsx`)
+    }
+
+    if (exportMode === 'update' || exportMode === 'both') {
+      const updateWorkbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(updateWorkbook, displayWorksheet, 'อัพเดทงาน')
+      XLSX.writeFile(updateWorkbook, `อัพเดทงาน-${parentId}.xlsx`)
+    }
   }
 
   async function handleImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
@@ -559,15 +580,28 @@ export default function JobListPage() {
                 {selectedLevel2Codes.size === byLevel2.size ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
               </Button>
               <span className="text-xs text-gray-400 whitespace-nowrap">เลือก {selectedLevel2Codes.size}/{byLevel2.size} กลุ่ม</span>
-              <Button
-                variant="outline"
-                onClick={handleExportExcel}
-                disabled={excelBusy || selectedLevel2Codes.size === 0}
-                className="gap-2 rounded-full h-9 border-gray-200 text-gray-700 px-3 text-xs font-semibold"
-              >
-                <Download className="h-4 w-4" />
-                Export Excel
-              </Button>
+              <div className="flex items-center gap-1 rounded-full border border-gray-200 bg-white h-9 px-1">
+                <select
+                  value={exportMode}
+                  onChange={(event) => setExportMode(event.target.value as ExportMode)}
+                  disabled={excelBusy || selectedLevel2Codes.size === 0}
+                  aria-label="รูปแบบไฟล์ Export"
+                  className="h-7 rounded-full bg-transparent px-2 text-xs font-semibold text-gray-700 outline-none disabled:opacity-50"
+                >
+                  <option value="both">ทั้ง 2 ไฟล์</option>
+                  <option value="edit">แก้ไขข้อมูล</option>
+                  <option value="update">อัพเดทงาน</option>
+                </select>
+                <Button
+                  variant="ghost"
+                  onClick={handleExportExcel}
+                  disabled={excelBusy || selectedLevel2Codes.size === 0}
+                  className="h-7 gap-1 rounded-full px-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </Button>
+              </div>
               <Button
                 variant="outline"
                 onClick={() => excelInputRef.current?.click()}

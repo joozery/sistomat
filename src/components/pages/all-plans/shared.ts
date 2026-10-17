@@ -27,7 +27,8 @@ export interface Job {
   is_overtime: boolean
 }
 
-export const PAGE_SIZE = 50
+// Process detail pages show all matching jobs in one list.
+export const PAGE_SIZE = 10000
 
 export function secondsToHours(secs: number) {
   return Math.round(secs / 3600 * 10) / 10
