@@ -8,19 +8,23 @@ import { useQuotationHeader } from '@/lib/useQuotationHeader'
 
 interface Job {
   job_code: string
+  job_note?: string
   drawing_name: string
   quantity: number
   material?: string
   coating?: string
+  processes?: { process?: string; target_time?: string }[]
 }
 
 interface QuoteRow {
   job_code: string
+  job_note?: string
   drawing_name: string
   material: string
   unit: string
   quantity: number
   unit_price: number
+  processes?: JobProcess[]
   // ประเมินราคา fields
   mat_type?: string
   mat_size?: string
@@ -87,6 +91,17 @@ function calcWcPricePerPiece(processes: JobProcess[], rates: MachineRate[], quan
   if (!quantity) return 0
   const totalCost = processes.reduce((sum, p) => sum + parseTargetHours(p.target_time) * findMachineRate(p.process, rates), 0)
   return totalCost / quantity
+}
+
+function formatJobDescription(jobCode: string, drawingName: string, jobNote: string | undefined, processes: JobProcess[] | undefined): string {
+  const base = `${jobCode}${drawingName ? ` (${drawingName})` : ''}`
+  const labels: string[] = []
+  const note = jobNote?.trim()
+  const modifyFromNote = note && /\bmodify\b/i.test(note) ? note : ''
+  const modifyFromProcess = processes?.find((process) => /\bmodify\b/i.test(process.process.trim()))?.process.trim() ?? ''
+  if (modifyFromNote) labels.push(modifyFromNote)
+  if (modifyFromProcess && modifyFromProcess.toLowerCase() !== modifyFromNote.toLowerCase()) labels.push(modifyFromProcess)
+  return [base, ...labels].join(' - ')
 }
 
 // สูตร ประเมินราคา
@@ -261,11 +276,16 @@ export default function QuotationPage() {
       if (jobs.length > 0) {
         initialRows = jobs.map((j) => ({
           job_code: j.job_code,
+          job_note: j.job_note,
           drawing_name: j.drawing_name || '',
           material: j.material || j.coating || 'SUS304',
           unit: 'pc.',
           quantity: j.quantity || 1,
           unit_price: 100,
+          processes: (j.processes ?? []).map((process) => ({
+            process: process.process ?? '',
+            target_time: process.target_time ?? '',
+          })),
         }))
       } else {
         initialRows = [
@@ -826,7 +846,7 @@ export default function QuotationPage() {
                     <td style={{ border: gridBorder, padding: '1px 6px' }}>
                       {r.isReal ? (
                         <span style={{ fontSize: '10px', color: '#0f172a', fontWeight: '500' }}>
-                          {r.job_code}{r.drawing_name ? ` (${r.drawing_name})` : ''}
+                          {formatJobDescription(r.job_code, r.drawing_name, r.job_note, r.processes ?? jobProcesses[r.job_code])}
                         </span>
                       ) : (
                         '0'
@@ -1155,7 +1175,7 @@ export default function QuotationPage() {
                           <tr key={i} style={{ height: '18px' }}>
                             <td style={p2tdc()}>{r.index}</td>
                             <td style={p2td()}>
-                              {r.isReal ? <span style={{ fontSize: '8px' }}>{rr.job_code}{rr.drawing_name ? ` (${rr.drawing_name})` : ''}</span> : ''}
+                              {r.isReal ? <span style={{ fontSize: '8px' }}>{formatJobDescription(rr.job_code, rr.drawing_name, rr.job_note, rr.processes ?? jobProcesses[rr.job_code])}</span> : ''}
                             </td>
                             <td style={p2tdc()}>
                               {r.isReal

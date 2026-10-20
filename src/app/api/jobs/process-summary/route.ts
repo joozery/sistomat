@@ -34,6 +34,9 @@ interface ProcessBucket {
   job_count: number
   total_qty: number
   completed_count: number
+  on_track_count: number
+  at_risk_count: number
+  completed_status_count: number
   min_due: string | Date | null
   target_secs: number
   elapsed_secs: number
@@ -66,7 +69,9 @@ export async function GET(req: NextRequest) {
     // เทียบ string ธรรมดากับฟิลด์ที่เป็น Date ตรงๆ จะไม่ match อะไรเลยเพราะ BSON คนละ type กัน
     // เลยต้องแปลงให้เป็น Date ก่อนเทียบเสมอด้วย $expr + $convert (onError/onNull กันพังถ้าไม่มีค่า)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filter: Record<string, any> = { type: 'job' }
+    // ใช้ชุดข้อมูลเดียวกับหน้ารายละเอียดกระบวนการ เพื่อให้ยอดรวมบนการ์ด
+    // และยอดในรายการไม่หายไปจากการกรอง type ของเอกสาร
+    const filter: Record<string, any> = {}
     if (dateFrom || dateTo) {
       const dueDateAsDate = { $convert: { input: '$due_date', to: 'date', onError: null, onNull: null } }
       const conds: Record<string, unknown>[] = [{ $ne: [dueDateAsDate, null] }]
@@ -90,6 +95,7 @@ export async function GET(req: NextRequest) {
 
         if (!byProcess[name]) byProcess[name] = {
           job_count: 0, total_qty: 0, completed_count: 0, min_due: null,
+          on_track_count: 0, at_risk_count: 0, completed_status_count: 0,
           target_secs: 0, elapsed_secs: 0, overtime_secs: 0, overtime_jobs: 0,
         }
         const bucket = byProcess[name]
@@ -98,7 +104,8 @@ export async function GET(req: NextRequest) {
         bucket.total_qty += qty
         // นับเสร็จเมื่อกด CMD_NEXT แล้วและมีคนทำจริง (เริ่ม+หยุด) — CMD_REJECT ประทับ next_confirmed_at
         // ให้ทุกแถวแม้ไม่เคยเริ่ม จึงดู next_confirmed_at อย่างเดียวไม่ได้
-        if (isRowCompleted({ workers: proc.workers ?? [], next_confirmed_at: proc.next_confirmed_at })) bucket.completed_count++
+        const completed = isRowCompleted({ workers: proc.workers ?? [], next_confirmed_at: proc.next_confirmed_at })
+        if (completed) bucket.completed_count++
         if (p.due_date && (!bucket.min_due || new Date(p.due_date) < new Date(bucket.min_due))) {
           bucket.min_due = p.due_date
         }
@@ -108,6 +115,7 @@ export async function GET(req: NextRequest) {
         bucket.target_secs += targetSecs
         bucket.elapsed_secs += elapsedSecs
 
+        let isOvertime = false
         if (targetSecs > 0) {
           const graceMinutes = String(proc.overtime_grace ?? '').trim()
             ? Number(proc.overtime_grace) || 0
@@ -116,8 +124,14 @@ export async function GET(req: NextRequest) {
           if (overtimeSecs > 0) {
             bucket.overtime_secs += overtimeSecs
             bucket.overtime_jobs++
+            isOvertime = true
           }
         }
+
+        // สถานะเป็นแบบแบ่งกลุ่มไม่ซ้ำกัน: เสร็จแล้ว > ล่าช้า > ปกติ
+        if (completed) bucket.completed_status_count++
+        else if (isOvertime) bucket.at_risk_count++
+        else bucket.on_track_count++
       }
     }
 
@@ -127,6 +141,9 @@ export async function GET(req: NextRequest) {
         job_count: b.job_count,
         total_qty: b.total_qty,
         completed_count: b.completed_count,
+        on_track_count: b.on_track_count,
+        at_risk_count: b.at_risk_count,
+        completed_status_count: b.completed_status_count,
         min_due: b.min_due,
         target_hours: Math.round(b.target_secs / 3600 * 10) / 10,
         elapsed_hours: Math.round(b.elapsed_secs / 3600 * 10) / 10,

@@ -6,6 +6,9 @@ export interface ProcessSummary {
   job_count: number
   total_qty: number
   completed_count: number
+  on_track_count: number
+  at_risk_count: number
+  completed_status_count: number
   min_due: string
   target_hours: number
   elapsed_hours: number

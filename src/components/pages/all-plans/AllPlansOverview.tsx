@@ -79,7 +79,15 @@ export function AllPlansOverview() {
       .finally(() => setSummaryLoading(false))
   }, [summaryDateFrom, summaryDateTo])
 
-  const filteredSummary = summary.filter((s) => statusFilter === 'all' || planStatus(s) === statusFilter)
+  const statusCount = (s: ProcessSummary) => statusFilter === 'completed'
+    ? s.completed_status_count
+    : statusFilter === 'at-risk'
+      ? s.at_risk_count
+      : statusFilter === 'on-track'
+        ? s.on_track_count
+        : s.job_count
+
+  const filteredSummary = summary.filter((s) => statusFilter === 'all' || statusCount(s) > 0)
   const detailQuery = new URLSearchParams()
   if (statusFilter !== 'all') detailQuery.set('status', statusFilter)
   if (summaryDateFrom) detailQuery.set('from', summaryDateFrom)
@@ -87,10 +95,10 @@ export function AllPlansOverview() {
   const detailQueryString = detailQuery.toString()
 
   const allStats = [
-    { key: 'all',       label: 'กระบวนการทั้งหมด', value: summary.length,                                              icon: LayoutGrid,   color: 'text-gray-700',    bg: 'bg-gray-100'    },
-    { key: 'on-track',  label: 'กำลังดำเนินการ',    value: summary.filter((s) => planStatus(s) === 'on-track').length,  icon: Clock,        color: 'text-blue-700',    bg: 'bg-blue-50'     },
-    { key: 'at-risk',   label: 'ล่าช้า',             value: summary.filter((s) => planStatus(s) === 'at-risk').length,   icon: AlertCircle,  color: 'text-amber-700',   bg: 'bg-amber-50'    },
-    { key: 'completed', label: 'เสร็จแล้ว',         value: summary.filter((s) => planStatus(s) === 'completed').length,  icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-50'  },
+    { key: 'all',       label: 'ขั้นตอนทั้งหมด', value: summary.reduce((n, s) => n + s.job_count, 0),              icon: LayoutGrid,   color: 'text-gray-700',    bg: 'bg-gray-100'    },
+    { key: 'on-track',  label: 'ปกติ',          value: summary.reduce((n, s) => n + s.on_track_count, 0),          icon: Clock,        color: 'text-blue-700',    bg: 'bg-blue-50'     },
+    { key: 'at-risk',   label: 'ล่าช้า',         value: summary.reduce((n, s) => n + s.at_risk_count, 0),           icon: AlertCircle,  color: 'text-amber-700',   bg: 'bg-amber-50'    },
+    { key: 'completed', label: 'เสร็จแล้ว',      value: summary.reduce((n, s) => n + s.completed_status_count, 0), icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-50'  },
   ]
   const stats = isTechnician
     ? allStats.filter((s) => s.key === 'all' || s.key === 'completed')
@@ -178,7 +186,8 @@ export function AllPlansOverview() {
             {filteredSummary.map((s) => {
               const c = colorFor(s.process)
               const pct = s.job_count > 0 ? Math.round((s.completed_count / s.job_count) * 100) : 0
-              const currentStatus = planStatus(s)
+              const visibleCount = statusCount(s)
+              const currentStatus = statusFilter === 'all' ? planStatus(s) : statusFilter
               const stCfg = STATUS_CONFIG[currentStatus]
               const showBadge = !isTechnician || currentStatus === 'completed'
 
@@ -199,7 +208,7 @@ export function AllPlansOverview() {
                           {s.process}
                         </span>
                         <p className="mt-1.5 text-sm font-semibold text-gray-700">
-                          {s.job_count.toLocaleString()} ขั้นตอน · {s.total_qty.toLocaleString()} ชิ้น
+                          {visibleCount.toLocaleString()} รายการ · {s.total_qty.toLocaleString()} ชิ้นรวม
                         </p>
                       </div>
                       {showBadge && (

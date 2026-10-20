@@ -35,6 +35,7 @@ import {
   LockKeyhole,
   Download,
   Upload,
+  Power,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { EditJobDialog } from '@/components/pages/job-list/EditJobDialog'
@@ -43,6 +44,7 @@ import { FilePreviewDialog } from '@/components/pages/process-qrcode/FilePreview
 import { PrintJobSheet } from '@/components/pages/process-details/PrintJobSheet'
 import type { ProcessRow } from '@/components/pages/process-details/ProcessTable'
 import { useCurrentUser } from '@/lib/useCurrentUser'
+import { CancelJobDialog } from '@/components/pages/job-list/CancelJobDialog'
 
 interface ProcessEntry {
   process: string
@@ -303,6 +305,7 @@ export default function JobListPage() {
   const isReadOnly = role === 'User' || role === 'ช่าง'
   const normalizedRole = role.trim().toLowerCase()
   const canCloseSale = normalizedRole === 'superadmin'
+  const canManageCancellation = normalizedRole === 'superadmin'
   // ช่างต้องเปิดดูไฟล์ PDF/3D ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
   const canViewFile = role !== 'User'
   const [jobs, setJobs] = useState<Job[]>([])
@@ -320,6 +323,9 @@ export default function JobListPage() {
   const [closeSaleMode, setCloseSaleMode] = useState<'close' | 'reopen'>('close')
   const [closingSale, setClosingSale] = useState(false)
   const [closeSaleError, setCloseSaleError] = useState('')
+  const [cancelTarget, setCancelTarget] = useState<Job | null>(null)
+  const [cancelSaving, setCancelSaving] = useState(false)
+  const [cancelError, setCancelError] = useState('')
   const [printingGroup, setPrintingGroup] = useState<string | null>(null)
   const [printError, setPrintError] = useState('')
   const [printJobs, setPrintJobs] = useState<PrintableJob[]>([])
@@ -492,6 +498,49 @@ export default function JobListPage() {
       setCloseSaleError(error instanceof Error ? error.message : 'ปิดการขายไม่สำเร็จ')
     } finally {
       setClosingSale(false)
+    }
+  }
+
+  async function handleCancelJob(reason: string) {
+    if (!cancelTarget || cancelSaving) return
+    setCancelSaving(true)
+    setCancelError('')
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(cancelTarget.job_code)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+        body: JSON.stringify({ cancel_job: { reason } }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'ยกเลิกใบงานไม่สำเร็จ')
+      setCancelTarget(null)
+      await loadJobs()
+    } catch (error: unknown) {
+      setCancelError(error instanceof Error ? error.message : 'ยกเลิกใบงานไม่สำเร็จ')
+    } finally {
+      setCancelSaving(false)
+    }
+  }
+
+  async function toggleJobCancellation(job: Job) {
+    if (!canManageCancellation) return
+    if (job.status !== 'ยกเลิกงาน') {
+      setCancelError('')
+      setCancelTarget(job)
+      return
+    }
+    if (!window.confirm(`ต้องการเปิด Job ${job.job_code} กลับมาใช้งานหรือไม่? ประวัติการยกเลิกจะยังคงอยู่`)) return
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(job.job_code)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+        body: JSON.stringify({ reopen_cancel: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || 'เปิดใบงานกลับมาไม่สำเร็จ')
+      await loadJobs()
+    } catch (error: unknown) {
+      window.alert(error instanceof Error ? error.message : 'เปิดใบงานกลับมาไม่สำเร็จ')
     }
   }
 
@@ -833,7 +882,7 @@ export default function JobListPage() {
                         </div>
 
                         {/* Action */}
-                        <div className="flex items-center justify-end gap-1.5 overflow-hidden">
+                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                           {saleClosed ? (
                             canCloseSale ? (
                               <Button
@@ -886,6 +935,16 @@ export default function JobListPage() {
                           {singleJob ? (
                             <>
                               {/* No BU → link directly to process-details */}
+                              {canManageCancellation && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => void toggleJobCancellation(singleJob)}
+                                  className={`h-8 rounded-full text-xs font-semibold gap-1 shrink-0 ${singleJob.status === 'ยกเลิกงาน' ? 'text-emerald-700 hover:bg-emerald-50' : 'text-red-700 hover:bg-red-50'}`}
+                                >
+                                  <Power className="h-3.5 w-3.5" /> {singleJob.status === 'ยกเลิกงาน' ? 'เปิดงาน' : 'ปิดงาน'}
+                                </Button>
+                              )}
                               {!isReadOnly && (
                                 <Button size="sm" variant="ghost" onClick={() => setEditJob(singleJob)}
                                   className="h-8 rounded-full text-gray-500 hover:bg-gray-100 text-xs gap-1 shrink-0">
@@ -1043,6 +1102,16 @@ export default function JobListPage() {
                               </div>
                               {/* จัดการ */}
                               <div className="flex items-center justify-end gap-1">
+                                {canManageCancellation && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => void toggleJobCancellation(job)}
+                                    className={`h-7 rounded-full text-[11px] font-semibold gap-1 px-2 shrink-0 ${job.status === 'ยกเลิกงาน' ? 'text-emerald-700 hover:bg-emerald-50' : 'text-red-700 hover:bg-red-50'}`}
+                                  >
+                                    <Power className="h-3 w-3" /> {job.status === 'ยกเลิกงาน' ? 'เปิดงาน' : 'ปิดงาน'}
+                                  </Button>
+                                )}
                                 {!isReadOnly && (
                                   <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
                                     className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2 shrink-0">
@@ -1180,6 +1249,16 @@ export default function JobListPage() {
                               </div>
                               {/* จัดการ */}
                               <div className="flex items-center justify-end gap-1">
+                                {canManageCancellation && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => void toggleJobCancellation(job)}
+                                    className={`h-7 rounded-full text-[11px] font-semibold gap-1 px-2 shrink-0 ${job.status === 'ยกเลิกงาน' ? 'text-emerald-700 hover:bg-emerald-50' : 'text-red-700 hover:bg-red-50'}`}
+                                  >
+                                    <Power className="h-3 w-3" /> {job.status === 'ยกเลิกงาน' ? 'เปิดงาน' : 'ปิดงาน'}
+                                  </Button>
+                                )}
                                 {!isReadOnly && (
                                   <Button size="sm" variant="ghost" onClick={() => setEditJob(job)}
                                     className="h-7 rounded-full text-gray-500 hover:bg-gray-100 text-[11px] gap-1 px-2 shrink-0">
@@ -1251,6 +1330,17 @@ export default function JobListPage() {
           fileUrl={preview.url}
           fileName={preview.name}
           attachments={preview.attachments}
+        />
+      )}
+
+      {cancelTarget && (
+        <CancelJobDialog
+          jobCode={cancelTarget.job_code}
+          open={Boolean(cancelTarget)}
+          saving={cancelSaving}
+          error={cancelError}
+          onCancel={() => { if (!cancelSaving) { setCancelTarget(null); setCancelError('') } }}
+          onConfirm={(reason) => void handleCancelJob(reason)}
         />
       )}
 

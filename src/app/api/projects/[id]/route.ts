@@ -99,7 +99,7 @@ export async function PUT(
     }
 
     const normalizedRole = String(auth.role ?? '').trim().toLowerCase()
-    const canManageCancellation = ['admin', 'administrator', 'superadmin'].includes(normalizedRole)
+    const canManageCancellation = normalizedRole === 'superadmin'
 
     if (cancelJob !== undefined) {
       if (!canManageCancellation) return NextResponse.json({ message: 'ไม่มีสิทธิ์ยกเลิกใบงานทั้งใบ' }, { status: 403 })

@@ -95,19 +95,18 @@ export async function GET(request: NextRequest) {
         filter.$expr = { $and: conds }
       }
       const skip = (pageNum - 1) * limit
-      const [docs, total] = await Promise.all([
-        db.collection('projects').find(filter).sort({ due_date: 1, project_id: 1 })
-          .skip(shouldFilterStatus ? 0 : skip)
-          .limit(shouldFilterStatus ? 0 : limit)
-          .toArray(),
-        db.collection('projects').countDocuments(filter),
-      ])
-      const jobs = docs.map((p) => {
-        // หา process instance ที่ตรงกับตัวที่กรอง (เผื่อกรณี job เดียวมีกระบวนการซ้ำชื่อกันหลายแถว ใช้ตัวแรกที่เจอ)
+      // ดึงเอกสารทั้งหมดก่อน แล้วแตกเป็น 1 รายการต่อ 1 Process row
+      // เพราะใบงานเดียวอาจมี Process ชื่อเดียวกันหลายแถว
+      const docs = await db.collection('projects').find(filter)
+        .sort({ due_date: 1, project_id: 1 })
+        .toArray()
+      const jobs = docs.flatMap((p) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const proc = (p.processes ?? []).find((pr: any) =>
+        const matchingProcesses = (p.processes ?? []).filter((pr: any) =>
           (pr.process ?? '').trim().toLowerCase() === process.trim().toLowerCase()
         )
+
+        return matchingProcesses.map((proc: any, processIndex: number) => {
         const targetSecs = parseTargetSeconds(proc?.target_time)
         const elapsedSecs = proc ? getEffectiveElapsedSeconds(proc) : 0
         let overtimeSeconds = 0
@@ -124,7 +123,7 @@ export async function GET(request: NextRequest) {
         }) : false
 
         return {
-          _id: p._id.toString(),
+          _id: `${p._id.toString()}-${processIndex}`,
           job_code:     p.project_id ?? '',
           drawing_name: p.dwg_name   ?? '',
           quantity:     p.quantity   ?? 1,
@@ -136,18 +135,19 @@ export async function GET(request: NextRequest) {
           is_overtime: overtimeSeconds > 0,
           completed,
         }
+        })
       })
       const filteredJobs = shouldFilterStatus
-        ? jobs.filter((job) => statusFilter === 'at-risk'
-          ? job.is_overtime
-          : statusFilter === 'completed'
-            ? !job.is_overtime && job.completed
-            : !job.is_overtime && !job.completed)
+        ? jobs.filter((job) => statusFilter === 'completed'
+          ? job.completed
+          : statusFilter === 'at-risk'
+            ? !job.completed && job.is_overtime
+            : !job.completed && !job.is_overtime)
         : jobs
-      const pagedJobs = shouldFilterStatus ? filteredJobs.slice(skip, skip + limit) : filteredJobs
+      const pagedJobs = filteredJobs.slice(skip, skip + limit)
       return NextResponse.json({
         jobs: pagedJobs,
-        total: shouldFilterStatus ? filteredJobs.length : total,
+        total: filteredJobs.length,
         page: pageNum,
         limit,
       })

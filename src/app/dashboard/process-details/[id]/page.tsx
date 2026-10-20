@@ -129,7 +129,7 @@ const COMMAND_BARCODES: CommandBarcodeSpec[] = [
 
 // ปกติโชว์การ์ดเหล่านี้ — พอสแกน FN_GOOD แล้วจะสลับไปโชว์ ACPT_FN / CANCEL_FN แทนชั่วคราว (ดู awaitingFinishDecision)
 const PAGE_COMMAND_BARCODES = COMMAND_BARCODES.filter(
-  (c) => c.value !== 'ACPT_FN' && c.value !== 'CANCEL_FN'
+  (c) => c.value !== 'ACPT_FN' && c.value !== 'CANCEL_FN' && c.value !== 'CANCEL_JOB'
 )
 const FINISH_DECISION_BARCODES = COMMAND_BARCODES.filter(
   (c) => c.value === 'ACPT_FN' || c.value === 'CANCEL_FN'
@@ -1098,6 +1098,12 @@ export default function ProcessDetailsPage() {
 
       if (rawUpper === 'CANCEL_JOB') {
         e.preventDefault()
+        showToast('warning', 'การยกเลิกใบงานย้ายไปที่หน้า Job List แล้ว', 'ให้ Superadmin เปิด/ปิดจาก Job ย่อยที่ต้องการ')
+        return
+      }
+
+      if (rawUpper === 'CANCEL_JOB_LEGACY_DISABLED') {
+        e.preventDefault()
         const normalizedRole = role.trim().toLowerCase()
         if (!['admin', 'administrator', 'superadmin'].includes(normalizedRole)) {
           showToast('error', 'ไม่มีสิทธิ์ยกเลิกใบงานทั้งใบ', 'ให้ Admin หรือ Superadmin ดำเนินการ')
@@ -1658,13 +1664,6 @@ export default function ProcessDetailsPage() {
   return (
     <>
     <ScanToast toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
-    {cancelDialogOpen && (
-      <CancelJobModal
-        saving={cancelSaving}
-        onCancel={() => { if (!cancelSaving) setCancelDialogOpen(false) }}
-        onConfirm={(reason) => void cancelJob(reason)}
-      />
-    )}
     {holdTarget && (
       <HoldReasonDialog
         processName={holdTarget.process}
@@ -1742,17 +1741,6 @@ export default function ProcessDetailsPage() {
         </Button>
 
         <div className="flex items-center gap-3">
-          {project.status === 'ยกเลิกงาน' && role === 'superadmin' && (
-            <Button
-              variant="outline"
-              onClick={() => void reopenCancellation()}
-              disabled={reopeningCancellation}
-              className="h-8 gap-1.5 rounded-full border-red-200 px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
-            >
-              {reopeningCancellation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-              เปิดใบงานกลับ
-            </Button>
-          )}
           {saveState === 'success' && (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold animate-in fade-in-0">
               <CheckCircle2 className="h-4 w-4" />
