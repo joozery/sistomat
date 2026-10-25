@@ -45,7 +45,9 @@ export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrin
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   // ช่างต้องเปิดดูไฟล์ PDF/3D, QR/บาร์โค้ดใบงาน และใบงาน QC ได้ (ต้องใช้แบบงานจริง) — จำกัดเฉพาะ role User เท่านั้นที่เปิดไม่ได้
-  const canViewFile = role !== 'User'
+  // User เปิดดูไฟล์ PDF/3D ได้ แต่ยังไม่เห็นชุด QR/Barcode และสิทธิ์ QC
+  const canViewFile = true
+  const canViewCodes = role !== 'User'
   const codeRef = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<'qr' | 'barcode'>('qr')
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -216,19 +218,19 @@ export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrin
                     <p className="text-[10px] text-gray-400 group-hover:text-[#7B1A1A] transition-colors font-medium">คลิกเพื่อดูเต็มจอ (PDF/3D)</p>
                   </div>
                 </div>
-                <Link
+                {canViewCodes && <Link
                   href={`/dashboard/process-details/${id}/qc`}
                   className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors shrink-0"
                 >
                   <ClipboardCheck className="h-3 w-3" />
                   ดูใบงาน QC
-                </Link>
+                </Link>}
               </div>
             )}
           </div>
 
           {/* Code display + toggle + Download — ช่างต้องเห็น/โหลด QR-บาร์โค้ดใบงานได้ */}
-          {canViewFile && (
+          {canViewCodes && (
           <div className="flex flex-col items-center gap-2">
             {/* Toggle */}
             <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-full">
