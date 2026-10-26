@@ -16,7 +16,7 @@ function formatThaiDate(value: string) {
 
 export function ThaiDateInput({ value, onChange, className, placeholder, ...props }: ThaiDateInputProps) {
   return (
-    <div className="relative cursor-pointer">
+    <label className="relative block cursor-pointer">
       <Calendar className="pointer-events-none absolute left-3 top-1/2 z-20 h-4 w-4 -translate-y-1/2 text-gray-400" />
       <div className={`${className ?? ''} pointer-events-none flex items-center pl-9`}>
         {value ? formatThaiDate(value) : (placeholder ?? 'วว/ดด/ปปปป')}
@@ -27,8 +27,15 @@ export function ThaiDateInput({ value, onChange, className, placeholder, ...prop
         value={value}
         onChange={onChange}
         aria-label={placeholder ?? 'เลือกวันที่'}
-        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+        onClick={(event) => {
+          try {
+            event.currentTarget.showPicker?.()
+          } catch {
+            // Browsers without showPicker() open the native picker normally.
+          }
+        }}
+        className="absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
       />
-    </div>
+    </label>
   )
 }
