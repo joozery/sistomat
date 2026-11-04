@@ -33,6 +33,41 @@ function jobStatusClass(status: string, isOvertime: boolean) {
   }
 }
 
+function processStatusClass(completed: boolean, inProgress: boolean) {
+  if (completed) return 'bg-emerald-50 text-emerald-700'
+  if (inProgress) return 'bg-blue-50 text-blue-700'
+  return 'bg-amber-50 text-amber-700'
+}
+
+function processStatusLabel(completed: boolean, inProgress: boolean) {
+  if (completed) return 'เสร็จแล้ว'
+  if (inProgress) return 'กำลังดำเนินการ'
+  return 'รอดำเนินการ'
+}
+
+function qcProcessStatus(status: string, completed: boolean, inProgress: boolean) {
+  const normalized = status.trim()
+  if (completed) {
+    if (normalized === 'รับงาน' || normalized === 'ไม่รับงาน') return normalized
+    return 'รอรับงาน'
+  }
+  if (inProgress) return 'กำลังดำเนินการ'
+  return 'รอดำเนินการ'
+}
+
+function displayedStatusClass(label: string) {
+  if (label === 'เสร็จแล้ว' || label === 'รับงาน') return 'bg-emerald-50 text-emerald-700'
+  if (label === 'ไม่รับงาน') return 'bg-red-50 text-red-700'
+  if (label === 'กำลังดำเนินการ') return 'bg-blue-50 text-blue-700'
+  return 'bg-amber-50 text-amber-700'
+}
+
+function displayedProcessStatus(status: string, completed: boolean, inProgress: boolean, isQc: boolean) {
+  return isQc
+    ? qcProcessStatus(status, completed, inProgress)
+    : processStatusLabel(completed, inProgress)
+}
+
 export function ProcessJobsPage({ processName }: { processName: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -41,6 +76,7 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
   const [dateFrom, setDateFrom] = useState(() => searchParams.get('from') ?? '')
   const [dateTo, setDateTo] = useState(() => searchParams.get('to') ?? '')
   const statusFilter = searchParams.get('status') ?? 'all'
+  const [processStatusFilter, setProcessStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
   const [jobs, setJobs] = useState<Job[]>([])
   const [total, setTotal] = useState(0)
@@ -75,6 +111,14 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const c = colorFor(processName)
+  const isQc = processName.trim().toUpperCase() === 'QC'
+  const statusOptions = isQc
+    ? ['รอดำเนินการ', 'กำลังดำเนินการ', 'รอรับงาน', 'รับงาน', 'ไม่รับงาน']
+    : ['รอดำเนินการ', 'กำลังดำเนินการ', 'เสร็จแล้ว']
+  const visibleJobs = jobs.filter((job) => {
+    if (processStatusFilter === 'all') return true
+    return displayedProcessStatus(job.status, job.completed, Boolean(job.in_progress), isQc) === processStatusFilter
+  })
 
   return (
     <div className="space-y-6 font-sans">
@@ -114,8 +158,17 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
               className="w-full min-w-0 pr-2 h-9 rounded-full border border-gray-200 text-xs sm:text-sm text-gray-700 bg-white focus:outline-none focus:border-[#7B1A1A] transition-all" />
           </div>
         </div>
-        {(search || dateFrom || dateTo) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setPage(1) }}
+        <select
+          value={processStatusFilter}
+          onChange={(event) => setProcessStatusFilter(event.target.value)}
+          className="h-9 rounded-full border border-gray-200 bg-white px-3 text-xs text-gray-700 outline-none focus:border-[#7B1A1A]"
+          aria-label="กรองสถานะ Process"
+        >
+          <option value="all">สถานะ: ทุกสถานะ</option>
+          {statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+        {(search || dateFrom || dateTo || processStatusFilter !== 'all') && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setProcessStatusFilter('all'); setPage(1) }}
             className="shrink-0 h-9 rounded-full text-gray-500 hover:text-[#7B1A1A] hover:bg-red-50 gap-1.5 text-xs">
             <X className="h-3.5 w-3.5" /> ล้าง
           </Button>
@@ -126,7 +179,7 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-100 bg-gray-50/60">
           <span className="text-sm font-semibold text-gray-600">
-            {jobsLoading ? '...' : total.toLocaleString()} รายการ
+            {jobsLoading ? '...' : visibleJobs.length.toLocaleString()} รายการ
           </span>
           {jobsLoading && <Loader2 className="h-4 w-4 animate-spin text-gray-300" />}
         </div>
@@ -135,7 +188,7 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
           <div className="flex justify-center items-center py-16">
             <Loader2 className="h-7 w-7 animate-spin text-[#7B1A1A]" />
           </div>
-        ) : jobs.length === 0 ? (
+        ) : visibleJobs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-gray-400">
             <Box className="h-8 w-8 opacity-30" />
             <p className="text-sm">ไม่พบรายการงาน</p>
@@ -147,9 +200,10 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
               <span className="text-center">จำนวน</span><span>เวลา (ตั้ง/ใช้จริง)</span><span>กำหนดส่ง</span><span>สถานะ</span><span></span>
             </div>
             <div className="divide-y divide-gray-50">
-              {jobs.map((job, idx) => {
+              {visibleJobs.map((job, idx) => {
                 // สถานะล่าช้าอิง overtime โดยไม่อิงวันที่กำหนดส่ง
                 const late = job.is_overtime
+                const displayedStatus = displayedProcessStatus(job.status, job.completed, Boolean(job.in_progress), isQc)
                 // มือถือ: flex-wrap เรียงด้วย order (บรรทัด 1 รหัส+สถานะ, 2 ชื่อแบบ, 3 รายละเอียด+ปุ่ม) / md ขึ้นไป: grid 7 คอลัมน์
                 return (
                   <div key={`${job.job_code}-${idx}`}
@@ -178,7 +232,9 @@ export function ProcessJobsPage({ processName }: { processName: string }) {
                     <span className={`order-6 md:order-none text-[11px] font-medium whitespace-nowrap ${late ? 'text-red-500' : 'text-gray-500'}`}>
                       {formatDateShort(job.due_date)}
                     </span>
-                    <span className={`order-2 md:order-none text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${jobStatusClass(job.status, late)}`}>{job.status || '-'}</span>
+                    <span className={`order-2 md:order-none text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${isQc ? displayedStatusClass(displayedStatus) : processStatusClass(job.completed, Boolean(job.in_progress))}`}>
+                      {displayedStatus}
+                    </span>
                     <Button size="sm" variant="ghost"
                       onClick={() => router.push(`/dashboard/process-details/${encodeURIComponent(job.job_code)}`)}
                       className="order-7 ml-auto md:order-none md:ml-0 h-7 rounded-full text-[#7B1A1A] hover:bg-red-50 text-[11px] font-semibold gap-1 px-2.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">

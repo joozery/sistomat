@@ -28,6 +28,8 @@ export interface Job {
   elapsed_time: string
   overtime_seconds: number
   is_overtime: boolean
+  completed: boolean
+  in_progress?: boolean
 }
 
 // Process detail pages show all matching jobs in one list.

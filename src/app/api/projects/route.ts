@@ -121,6 +121,9 @@ export async function GET(request: NextRequest) {
           workers: proc.workers ?? [],
           next_confirmed_at: proc.next_confirmed_at,
         }) : false
+        const inProgress = !completed && Boolean(proc?.workers?.some((worker: { worker_id?: string; start_time?: string; stop_time?: string }) =>
+          worker.worker_id && worker.start_time && !worker.stop_time
+        ))
 
         return {
           _id: `${p._id.toString()}-${processIndex}`,
@@ -134,6 +137,7 @@ export async function GET(request: NextRequest) {
           overtime_seconds: overtimeSeconds,
           is_overtime: overtimeSeconds > 0,
           completed,
+          in_progress: inProgress,
         }
         })
       })
