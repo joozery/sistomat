@@ -25,6 +25,11 @@ export interface ProgressJob {
   processes?: ProgressProcess[]
 }
 
+export function isClosedJobStatus(status?: string): boolean {
+  const normalized = (status ?? '').trim()
+  return normalized === 'ยกเลิกงาน' || normalized === 'ยกเลิก'
+}
+
 export interface ProjectProgress {
   status: 'none' | 'not_started' | 'in_progress' | 'done'
   current_step: string   // ขั้นตอนที่พบมากสุดในใบงานที่กำลังทำอยู่ ('' ถ้าไม่มี)
@@ -54,7 +59,9 @@ export function summarizeProjectProgress(
   const activeJobs: ProjectProgress['active_jobs'] = []
 
   for (const job of jobs) {
-    if (job.status === 'ยกเลิก') continue  // งานที่ถูก REJECT ไม่นับเป็นงานที่ทำอยู่/เสร็จ
+    // งานที่ปิด/ยกเลิกแล้วไม่นับเป็นงานที่ทำอยู่หรือรอเพิ่ม Process
+    // ปุ่ม "ปิดงาน" บันทึกสถานะเป็น "ยกเลิกงาน" ส่วนข้อมูลเก่าบางรายการใช้ "ยกเลิก"
+    if (isClosedJobStatus(job.status)) continue
 
     const processes = job.processes ?? []
     const validProcesses = processes.filter((p) => p && typeof p.process === 'string' && p.process.trim().length > 0)

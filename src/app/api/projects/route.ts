@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { getEffectiveElapsedSeconds } from '@/lib/process-time'
-import { summarizeProjectProgress, type ProgressJob } from '@/lib/project-progress'
+import { isClosedJobStatus, summarizeProjectProgress, type ProgressJob } from '@/lib/project-progress'
 import { isRowCompleted } from '@/lib/workers'
 import jwt from 'jsonwebtoken'
 import { purgeExpiredTrash } from '@/lib/trash'
@@ -97,9 +97,9 @@ export async function GET(request: NextRequest) {
       const skip = (pageNum - 1) * limit
       // ดึงเอกสารทั้งหมดก่อน แล้วแตกเป็น 1 รายการต่อ 1 Process row
       // เพราะใบงานเดียวอาจมี Process ชื่อเดียวกันหลายแถว
-      const docs = await db.collection('projects').find(filter)
+      const docs = (await db.collection('projects').find(filter)
         .sort({ due_date: 1, project_id: 1 })
-        .toArray()
+        .toArray()).filter((p) => !isClosedJobStatus(String(p.status ?? '')))
       const jobs = docs.flatMap((p) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matchingProcesses = (p.processes ?? []).filter((pr: any) =>

@@ -8,6 +8,43 @@ interface ProcessTimeData {
   workers?: ProcessWorkerTime[]
 }
 
+function parseWorkerTimeForDate(value: string, date: string): number {
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return new Date(value.replace(' ', 'T')).getTime()
+  }
+  return new Date(`${date}T${value}`).getTime()
+}
+
+export function getElapsedSecondsForDateRange(
+  process: ProcessTimeData,
+  fromDate?: string | null,
+  toDate?: string | null,
+  nowMs = Date.now(),
+): number {
+  const anchorDate = fromDate || toDate
+  if (!anchorDate) return getEffectiveElapsedSeconds(process, nowMs)
+
+  const rangeStart = fromDate
+    ? new Date(`${fromDate}T00:00:00`).getTime()
+    : Number.NEGATIVE_INFINITY
+  const rangeEnd = toDate
+    ? new Date(`${toDate}T23:59:59.999`).getTime()
+    : Number.POSITIVE_INFINITY
+  let totalSeconds = 0
+
+  for (const worker of process.workers ?? []) {
+    if (!worker.start_time) continue
+    const start = parseWorkerTimeForDate(worker.start_time, anchorDate)
+    const end = worker.stop_time ? parseWorkerTimeForDate(worker.stop_time, anchorDate) : nowMs
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) continue
+    const overlapStart = Math.max(start, rangeStart)
+    const overlapEnd = Math.min(end, rangeEnd)
+    if (overlapEnd > overlapStart) totalSeconds += Math.floor((overlapEnd - overlapStart) / 1000)
+  }
+
+  return totalSeconds
+}
+
 export function parseElapsedSeconds(value = ''): number {
   if (!value || value === '00:00:00' || value === '00:00') return 0
   const parts = value.split(':').map(Number)

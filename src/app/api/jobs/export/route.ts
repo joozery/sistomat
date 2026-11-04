@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
+import { getElapsedSecondsForDateRange } from '@/lib/process-time'
 import jwt from 'jsonwebtoken'
 
 function getToken(req: NextRequest): string | null {
@@ -43,8 +44,17 @@ interface WorkerDoc {
   name: string
 }
 
+function secondsToHMS(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds))
+  const hours = Math.floor(safe / 3600)
+  const minutes = Math.floor((safe % 3600) / 60)
+  const seconds = safe % 60
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
 export interface ExportRow {
   job_code: string
+  base_job_code: string
   job_note?: string
   dwg_name: string
   sender: string
@@ -96,7 +106,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
-  const dateField = searchParams.get('dateField') === 'due' ? 'due_date' : 'received_date'
+  const dateFieldParam = searchParams.get('dateField')
+  const isWorkDateFilter = dateFieldParam === 'worked'
+  const dateField = dateFieldParam === 'due' ? 'due_date' : 'received_date'
   const job = searchParams.get('job')?.trim()
   const status = searchParams.get('status')
   const processFilter = searchParams.get('process')
@@ -107,7 +119,7 @@ export async function GET(req: NextRequest) {
     const db = client.db('sistomat')
 
     const match: Record<string, unknown> = { processes: { $exists: true, $ne: [] } }
-    if (from || to) {
+    if ((from || to) && !isWorkDateFilter) {
       const dateAsDate = { $convert: { input: `$${dateField}`, to: 'date', onError: null, onNull: null } }
       const dateConditions: Record<string, unknown>[] = [{ $ne: [dateAsDate, null] }]
       if (from) dateConditions.push({ $gte: [dateAsDate, new Date(`${from}T00:00:00.000Z`)] })
@@ -172,11 +184,16 @@ export async function GET(req: NextRequest) {
       procs.forEach((row, i) => {
         if (processFilter && row.process !== processFilter) return
         if (workerFilter && !(row.workers ?? []).some((w) => String(w.worker_id) === workerFilter)) return
+        const workedSeconds = isWorkDateFilter
+          ? getElapsedSecondsForDateRange(row, from, to)
+          : 0
+        if (isWorkDateFilter && (from || to) && workedSeconds <= 0) return
         const workerNames = (row.workers ?? [])
           .filter((w) => w.worker_id)
           .map((w) => nameByCode.get(String(w.worker_id)) ?? `#${w.worker_id}`)
         rows.push({
           job_code: fullJobCode,
+          base_job_code: p.project_id,
           job_note: note,
           dwg_name: p.dwg_name ?? '',
           sender: p.sender ?? '',
@@ -188,7 +205,9 @@ export async function GET(req: NextRequest) {
           process: row.process ?? '',
           target_time: row.target_time ?? '',
           skill: row.skill ?? '',
-          elapsed_time: row.elapsed_time ?? '',
+          elapsed_time: isWorkDateFilter && (from || to)
+            ? secondsToHMS(workedSeconds)
+            : row.elapsed_time ?? '',
           damage_cost: Number.isFinite(Number(row.damage_cost)) ? Math.max(0, Number(row.damage_cost)) : 0,
           remark: row.remark ?? '',
           workers: workerNames.join(', '),

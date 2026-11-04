@@ -21,7 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Trash2, AlertTriangle, Printer } from 'lucide-react'
+import { Loader2, ExternalLink, Search, Plus, Clock, Calendar, CheckCircle2, QrCode, FileSpreadsheet, Trash2, AlertTriangle, Printer, Pencil } from 'lucide-react'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 
 interface Project {
@@ -117,6 +117,10 @@ export function ProjectTable({
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [renameTarget, setRenameTarget] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renaming, setRenaming] = useState(false)
+  const [renameError, setRenameError] = useState('')
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
@@ -164,6 +168,29 @@ export function ProjectTable({
       setDeleteError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function handleConfirmRename() {
+    if (!renameTarget) return
+    setRenaming(true)
+    setRenameError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/projects/${encodeURIComponent(renameTarget)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ rename_project: { new_project_id: renameValue } }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'เปลี่ยนรหัสไม่สำเร็จ')
+      setRenameTarget(null)
+      setRenameValue('')
+      onDeleted()
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : 'เปลี่ยนรหัสไม่สำเร็จ')
+    } finally {
+      setRenaming(false)
     }
   }
 
@@ -396,6 +423,16 @@ export function ProjectTable({
                           {String((currentPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}
                         </span>
                         <span className="font-mono font-bold text-sm text-gray-800 truncate">{project.project_id}</span>
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            title="แก้ไขรหัส Job ใหญ่"
+                            onClick={() => { setRenameTarget(project.project_id); setRenameValue(project.project_id); setRenameError('') }}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-[#7B1A1A]"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        )}
                         {role?.trim().toLowerCase() === 'superadmin' && (project.progress?.jobs_pending_process ?? 0) > 0 && (
                           <span
                             title={`มี ${project.progress!.jobs_pending_process} จ๊อบย่อยที่รอเพิ่ม Process`}
@@ -527,6 +564,16 @@ export function ProjectTable({
                           <span className="font-mono font-bold text-sm text-gray-800 group-hover:text-[#7B1A1A] transition-colors">
                             {project.project_id}
                           </span>
+                          {!isReadOnly && (
+                            <button
+                              type="button"
+                              title="แก้ไขรหัส Job ใหญ่"
+                              onClick={() => { setRenameTarget(project.project_id); setRenameValue(project.project_id); setRenameError('') }}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-[#7B1A1A]"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
                           {role?.trim().toLowerCase() === 'superadmin' && (progress?.jobs_pending_process ?? 0) > 0 && (
                             <span
                               title={`มี ${progress!.jobs_pending_process} จ๊อบย่อยที่รอเพิ่ม Process`}
@@ -657,6 +704,46 @@ export function ProjectTable({
         </>
       )}
 
+
+      <Dialog open={!!renameTarget} onOpenChange={(v) => { if (!v && !renaming) { setRenameTarget(null); setRenameError('') } }}>
+        <DialogContent className="sm:max-w-md rounded-2xl p-6 bg-white border-0 font-sans">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-[#7B1A1A]" />
+              แก้ไขรหัส Job ใหญ่
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 text-xs mt-1">
+              ระบบจะเปลี่ยนรหัส Job ย่อยที่อยู่ภายใต้โปรเจกต์นี้ตามอัตโนมัติ โดยไม่เปลี่ยน Process เวลา สถานะ หรือไฟล์
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <label htmlFor="rename-project-id" className="text-xs font-semibold text-gray-600">รหัสใหม่</label>
+              <Input
+                id="rename-project-id"
+                value={renameValue}
+                onChange={(event) => setRenameValue(event.target.value.toUpperCase())}
+                disabled={renaming}
+                className="font-mono"
+                placeholder="เช่น A-0102"
+              />
+            </div>
+            {renameError && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{renameError}</p>}
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              ตัวอย่าง: {renameTarget}-001-01 จะเปลี่ยนเป็นรหัสใหม่-001-01 และต้องสร้าง QR/Barcode ใหม่
+            </p>
+          </div>
+          <DialogFooter className="pt-2 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setRenameTarget(null)} disabled={renaming} className="rounded-full h-9">
+              ยกเลิก
+            </Button>
+            <Button type="button" onClick={handleConfirmRename} disabled={renaming || !renameValue.trim()} className="rounded-full h-9 bg-[#7B1A1A] hover:bg-[#5C1212] text-white px-5 gap-1">
+              {renaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+              {renaming ? 'กำลังเปลี่ยนรหัส...' : 'ยืนยันเปลี่ยนรหัส'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deleting) { setDeleteTarget(null); setDeleteError('') } }}>
         <DialogContent className="sm:max-w-sm rounded-2xl p-6 bg-white border-0 font-sans">

@@ -27,6 +27,7 @@ function getToken() {
 
 interface ExportRow {
   job_code: string
+  base_job_code: string
   job_note?: string
   dwg_name: string
   sender: string
@@ -112,7 +113,10 @@ export function ExportJobsPage() {
 
   const [from, setFrom] = useState(() => searchParams.get('from') ?? '')
   const [to, setTo] = useState(() => searchParams.get('to') ?? '')
-  const [dateField, setDateField] = useState<'received' | 'due'>(() => searchParams.get('dateField') === 'due' ? 'due' : 'received')
+  const [dateField, setDateField] = useState<'received' | 'due' | 'worked'>(() => {
+    const value = searchParams.get('dateField')
+    return value === 'due' || value === 'worked' ? value : 'received'
+  })
   const [job, setJob] = useState('')
   const [status, setStatus] = useState('all')
   const [process, setProcess] = useState('all')
@@ -297,18 +301,17 @@ export function ExportJobsPage() {
     let sequence = 1
     for (const jobRows of grouped.values()) {
       const first = jobRows[0]
-      const remarks = [...new Set(jobRows.map((row) => row.remark?.trim() ?? '').filter(Boolean))]
       setCell(`A${rowNumber}`, sequence++)
       setCell(`B${rowNumber}`, templateDate(first.received_date))
       setCell(`C${rowNumber}`, templateDate(first.due_date))
-      setCell(`D${rowNumber}`, first.job_code)
+      setCell(`D${rowNumber}`, first.base_job_code || first.job_code)
       setCell(`E${rowNumber}`, first.dwg_name || '')
       setCell(`F${rowNumber}`, first.quantity ?? 1)
       setCell(`G${rowNumber}`, first.sender || '')
       setCell(`H${rowNumber}`, '')
       setCell(`I${rowNumber}`, '')
       setCell(`J${rowNumber}`, first.coating || '')
-      setCell(`K${rowNumber}`, remarks.join(' / '))
+      setCell(`K${rowNumber}`, first.job_note?.trim() ?? '')
       rowNumber += 1
     }
 
@@ -391,11 +394,12 @@ export function ExportJobsPage() {
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">กรองตามวันที่</label>
-            <Select value={dateField} onValueChange={(value) => setDateField(value as 'received' | 'due')}>
+            <Select value={dateField} onValueChange={(value) => setDateField(value as 'received' | 'due' | 'worked')}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="received">วันที่รับงาน</SelectItem>
                 <SelectItem value="due">วันที่ส่งงาน</SelectItem>
+                <SelectItem value="worked">วันที่ทำงาน</SelectItem>
               </SelectContent>
             </Select>
           </div>

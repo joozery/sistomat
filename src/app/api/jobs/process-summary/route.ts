@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { getEffectiveElapsedSeconds } from '@/lib/process-time'
 import { isRowCompleted } from '@/lib/workers'
+import { isClosedJobStatus } from '@/lib/project-progress'
 import jwt from 'jsonwebtoken'
 
 function getToken(req: NextRequest): string | null {
@@ -82,12 +83,13 @@ export async function GET(req: NextRequest) {
 
     const projects = await db.collection('projects').find(
       filter,
-      { projection: { due_date: 1, quantity: 1, processes: 1 } }
+      { projection: { due_date: 1, quantity: 1, status: 1, processes: 1 } }
     ).toArray()
 
     const byProcess: Record<string, ProcessBucket> = {}
 
     for (const p of projects) {
+      if (isClosedJobStatus(p.status)) continue
       const qty = Number(p.quantity) || 1
       for (const proc of (p.processes ?? [])) {
         const name = (proc.process ?? '').trim()

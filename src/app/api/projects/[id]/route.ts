@@ -13,6 +13,24 @@ type ProcessSnapshot = {
   next_confirmed_at?: string | Date | null
 }
 
+function parseHierarchy(code: string) {
+  const match = code.match(/^([A-Z]+-\d{3,4})(?:-(\d{3}))?(?:-(\d{2,3}))?$/)
+  if (!match) return { level1: code, level2: null, level3: null }
+  return {
+    level1: match[1],
+    level2: match[2] ? `${match[1]}-${match[2]}` : null,
+    level3: match[3] ? code : null,
+  }
+}
+
+function rewriteDescendantCode(code: string, oldParent: string, newParent: string): string {
+  if (code === oldParent) return newParent
+  const oldWithJ = `J${oldParent}`
+  if (code.startsWith(oldWithJ)) return `J${newParent}${code.slice(oldWithJ.length)}`
+  if (code.startsWith(`${oldParent}-`)) return `J${newParent}${code.slice(oldParent.length)}`
+  return code
+}
+
 function getToken(req: NextRequest): string | null {
   const auth = req.headers.get('Authorization')
   if (auth?.startsWith('Bearer ')) return auth.slice(7)
@@ -100,6 +118,89 @@ export async function PUT(
 
     const normalizedRole = String(auth.role ?? '').trim().toLowerCase()
     const canManageCancellation = normalizedRole === 'superadmin'
+
+    if (body.rename_project !== undefined) {
+      if (normalizedRole === 'user' || normalizedRole === 'ช่าง') {
+        return NextResponse.json({ message: 'ไม่มีสิทธิ์แก้ไขรหัสโปรเจกต์' }, { status: 403 })
+      }
+
+      const newProjectId = typeof body.rename_project?.new_project_id === 'string'
+        ? body.rename_project.new_project_id.trim().toUpperCase()
+        : ''
+      if (!/^[A-Z]+-\d{3,4}$/.test(newProjectId)) {
+        return NextResponse.json({ message: 'รูปแบบรหัส Job ใหญ่ไม่ถูกต้อง' }, { status: 400 })
+      }
+      if (newProjectId === id) {
+        return NextResponse.json({ message: 'รหัสใหม่ต้องแตกต่างจากรหัสเดิม' }, { status: 400 })
+      }
+
+      const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const descendantRegex = `^J?${escapedId}(?:-|$)`
+      const sourceFilter = {
+        $or: [
+          { project_id: id },
+          { project_id: { $regex: descendantRegex, $options: 'i' } },
+          { level1: { $in: [id, `J${id}`] } },
+        ],
+      }
+
+      const [projectDocs, jobDocs] = await Promise.all([
+        db.collection('projects').find(sourceFilter).project({ project_id: 1, level1: 1, level2: 1, level3: 1 }).toArray(),
+        db.collection('jobs').find({
+          $or: [
+            { job_code: id },
+            { job_code: { $regex: descendantRegex, $options: 'i' } },
+            { level1: { $in: [id, `J${id}`] } },
+          ],
+        }).project({ job_code: 1, level1: 1, level2: 1, level3: 1 }).toArray(),
+      ])
+
+      const projectRenames = projectDocs.map((doc) => {
+        const nextCode = rewriteDescendantCode(String(doc.project_id), id, newProjectId)
+        return { doc, nextCode, hierarchy: parseHierarchy(nextCode) }
+      })
+      const jobRenames = jobDocs.map((doc) => {
+        const nextCode = rewriteDescendantCode(String(doc.job_code), id, newProjectId)
+        return { doc, nextCode, hierarchy: parseHierarchy(nextCode) }
+      })
+      const targetCodes = [...projectRenames.map((item) => item.nextCode), ...jobRenames.map((item) => item.nextCode)]
+      const [projectConflicts, jobConflicts] = await Promise.all([
+        db.collection('projects').find({ project_id: { $in: targetCodes }, _id: { $nin: projectDocs.map((doc) => doc._id) } }).project({ project_id: 1 }).toArray(),
+        db.collection('jobs').find({ job_code: { $in: targetCodes }, _id: { $nin: jobDocs.map((doc) => doc._id) } }).project({ job_code: 1 }).toArray(),
+      ])
+      if (projectConflicts.length > 0 || jobConflicts.length > 0) {
+        return NextResponse.json({ message: 'รหัสใหม่หรือรหัส Job ย่อยซ้ำกับข้อมูลเดิมในระบบ' }, { status: 409 })
+      }
+      if (projectRenames.length === 0) {
+        return NextResponse.json({ message: 'ไม่พบข้อมูล Job ที่ต้องเปลี่ยนรหัส' }, { status: 404 })
+      }
+
+      const quotationRenames = projectRenames
+        .filter(({ doc, hierarchy }) => typeof doc.level2 === 'string' && hierarchy.level2 && doc.level2 !== hierarchy.level2)
+        .map(({ doc, hierarchy }) => ({ oldCode: String(doc.level2), newCode: hierarchy.level2 as string }))
+      const quotationOperations = quotationRenames.map(({ oldCode, newCode }) => ({
+        updateOne: { filter: { code: oldCode }, update: { $set: { code: newCode, updated_at: new Date() } } },
+      }))
+
+      await Promise.all([
+        db.collection('projects').bulkWrite(projectRenames.map(({ doc, nextCode, hierarchy }) => ({
+          updateOne: { filter: { _id: doc._id }, update: { $set: { project_id: nextCode, ...hierarchy, updated_at: new Date() } } },
+        }))),
+        db.collection('jobs').bulkWrite(jobRenames.map(({ doc, nextCode, hierarchy }) => ({
+          updateOne: { filter: { _id: doc._id }, update: { $set: { job_code: nextCode, ...hierarchy, updated_at: new Date() } } },
+        }))),
+        quotationOperations.length > 0 ? db.collection('quotations').bulkWrite(quotationOperations) : Promise.resolve(),
+      ])
+
+      return NextResponse.json({
+        message: 'เปลี่ยนรหัสโปรเจกต์และ Job ย่อยสำเร็จ',
+        old_project_id: id,
+        new_project_id: newProjectId,
+        projects_updated: projectRenames.length,
+        jobs_updated: jobRenames.length,
+        quotations_updated: quotationOperations.length,
+      })
+    }
 
     if (cancelJob !== undefined) {
       if (!canManageCancellation) return NextResponse.json({ message: 'ไม่มีสิทธิ์ยกเลิกใบงานทั้งใบ' }, { status: 403 })
