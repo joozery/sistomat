@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientPromise } from '@/lib/mongodb'
 import { getElapsedSecondsForDateRange } from '@/lib/process-time'
+import { getProcessStatus } from '@/lib/process-status'
 import jwt from 'jsonwebtoken'
 
 function getToken(req: NextRequest): string | null {
@@ -42,6 +43,12 @@ interface ProjectDoc {
 interface WorkerDoc {
   code: number | string
   name: string
+}
+
+interface JobDateDoc {
+  job_code: string
+  received_date?: Date | string | null
+  due_date?: Date | string | null
 }
 
 function secondsToHMS(totalSeconds: number): string {
@@ -126,7 +133,6 @@ export async function GET(req: NextRequest) {
       if (to) dateConditions.push({ $lte: [dateAsDate, new Date(`${to}T23:59:59.999Z`)] })
       match.$expr = { $and: dateConditions }
     }
-    if (status) match.status = status
     if (job) {
       const escaped = job.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       match.$or = [
@@ -139,6 +145,15 @@ export async function GET(req: NextRequest) {
       .find(match)
       .project<ProjectDoc>({ project_id: 1, job_note: 1, dwg_name: 1, sender: 1, quantity: 1, received_date: 1, due_date: 1, status: 1, processes: 1, coating: 1 })
       .toArray()
+
+    // Older Job records can contain dates in the jobs collection while the
+    // linked project document has no date. Keep projects as the primary source
+    // and use the matching Job as a fallback for Export only.
+    const jobDateDocs = await db.collection<JobDateDoc>('jobs')
+      .find({ job_code: { $in: projects.map((project) => project.project_id) } })
+      .project<JobDateDoc>({ job_code: 1, received_date: 1, due_date: 1 })
+      .toArray()
+    const jobDateByCode = new Map(jobDateDocs.map((job) => [job.job_code, job]))
 
     projects.sort((a, b) => compareJobCodes(String(a.project_id), String(b.project_id)))
 
@@ -177,6 +192,9 @@ export async function GET(req: NextRequest) {
 
       const note = typeof p.job_note === 'string' ? p.job_note.trim() : ''
       const fullJobCode = [p.project_id, note].filter(Boolean).join('-')
+      const fallbackDates = jobDateByCode.get(p.project_id)
+      const receivedDate = p.received_date || fallbackDates?.received_date || null
+      const dueDate = p.due_date || fallbackDates?.due_date || null
       const parsedQty = Number(p.quantity)
       const quantity = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1
 
@@ -188,6 +206,13 @@ export async function GET(req: NextRequest) {
           ? getElapsedSecondsForDateRange(row, from, to)
           : 0
         if (isWorkDateFilter && (from || to) && workedSeconds <= 0) return
+        const processStatus = getProcessStatus({
+          processName: row.process ?? '',
+          jobStatus: p.status,
+          workers: row.workers,
+          nextConfirmedAt: row.next_confirmed_at,
+        })
+        if (status && processStatus !== status) return
         const workerNames = (row.workers ?? [])
           .filter((w) => w.worker_id)
           .map((w) => nameByCode.get(String(w.worker_id)) ?? `#${w.worker_id}`)
@@ -198,9 +223,9 @@ export async function GET(req: NextRequest) {
           dwg_name: p.dwg_name ?? '',
           sender: p.sender ?? '',
           quantity,
-          received_date: p.received_date ?? null,
-          due_date: p.due_date ?? null,
-          status: p.status ?? '',
+          received_date: receivedDate,
+          due_date: dueDate,
+          status: processStatus,
           index: i + 1,
           process: row.process ?? '',
           target_time: row.target_time ?? '',
@@ -211,7 +236,7 @@ export async function GET(req: NextRequest) {
           damage_cost: Number.isFinite(Number(row.damage_cost)) ? Math.max(0, Number(row.damage_cost)) : 0,
           remark: row.remark ?? '',
           workers: workerNames.join(', '),
-          completed: Boolean(row.next_confirmed_at),
+          completed: processStatus === 'เสร็จแล้ว' || processStatus === 'รับงาน' || processStatus === 'ไม่รับงาน',
           coating: p.coating ?? '',
         })
       })

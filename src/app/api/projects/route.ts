@@ -176,6 +176,20 @@ export async function GET(request: NextRequest) {
       { type: 'job', level1: { $in: Array.from(idByLevel1.keys()) } },
       { projection: { project_id: 1, dwg_name: 1, job_note: 1, level1: 1, status: 1, processes: 1, is_printed: 1 } }
     ).toArray()
+    // Legacy data may contain an intermediate child-group document such as
+    // E-0743-003 without type: "job". When its real job children already
+    // exist as JE-0743-003-01, keep the document untouched but do not render
+    // it as another top-level project under Process QR Code.
+    const topLevelProjectIds = new Set(projects.map((project) => String(project.project_id ?? '')))
+    const childProjectIds = new Set(children.map((child) => String(child.project_id ?? '').toUpperCase()))
+    const childGroupPattern = /^([A-Z]+-\d{3,4})-(\d{3})$/i
+    const visibleProjects = projects.filter((project) => {
+      const projectId = String(project.project_id ?? '')
+      const match = projectId.match(childGroupPattern)
+      if (!match || !topLevelProjectIds.has(match[1])) return true
+      const childPrefix = `J${match[1]}-${match[2]}-`
+      return !Array.from(childProjectIds).some((childId) => childId.startsWith(childPrefix))
+    })
     const jobsByProject = new Map<string, ProgressJob[]>()
     for (const child of children) {
       const id = idByLevel1.get(String(child.level1))
@@ -185,7 +199,7 @@ export async function GET(request: NextRequest) {
       else jobsByProject.set(id, [child as ProgressJob])
     }
 
-    const serialized = projects.map((p) => ({
+    const serialized = visibleProjects.map((p) => ({
       ...p,
       _id: p._id.toString(),
       progress: summarizeProjectProgress(jobsByProject.get(String(p.project_id)) ?? [p as ProgressJob]),

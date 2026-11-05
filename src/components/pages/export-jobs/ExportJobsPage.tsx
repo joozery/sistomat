@@ -17,8 +17,9 @@ import { useProcessOptions } from '@/lib/useProcessOptions'
 import { useCurrentUser } from '@/lib/useCurrentUser'
 import { useWorkersList } from '@/lib/useWorkersList'
 import { normalizeTargetTime } from '@/components/pages/process-details/ProcessTable'
+import { GENERAL_PROCESS_STATUSES, QC_PROCESS_STATUSES, isQcProcess } from '@/lib/process-status'
 
-const STATUS_OPTIONS = ['กำลังดำเนินการ', 'รับงาน', 'จบงาน', 'ไม่รับงาน', 'ยกเลิก']
+const STATUS_OPTIONS = [...new Set([...GENERAL_PROCESS_STATUSES, ...QC_PROCESS_STATUSES])]
 
 function getToken() {
   if (typeof window === 'undefined') return ''
@@ -122,6 +123,12 @@ export function ExportJobsPage() {
   const [process, setProcess] = useState('all')
   const [worker, setWorker] = useState('all')
   const [exportFormat, setExportFormat] = useState<'process' | 'job'>('process')
+
+  const statusOptions = process !== 'all' && isQcProcess(process)
+    ? QC_PROCESS_STATUSES
+    : process !== 'all'
+      ? GENERAL_PROCESS_STATUSES
+      : STATUS_OPTIONS
 
   const [rows, setRows] = useState<ExportRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -301,17 +308,23 @@ export function ExportJobsPage() {
     let sequence = 1
     for (const jobRows of grouped.values()) {
       const first = jobRows[0]
+      const processRemarks = [...new Map(
+        jobRows
+          .map((row) => ({ process: row.process?.trim(), remark: row.remark?.trim() }))
+          .filter((row) => row.process && row.remark)
+          .map((row) => [row.process, `${row.process}: ${row.remark}`] as const),
+      ).values()]
       setCell(`A${rowNumber}`, sequence++)
       setCell(`B${rowNumber}`, templateDate(first.received_date))
       setCell(`C${rowNumber}`, templateDate(first.due_date))
-      setCell(`D${rowNumber}`, first.base_job_code || first.job_code)
+      setCell(`D${rowNumber}`, first.job_code)
       setCell(`E${rowNumber}`, first.dwg_name || '')
       setCell(`F${rowNumber}`, first.quantity ?? 1)
       setCell(`G${rowNumber}`, first.sender || '')
       setCell(`H${rowNumber}`, '')
       setCell(`I${rowNumber}`, '')
       setCell(`J${rowNumber}`, first.coating || '')
-      setCell(`K${rowNumber}`, first.job_note?.trim() ?? '')
+      setCell(`K${rowNumber}`, processRemarks.join(' / '))
       rowNumber += 1
     }
 
@@ -417,7 +430,7 @@ export function ExportJobsPage() {
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">ทุกสถานะ</SelectItem>
-                {STATUS_OPTIONS.map((s) => (
+                {statusOptions.map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
