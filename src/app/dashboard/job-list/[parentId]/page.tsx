@@ -36,6 +36,7 @@ import {
   Download,
   Upload,
   Power,
+  ArrowRightLeft,
 } from 'lucide-react'
 import { AddJobDialog } from '@/components/pages/job-list/AddJobDialog'
 import { EditJobDialog } from '@/components/pages/job-list/EditJobDialog'
@@ -323,6 +324,10 @@ export default function JobListPage() {
   const [closeSaleMode, setCloseSaleMode] = useState<'close' | 'reopen'>('close')
   const [closingSale, setClosingSale] = useState(false)
   const [closeSaleError, setCloseSaleError] = useState('')
+  const [moveGroupTarget, setMoveGroupTarget] = useState<string | null>(null)
+  const [moveGroupValue, setMoveGroupValue] = useState('')
+  const [movingGroup, setMovingGroup] = useState(false)
+  const [moveGroupError, setMoveGroupError] = useState('')
   const [cancelTarget, setCancelTarget] = useState<Job | null>(null)
   const [cancelSaving, setCancelSaving] = useState(false)
   const [cancelError, setCancelError] = useState('')
@@ -498,6 +503,29 @@ export default function JobListPage() {
       setCloseSaleError(error instanceof Error ? error.message : 'ปิดการขายไม่สำเร็จ')
     } finally {
       setClosingSale(false)
+    }
+  }
+
+  async function handleConfirmMoveGroup() {
+    if (!moveGroupTarget || movingGroup) return
+    setMovingGroup(true)
+    setMoveGroupError('')
+    try {
+      const res = await fetch('/api/jobs/move-group', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+        body: JSON.stringify({ from_group: moveGroupTarget, to_group: moveGroupValue }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'เปลี่ยนกลุ่ม Job ไม่สำเร็จ')
+      setMoveGroupTarget(null)
+      setMoveGroupValue('')
+      await loadJobs()
+      window.alert(`เปลี่ยนกลุ่มจาก ${data.from_group} เป็น ${data.to_group} สำเร็จ`)
+    } catch (error) {
+      setMoveGroupError(error instanceof Error ? error.message : 'เปลี่ยนกลุ่ม Job ไม่สำเร็จ')
+    } finally {
+      setMovingGroup(false)
     }
   }
 
@@ -930,6 +958,16 @@ export default function JobListPage() {
                               className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1 shrink-0"
                             >
                               <Receipt className="h-3.5 w-3.5" /> ใบเสนอราคา
+                            </Button>
+                          )}
+                          {!isReadOnly && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => { setMoveGroupError(''); setMoveGroupValue(level2Code); setMoveGroupTarget(level2Code) }}
+                              className="h-8 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-semibold gap-1 shrink-0"
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" /> เปลี่ยนกลุ่ม
                             </Button>
                           )}
                           {singleJob ? (
@@ -1425,6 +1463,38 @@ export default function JobListPage() {
               {closingSale
                 ? (closeSaleMode === 'close' ? 'กำลังปิด...' : 'กำลังเปิด...')
                 : (closeSaleMode === 'close' ? 'ปิดการขาย' : 'เปิดการขายอีกครั้ง')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!moveGroupTarget} onOpenChange={(open) => { if (!open && !movingGroup) { setMoveGroupTarget(null); setMoveGroupValue(''); setMoveGroupError('') } }}>
+        <DialogContent className="sm:max-w-md rounded-2xl border-0 bg-white p-6 font-sans">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+              <ArrowRightLeft className="h-5 w-5 text-[#7B1A1A]" /> เปลี่ยนกลุ่ม Job
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-xs text-gray-500">
+              ย้าย Job ลูกทั้งหมดจากกลุ่ม <span className="font-mono font-bold text-gray-700">{moveGroupTarget}</span> ไปยังกลุ่มใหม่ โดยคง Process ประวัติ เวลา สถานะ และไฟล์เดิมไว้
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 pt-2">
+            <label htmlFor="move-group-code" className="text-xs font-semibold text-gray-600">เลขกลุ่มใหม่</label>
+            <input
+              id="move-group-code"
+              value={moveGroupValue}
+              onChange={(event) => setMoveGroupValue(event.target.value.toUpperCase())}
+              placeholder="เช่น JE-0700-002"
+              className="h-10 w-full rounded-lg border border-gray-200 px-3 font-mono text-sm outline-none focus:border-[#7B1A1A]"
+            />
+            <p className="text-[11px] text-gray-400">เปลี่ยนได้เฉพาะกลุ่มภายใต้ Job ใหญ่เดิม เช่น JE-0700-017 → JE-0700-002</p>
+          </div>
+          {moveGroupError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{moveGroupError}</p>}
+          <DialogFooter className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => { setMoveGroupTarget(null); setMoveGroupValue(''); setMoveGroupError('') }} disabled={movingGroup} className="h-9 rounded-full border-gray-200">ยกเลิก</Button>
+            <Button type="button" onClick={handleConfirmMoveGroup} disabled={movingGroup || !moveGroupValue.trim()} className="h-9 rounded-full bg-[#7B1A1A] px-5 text-white hover:bg-[#5C1212]">
+              {movingGroup ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <ArrowRightLeft className="mr-1 h-3.5 w-3.5" />}
+              {movingGroup ? 'กำลังเปลี่ยนกลุ่ม...' : 'ยืนยันเปลี่ยนกลุ่ม'}
             </Button>
           </DialogFooter>
         </DialogContent>
