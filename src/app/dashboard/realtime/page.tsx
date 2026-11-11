@@ -99,6 +99,18 @@ function getElapsedSeconds(start: string, stop?: string | null, now?: number): n
   return Math.max(0, Math.floor((endMs - startMs) / 1000))
 }
 
+function formatElapsedSeconds(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds))
+  const h = Math.floor(safe / 3600)
+  const m = Math.floor((safe % 3600) / 60)
+  const s = safe % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+function processElapsedKey(projectId: string, process: string): string {
+  return `${projectId}\u0000${process.trim().toUpperCase()}`
+}
+
 function calcProgress(start: string, target: string, stop?: string | null, now?: number): number {
   const targetSecs = getTargetSeconds(target)
   if (!targetSecs) return 0
@@ -134,15 +146,17 @@ function getProcessColor(process: string): string {
   return key ? PROCESS_COLORS[key] : 'bg-gray-100 text-gray-600 border-gray-200'
 }
 
-function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperationalMetrics }: { ev: RealtimeEvent; idx: number; now: number; workers: WorkerData[]; overtimeGraceMinutes: number; hideOperationalMetrics?: boolean }) {
+function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, aggregateElapsedSeconds, hideOperationalMetrics }: { ev: RealtimeEvent; idx: number; now: number; workers: WorkerData[]; overtimeGraceMinutes: number; aggregateElapsedSeconds?: number; hideOperationalMetrics?: boolean }) {
   const router = useRouter()
   const isRunning = ev.status === 'running'
   const isIdle = ev.status === 'idle'
 
   // คำนวณตรงๆ ทุก render — now เปลี่ยนทุกวินาที ทำให้ค่าอัปเดตแน่นอน
-  const elapsed = isRunning
-    ? calcElapsed(ev.start_time, null, now)
-    : ev.status === 'completed' ? calcElapsed(ev.start_time, ev.stop_time, now) : null
+  const elapsed = isIdle
+    ? null
+    : aggregateElapsedSeconds !== undefined
+      ? formatElapsedSeconds(aggregateElapsedSeconds)
+      : isRunning ? calcElapsed(ev.start_time, null, now) : calcElapsed(ev.start_time, ev.stop_time, now)
 
   const progress = isRunning
     ? calcProgress(ev.start_time, ev.target_time, null, now)
@@ -305,7 +319,7 @@ function TableRow({ ev, idx, now, workers, overtimeGraceMinutes, hideOperational
   )
 }
 
-function CompletedRow({ ev, idx, workers, hideElapsed }: { ev: RealtimeEvent; idx: number; workers: WorkerData[]; hideElapsed?: boolean }) {
+function CompletedRow({ ev, idx, workers, aggregateElapsedSeconds, hideElapsed }: { ev: RealtimeEvent; idx: number; workers: WorkerData[]; aggregateElapsedSeconds?: number; hideElapsed?: boolean }) {
   const router = useRouter()
   return (
     <tr
@@ -351,7 +365,7 @@ function CompletedRow({ ev, idx, workers, hideElapsed }: { ev: RealtimeEvent; id
         )}
       </td>
       {!hideElapsed && <td className="md:px-3 md:py-3 md:w-28">
-        <span className="font-mono text-sm font-bold text-gray-400">{calcElapsed(ev.start_time, ev.stop_time)}</span>
+        <span className="font-mono text-sm font-bold text-gray-400">{aggregateElapsedSeconds !== undefined ? formatElapsedSeconds(aggregateElapsedSeconds) : calcElapsed(ev.start_time, ev.stop_time)}</span>
       </td>}
       <td className="hidden md:table-cell pr-4 py-3 w-10 text-right">
         <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -577,6 +591,19 @@ export default function RealtimePage() {
   })
   const completedTotalPages = Math.max(1, Math.ceil(filteredCompleted.length / PAGE_SIZE))
   const paginatedCompleted = filteredCompleted.slice((completedPage - 1) * PAGE_SIZE, completedPage * PAGE_SIZE)
+
+  // รวมเวลาทุกช่วงของ Job + Process เดียวกัน ทั้งรอบที่จบแล้วและรอบที่กำลังทำอยู่
+  // เป็นการคำนวณเพื่อแสดงผลเท่านั้น ไม่เขียนทับ elapsed_time ในฐานข้อมูล
+  const aggregatedElapsedByProcess = useMemo(() => {
+    const totals = new Map<string, number>()
+    for (const ev of data?.events ?? []) {
+      if (ev.status === 'idle' || !ev.start_time) continue
+      const key = processElapsedKey(ev.project_id, ev.process)
+      const seconds = getElapsedSeconds(ev.start_time, ev.stop_time, now)
+      totals.set(key, (totals.get(key) ?? 0) + seconds)
+    }
+    return totals
+  }, [data, now])
 
   // KPI ด้านบนนับเป็นจำนวน Job (project_id) ไม่ใช่จำนวน worker session/process
   const jobCounts = useMemo(() => {
@@ -950,6 +977,7 @@ export default function RealtimePage() {
                         now={now}
                         workers={workers}
                         overtimeGraceMinutes={overtimeGraceMinutes}
+                        aggregateElapsedSeconds={aggregatedElapsedByProcess.get(processElapsedKey(ev.project_id, ev.process))}
                         hideOperationalMetrics={hideOperationalMetrics}
                       />
                     ))}
@@ -1130,6 +1158,7 @@ export default function RealtimePage() {
                         ev={ev}
                         idx={(completedPage - 1) * PAGE_SIZE + i}
                         workers={workers}
+                        aggregateElapsedSeconds={aggregatedElapsedByProcess.get(processElapsedKey(ev.project_id, ev.process))}
                         hideElapsed={hideOperationalMetrics}
                       />
                     ))}
