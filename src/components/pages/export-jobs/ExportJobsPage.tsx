@@ -314,6 +314,13 @@ export function ExportJobsPage() {
           .filter((row) => row.process && row.remark)
           .map((row) => [row.process, `${row.process}: ${row.remark}`] as const),
       ).values()]
+      const damageByProcess = jobRows.map((row) => (
+        `${row.process?.trim() || 'ไม่ระบุ process'}: ${normalizeDamageCost(row.damage_cost).toLocaleString('th-TH', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} บาท`
+      ))
+      const totalDamage = jobRows.reduce((sum, row) => sum + normalizeDamageCost(row.damage_cost), 0)
       setCell(`A${rowNumber}`, sequence++)
       setCell(`B${rowNumber}`, templateDate(first.received_date))
       setCell(`C${rowNumber}`, templateDate(first.due_date))
@@ -325,16 +332,29 @@ export function ExportJobsPage() {
       setCell(`I${rowNumber}`, '')
       setCell(`J${rowNumber}`, first.coating || '')
       setCell(`K${rowNumber}`, processRemarks.join(' / '))
+      setCell(
+        `L${rowNumber}`,
+        `${damageByProcess.join('\n')}\nรวม: ${totalDamage.toLocaleString('th-TH', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} บาท`,
+      )
       rowNumber += 1
     }
 
     const lastDataRow = Math.max(3, rowNumber - 1)
-    sheet['!ref'] = `A1:K${lastDataRow}`
-    sheet['!autofilter'] = { ref: `A3:K${lastDataRow}` }
+    const damageHeader = sheet['K2'] ?? {}
+    sheet['L2'] = { ...damageHeader, t: 's', v: 'ค่าความเสียหาย (บาท)' }
+    sheet['!merges'] = [
+      ...(sheet['!merges'] ?? []),
+      { s: { c: 11, r: 1 }, e: { c: 11, r: 2 } },
+    ]
+    sheet['!ref'] = `A1:L${lastDataRow}`
+    sheet['!autofilter'] = { ref: `A3:L${lastDataRow}` }
     sheet['!margins'] = { left: 0.2, right: 0.2, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
 
-    const minWidths = [7, 12, 12, 20, 24, 10, 18, 18, 18, 18, 20]
-    const maxWidths = [9, 14, 14, 30, 38, 12, 24, 26, 34, 26, 34]
+    const minWidths = [7, 12, 12, 20, 24, 10, 18, 18, 18, 18, 20, 24]
+    const maxWidths = [9, 14, 14, 30, 38, 12, 24, 26, 34, 26, 34, 34]
     const widths = minWidths.map((minimum, columnIndex) => {
       let longest = 0
       for (let rowIndex = 0; rowIndex < lastDataRow; rowIndex += 1) {
