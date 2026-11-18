@@ -127,6 +127,8 @@ export interface ProcessRow {
 interface ProcessTableProps {
   processList: ProcessRow[]
   processOptions: string[]
+  coating?: string
+  onCoatingChange?: (value: string) => void
   disabled?: boolean
   onChange: (index: number, field: keyof ProcessRow, value: string) => void
   onWorkerChange: (rowIndex: number, workerIndex: number, field: keyof WorkerLog, value: string) => void
@@ -148,7 +150,7 @@ const workerColors = [
   { header: '#fbcfe8', subHeader: '#fce7f3', cell: '#fdf2f8' },
 ]
 
-export function ProcessTable({ processList, processOptions, disabled = false, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
+export function ProcessTable({ processList, processOptions, coating = '', onCoatingChange, disabled = false, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   const canSeeSkill = role !== 'User' && role !== 'ช่าง'
@@ -228,6 +230,9 @@ export function ProcessTable({ processList, processOptions, disabled = false, ac
               {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-red-700 px-2 py-1.5 w-28 leading-snug">
                 ค่าความเสียหาย<br />
                 <span className="font-normal text-[10px]">(บาท)</span>
+              </th>}
+              {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[140px] leading-snug">
+                Coating / Heat Treatment
               </th>}
               {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[100px]">
                 หมายเหตุ
@@ -513,6 +518,23 @@ export function ProcessTable({ processList, processOptions, disabled = false, ac
                         onChange={(e) => onChange(index, 'damage_cost', e.target.value)}
                         placeholder="0.00"
                         className="h-9 w-full border-0 bg-transparent px-2 text-right text-slate-700 outline-none focus:ring-2 focus:ring-inset focus:ring-red-300"
+                        style={{ fontSize: '12px' }}
+                      />
+                    )}
+                  </td>
+
+                  <td className="border border-slate-300 p-0 align-top">
+                    {isReadOnly || !onCoatingChange ? (
+                      <div className="min-h-9 flex items-center px-2 text-slate-700" style={{ fontSize: '12px' }}>
+                        {coating || '-'}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={coating}
+                        onChange={(e) => onCoatingChange(e.target.value)}
+                        placeholder="ระบุ Coating / Heat Treatment"
+                        className="w-full min-h-9 border-0 bg-white px-2 text-slate-700 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400"
                         style={{ fontSize: '12px' }}
                       />
                     )}

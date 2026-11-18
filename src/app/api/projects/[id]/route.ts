@@ -104,7 +104,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await req.json()
-    const { processes, status, qc, flags, cancel_job: cancelJob, reopen_cancel: reopenCancel } = body
+    const { processes, status, qc, coating, flags, cancel_job: cancelJob, reopen_cancel: reopenCancel } = body
     const marker = body.marker === undefined ? undefined : parseJobMarker(body.marker)
     if (marker === null) return NextResponse.json({ message: 'กรุณาระบุเหตุผล Reject / Rework ไม่เกิน 500 ตัวอักษร' }, { status: 400 })
 
@@ -293,6 +293,7 @@ export async function PUT(
     if (processes !== undefined) update.processes = processes
     if (status !== undefined) update.status = status
     if (qc !== undefined) update.qc = qc
+    if (coating !== undefined) update.coating = typeof coating === 'string' ? coating : ''
     if (flags !== undefined) {
       // A barcode may update one flag; retain Hold/Rework and other existing flags.
       if (!flags || typeof flags !== 'object' || Array.isArray(flags)) {

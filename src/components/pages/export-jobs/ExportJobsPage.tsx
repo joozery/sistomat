@@ -243,6 +243,7 @@ export function ExportJobsPage() {
       const base: Record<string, string | number> = {
         'Job': r.job_code,
         'DWG': r.dwg_name,
+        'Coating / Heat Treatment': r.coating,
         'จำนวนชิ้นงาน': r.quantity ?? 1,
         'วันรับงาน': formatDate(r.received_date),
         'วันกำหนดส่งมอบ': formatDate(r.due_date),
@@ -314,12 +315,18 @@ export function ExportJobsPage() {
           .filter((row) => row.process && row.remark)
           .map((row) => [row.process, `${row.process}: ${row.remark}`] as const),
       ).values()]
-      const damageByProcess = jobRows.map((row) => (
-        `${row.process?.trim() || 'ไม่ระบุ process'}: ${normalizeDamageCost(row.damage_cost).toLocaleString('th-TH', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} บาท`
-      ))
+      const damageByProcess = jobRows
+        .map((row) => ({
+          process: row.process?.trim() || 'ไม่ระบุ process',
+          amount: normalizeDamageCost(row.damage_cost),
+        }))
+        .filter((row) => row.amount > 0)
+        .map((row) => (
+          `${row.process}: ${row.amount.toLocaleString('th-TH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} บาท`
+        ))
       const totalDamage = jobRows.reduce((sum, row) => sum + normalizeDamageCost(row.damage_cost), 0)
       setCell(`A${rowNumber}`, sequence++)
       setCell(`B${rowNumber}`, templateDate(first.received_date))
@@ -334,7 +341,7 @@ export function ExportJobsPage() {
       setCell(`K${rowNumber}`, processRemarks.join(' / '))
       setCell(
         `L${rowNumber}`,
-        `${damageByProcess.join('\n')}\nรวม: ${totalDamage.toLocaleString('th-TH', {
+        `${damageByProcess.length > 0 ? `${damageByProcess.join('\n')}\n` : ''}รวม: ${totalDamage.toLocaleString('th-TH', {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         })} บาท`,
@@ -353,7 +360,7 @@ export function ExportJobsPage() {
     sheet['!autofilter'] = { ref: `A3:L${lastDataRow}` }
     sheet['!margins'] = { left: 0.2, right: 0.2, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
 
-    const minWidths = [7, 12, 12, 20, 24, 10, 18, 18, 18, 18, 20, 24]
+    const minWidths = [7, 12, 12, 20, 24, 10, 18, 18, 20, 18, 20, 24]
     const maxWidths = [9, 14, 14, 30, 38, 12, 24, 26, 34, 26, 34, 34]
     const widths = minWidths.map((minimum, columnIndex) => {
       let longest = 0

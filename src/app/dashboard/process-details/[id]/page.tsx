@@ -652,6 +652,7 @@ interface ProjectData {
   received_date: string
   due_date: string
   status: string
+  coating?: string
   processes?: any[]
   file_url?: string
   file_name?: string
@@ -920,6 +921,12 @@ export default function ProcessDetailsPage() {
       next[index] = { ...next[index], [field]: value }
       return next
     })
+    setEditVersion((v) => v + 1)
+  }
+
+  const handleCoatingChange = (value: string) => {
+    setProject((prev) => prev ? { ...prev, coating: value } : prev)
+    projectRef.current = projectRef.current ? { ...projectRef.current, coating: value } : projectRef.current
     setEditVersion((v) => v + 1)
   }
 
@@ -1597,7 +1604,10 @@ export default function ProcessDetailsPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ processes: processesToSave || processList }),
+        body: JSON.stringify({
+          processes: processesToSave || processList,
+          coating: projectRef.current?.coating ?? '',
+        }),
       })
       if (res.ok) {
         setSaveState('success')
@@ -1816,6 +1826,8 @@ export default function ProcessDetailsPage() {
           <ProcessTable
             processList={processList}
             processOptions={processOptions}
+            coating={project.coating ?? ''}
+            onCoatingChange={handleCoatingChange}
             disabled={project.status === 'ยกเลิกงาน'}
             activeRowIndex={activeRowIndex}
             activeWorkerSlot={activeWorkerSlot}
