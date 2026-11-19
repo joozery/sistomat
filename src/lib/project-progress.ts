@@ -3,6 +3,7 @@ import { isRowCompleted } from './workers'
 
 interface ProgressProcess {
   process?: string
+  target_time?: string
   elapsed_time?: string
   next_confirmed_at?: unknown
   workers?: { worker_id?: string; start_time?: string; stop_time?: string }[]
@@ -16,11 +17,24 @@ function isProcessDone(proc: ProgressProcess): boolean {
   })
 }
 
+function parseTargetSeconds(raw?: string): number {
+  const value = (raw ?? '').trim()
+  if (!value) return 0
+  if (value.includes(':')) {
+    const [hours = '', minutes = ''] = value.split(':')
+    return (Number(hours.replace(/\D/g, '')) || 0) * 3600 + (Number(minutes.replace(/\D/g, '')) || 0) * 60
+  }
+  const digits = value.replace(/\D/g, '')
+  if (digits.length <= 2) return (Number(digits) || 0) * 3600
+  return (Number(digits.slice(0, -2)) || 0) * 3600 + (Number(digits.slice(-2)) || 0) * 60
+}
+
 export interface ProgressJob {
   project_id?: string
   dwg_name?: string
   job_note?: string
   status?: string
+  quantity?: number
   is_printed?: boolean
   processes?: ProgressProcess[]
 }
@@ -39,7 +53,7 @@ export interface ProjectProgress {
   jobs_done: number
   jobs_printed: number
   jobs_pending_process: number
-  active_steps: { process: string; count: number }[]
+  active_steps: { process: string; count: number; target_seconds: number; pieces: number }[]
   active_jobs: { job_code: string; drawing_name: string; job_note: string; process: string }[]
 }
 
@@ -55,7 +69,7 @@ export function summarizeProjectProgress(
   let printed = 0
   let pendingProcess = 0
   let elapsedSeconds = 0
-  const stepCounts = new Map<string, number>()
+  const stepCounts = new Map<string, { count: number; target_seconds: number; pieces: number }>()
   const activeJobs: ProjectProgress['active_jobs'] = []
 
   for (const job of jobs) {
@@ -82,7 +96,11 @@ export function summarizeProjectProgress(
       continue
     }
     const name = (current.process ?? '').trim() || '-'
-    stepCounts.set(name, (stepCounts.get(name) ?? 0) + 1)
+    const currentSummary = stepCounts.get(name) ?? { count: 0, target_seconds: 0, pieces: 0 }
+    currentSummary.count += 1
+    currentSummary.target_seconds += parseTargetSeconds(current.target_time)
+    currentSummary.pieces += Number.isFinite(Number(job.quantity)) && Number(job.quantity) > 0 ? Number(job.quantity) : 1
+    stepCounts.set(name, currentSummary)
     if (job.project_id) {
       activeJobs.push({
         job_code: job.project_id,
@@ -98,10 +116,10 @@ export function summarizeProjectProgress(
 
   let currentStep = ''
   let topCount = 0
-  for (const [name, count] of stepCounts) {
-    if (count > topCount) {
+  for (const [name, summary] of stepCounts) {
+    if (summary.count > topCount) {
       currentStep = name
-      topCount = count
+      topCount = summary.count
     }
   }
 
@@ -120,7 +138,7 @@ export function summarizeProjectProgress(
     jobs_done: done,
     jobs_printed: printed,
     jobs_pending_process: pendingProcess,
-    active_steps: Array.from(stepCounts, ([process, count]) => ({ process, count }))
+    active_steps: Array.from(stepCounts, ([process, summary]) => ({ process, ...summary }))
       .sort((a, b) => b.count - a.count),
     active_jobs: activeJobs,
   }

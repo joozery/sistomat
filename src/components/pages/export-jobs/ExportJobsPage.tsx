@@ -253,7 +253,8 @@ export function ExportJobsPage() {
       }
       if (canSeeSkill) base['SKILL'] = r.skill
       base['รวมเวลา'] = r.elapsed_time
-      base['ค่าความเสียหาย (บาท)'] = normalizeDamageCost(r.damage_cost)
+      const damageCost = normalizeDamageCost(r.damage_cost)
+      base['ค่าความเสียหาย (บาท)'] = damageCost > 0 ? damageCost : ''
       base['หมายเหตุ'] = r.remark ?? ''
       base['ส่วนต่างเวลา'] = comparison.difference
       base['ผลเทียบเป้าหมาย'] = comparison.label
@@ -305,16 +306,17 @@ export function ExportJobsPage() {
       sheet[address] = { ...previous, t: type, v: value }
     }
 
+    // Keep the template layout, but remove the old OUTSOURCE/PROCESS labels
+    // from the generated Job export and use the same Coating label as Process Details.
+    setCell('H2', '')
+    setCell('H3', '')
+    setCell('I3', '')
+    setCell('J3', 'Coating')
+
     let rowNumber = 4
     let sequence = 1
     for (const jobRows of grouped.values()) {
       const first = jobRows[0]
-      const processRemarks = [...new Map(
-        jobRows
-          .map((row) => ({ process: row.process?.trim(), remark: row.remark?.trim() }))
-          .filter((row) => row.process && row.remark)
-          .map((row) => [row.process, `${row.process}: ${row.remark}`] as const),
-      ).values()]
       const damageByProcess = jobRows
         .map((row) => ({
           process: row.process?.trim() || 'ไม่ระบุ process',
@@ -338,14 +340,13 @@ export function ExportJobsPage() {
       setCell(`H${rowNumber}`, '')
       setCell(`I${rowNumber}`, '')
       setCell(`J${rowNumber}`, first.coating || '')
-      setCell(`K${rowNumber}`, processRemarks.join(' / '))
-      setCell(
-        `L${rowNumber}`,
-        `${damageByProcess.length > 0 ? `${damageByProcess.join('\n')}\n` : ''}รวม: ${totalDamage.toLocaleString('th-TH', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} บาท`,
-      )
+      setCell(`K${rowNumber}`, '')
+      setCell(`L${rowNumber}`, totalDamage > 0
+        ? `${damageByProcess.length > 0 ? `${damageByProcess.join('\n')}\n` : ''}รวม: ${totalDamage.toLocaleString('th-TH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} บาท`
+        : '')
       rowNumber += 1
     }
 

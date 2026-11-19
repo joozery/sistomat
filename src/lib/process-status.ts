@@ -1,7 +1,7 @@
 import { isRowCompleted } from './workers'
 
 export const GENERAL_PROCESS_STATUSES = ['รอดำเนินการ', 'กำลังดำเนินการ', 'เสร็จแล้ว'] as const
-export const QC_PROCESS_STATUSES = ['รอดำเนินการ', 'กำลังดำเนินการ', 'รอรับงาน', 'รับงาน', 'ไม่รับงาน'] as const
+export const QC_PROCESS_STATUSES = ['รอดำเนินการ', 'กำลังดำเนินการ', 'เสร็จแล้ว', 'รอรับงาน', 'รับงาน', 'ไม่รับงาน'] as const
 
 export function isQcProcess(processName: string): boolean {
   return processName.trim().toUpperCase() === 'QC'
@@ -38,7 +38,8 @@ export function getProcessStatus({
   if (completed) {
     const normalizedJobStatus = (jobStatus ?? '').trim()
     if (normalizedJobStatus === 'รับงาน' || normalizedJobStatus === 'ไม่รับงาน') return normalizedJobStatus
-    return 'รอรับงาน'
+    if (normalizedJobStatus === 'รอรับงาน') return 'รอรับงาน'
+    return 'เสร็จแล้ว'
   }
   if (inProgress) return 'กำลังดำเนินการ'
   return 'รอดำเนินการ'

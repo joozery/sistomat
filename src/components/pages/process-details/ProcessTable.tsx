@@ -231,8 +231,8 @@ export function ProcessTable({ processList, processOptions, coating = '', onCoat
                 ค่าความเสียหาย<br />
                 <span className="font-normal text-[10px]">(บาท)</span>
               </th>}
-              {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[140px] leading-snug">
-                Coating / Heat Treatment
+              {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-1 py-1.5 w-24 min-w-0 leading-snug">
+                Coating
               </th>}
               {!isReadOnly && <th rowSpan={2} className="border border-slate-300 text-center font-bold text-slate-800 px-2 py-1.5 min-w-[100px]">
                 หมายเหตุ
@@ -533,8 +533,8 @@ export function ProcessTable({ processList, processOptions, coating = '', onCoat
                         type="text"
                         value={coating}
                         onChange={(e) => onCoatingChange(e.target.value)}
-                        placeholder="ระบุ Coating / Heat Treatment"
-                        className="w-full min-h-9 border-0 bg-white px-2 text-slate-700 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400"
+                        placeholder="ระบุ Coating"
+                        className="w-full min-h-9 border-0 bg-white px-1 text-slate-700 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400"
                         style={{ fontSize: '12px' }}
                       />
                     )}

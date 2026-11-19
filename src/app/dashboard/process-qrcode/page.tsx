@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight, RefreshCw, CalendarDays, X } from 'lucide-react'
+import { QrCode, Activity, CheckCircle2, ScanBarcode, ArrowRight, RefreshCw, CalendarDays, X, Clock3, Package } from 'lucide-react'
 import { ProjectTable } from '@/components/pages/process-qrcode/ProjectTable'
 import { AddProjectDialog } from '@/components/pages/process-qrcode/AddProjectDialog'
 import { ImportExcelDialog } from '@/components/pages/process-qrcode/ImportExcelDialog'
 import { ThaiDateInput } from '@/components/ui/thai-date-input'
 import { compareNatural } from '@/lib/natural-sort'
+import { useCurrentUser } from '@/lib/useCurrentUser'
 
 const API_URL = '/api/projects'
 const ITEMS_PER_PAGE = 10
@@ -25,7 +26,7 @@ interface Project {
     jobs_done: number
     jobs_printed?: number
     jobs_pending_process?: number
-    active_steps?: { process: string; count: number }[]
+    active_steps?: { process: string; count: number; target_seconds: number; pieces: number }[]
     active_jobs?: { job_code: string; drawing_name: string; job_note: string; process: string }[]
   }
 }
@@ -42,6 +43,8 @@ interface MatchedJob {
 
 export default function ProcessQRCodePage() {
   const router = useRouter()
+  const { role } = useCurrentUser()
+  const canSeeTargetTime = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   const scanInputRef = useRef<HTMLInputElement>(null)
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scanValueRef = useRef('')
@@ -126,15 +129,27 @@ export default function ProcessQRCodePage() {
 
   const normalize = (s: string) => s.toLowerCase().replace(/[-\s]/g, '')
   const matchedLevel1s = new Set(matchedJobs.map((j) => j.level1).filter((l): l is string => Boolean(l)))
-  const processCounts = new Map<string, number>()
+  const processCounts = new Map<string, { count: number; target_seconds: number; pieces: number }>()
   for (const project of projects) {
     for (const step of project.progress?.active_steps ?? []) {
-      processCounts.set(step.process, (processCounts.get(step.process) ?? 0) + step.count)
+      const summary = processCounts.get(step.process) ?? { count: 0, target_seconds: 0, pieces: 0 }
+      summary.count += step.count
+      summary.target_seconds += step.target_seconds ?? 0
+      summary.pieces += step.pieces ?? 0
+      processCounts.set(step.process, summary)
     }
   }
-  const processSummary = Array.from(processCounts, ([process, count]) => ({ process, count }))
+  const processSummary = Array.from(processCounts, ([process, summary]) => ({ process, ...summary }))
     .sort((a, b) => b.count - a.count || a.process.localeCompare(b.process, 'th'))
   const maxProcessCount = processSummary[0]?.count ?? 1
+
+  const formatTargetTime = (seconds: number) => {
+    if (!seconds) return 'ไม่ตั้งเป้า'
+    const totalMinutes = Math.round(seconds / 60)
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    return hours > 0 ? `${hours} ชม. ${minutes} นาที` : `${minutes} นาที`
+  }
 
   const filtered = projects.filter((p) => {
     if (processFilter && !p.progress?.active_steps?.some((step) => step.process === processFilter)) return false
@@ -272,7 +287,7 @@ export default function ProcessQRCodePage() {
           <p className="text-xs text-gray-400">ยังไม่มี Job ที่ระบุ Process</p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
-            {processSummary.map(({ process, count }) => (
+            {processSummary.map(({ process, count, target_seconds, pieces }) => (
               <button key={process} type="button" aria-pressed={processFilter === process}
                 onClick={() => { setProcessFilter(processFilter === process ? null : process); setCurrentPage(1) }}
                 className={`rounded-xl border p-3 text-left transition-colors ${processFilter === process
@@ -284,6 +299,12 @@ export default function ProcessQRCodePage() {
                 </div>
                 <div className="h-1.5 rounded-full bg-gray-200 mt-3 overflow-hidden">
                   <div className="h-full rounded-full bg-[#7B1A1A]" style={{ width: `${count / maxProcessCount * 100}%` }} />
+                </div>
+                <div className="mt-2 space-y-1 text-[10px] text-gray-500">
+                  {canSeeTargetTime && (
+                    <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" /> เป้าหมายรวม {formatTargetTime(target_seconds)}</span>
+                  )}
+                  <span className="flex items-center gap-1"><Package className="h-3 w-3" /> จำนวนชิ้นงาน {pieces.toLocaleString('th-TH')} ชิ้น</span>
                 </div>
                 <span className="text-[10px] text-gray-400 mt-1 block">Job ย่อย</span>
               </button>
