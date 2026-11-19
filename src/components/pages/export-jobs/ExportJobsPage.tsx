@@ -300,23 +300,49 @@ export function ExportJobsPage() {
     const sheet = workbook.Sheets['ต.ค.69'] ?? workbook.Sheets[workbook.SheetNames[0]]
     if (!sheet) throw new Error('ไม่พบชีตสำหรับ Export งานเป็น Job')
 
+    // Remove the two legacy Process columns (H:I) from the generated Job export.
+    const sourceRange = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1:L1')
+    const removeStart = 7
+    const removeCount = 2
+    for (let row = sourceRange.s.r; row <= sourceRange.e.r; row += 1) {
+      for (let col = removeStart; col <= sourceRange.e.c - removeCount; col += 1) {
+        const sourceAddress = XLSX.utils.encode_cell({ r: row, c: col + removeCount })
+        const targetAddress = XLSX.utils.encode_cell({ r: row, c: col })
+        if (sheet[sourceAddress]) sheet[targetAddress] = sheet[sourceAddress]
+        else delete sheet[targetAddress]
+      }
+      for (let col = sourceRange.e.c - removeCount + 1; col <= sourceRange.e.c; col += 1) {
+        delete sheet[XLSX.utils.encode_cell({ r: row, c: col })]
+      }
+    }
+    sheet['!merges'] = (sheet['!merges'] ?? [])
+      .filter((merge: { s: { c: number }; e: { c: number } }) => merge.e.c < removeStart || merge.s.c >= removeStart + removeCount)
+      .map((merge: { s: { c: number; r: number }; e: { c: number; r: number } }) => ({
+        s: { ...merge.s, c: merge.s.c >= removeStart + removeCount ? merge.s.c - removeCount : merge.s.c },
+        e: { ...merge.e, c: merge.e.c >= removeStart + removeCount ? merge.e.c - removeCount : merge.e.c },
+      }))
+    if (sheet['!cols']) sheet['!cols'].splice(removeStart, removeCount)
+    sourceRange.e.c -= removeCount
+    sheet['!ref'] = XLSX.utils.encode_range(sourceRange)
+
     const setCell = (address: string, value: string | number | Date) => {
       const previous = sheet[address] ?? {}
       const type = value instanceof Date ? 'd' : typeof value === 'number' ? 'n' : 's'
       sheet[address] = { ...previous, t: type, v: value }
     }
 
-    // Keep the template layout, but remove the old OUTSOURCE/PROCESS labels
-    // from the generated Job export and use the same Coating label as Process Details.
     setCell('H2', '')
-    setCell('H3', '')
-    setCell('I3', '')
-    setCell('J3', 'Coating')
+    setCell('H3', 'Coating')
 
     let rowNumber = 4
     let sequence = 1
     for (const jobRows of grouped.values()) {
       const first = jobRows[0]
+      const remarks = [...new Set(
+        jobRows
+          .map((row) => row.remark?.trim())
+          .filter((remark): remark is string => Boolean(remark)),
+      )].join(' / ')
       const damageByProcess = jobRows
         .map((row) => ({
           process: row.process?.trim() || 'ไม่ระบุ process',
@@ -337,11 +363,9 @@ export function ExportJobsPage() {
       setCell(`E${rowNumber}`, first.dwg_name || '')
       setCell(`F${rowNumber}`, first.quantity ?? 1)
       setCell(`G${rowNumber}`, first.sender || '')
-      setCell(`H${rowNumber}`, '')
-      setCell(`I${rowNumber}`, '')
-      setCell(`J${rowNumber}`, first.coating || '')
-      setCell(`K${rowNumber}`, '')
-      setCell(`L${rowNumber}`, totalDamage > 0
+      setCell(`H${rowNumber}`, first.coating || '')
+      setCell(`I${rowNumber}`, remarks)
+      setCell(`J${rowNumber}`, totalDamage > 0
         ? `${damageByProcess.length > 0 ? `${damageByProcess.join('\n')}\n` : ''}รวม: ${totalDamage.toLocaleString('th-TH', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -351,18 +375,18 @@ export function ExportJobsPage() {
     }
 
     const lastDataRow = Math.max(3, rowNumber - 1)
-    const damageHeader = sheet['K2'] ?? {}
-    sheet['L2'] = { ...damageHeader, t: 's', v: 'ค่าความเสียหาย (บาท)' }
+    const damageHeader = sheet['I2'] ?? {}
+    sheet['J2'] = { ...damageHeader, t: 's', v: 'ค่าความเสียหาย (บาท)' }
     sheet['!merges'] = [
       ...(sheet['!merges'] ?? []),
-      { s: { c: 11, r: 1 }, e: { c: 11, r: 2 } },
+      { s: { c: 9, r: 1 }, e: { c: 9, r: 2 } },
     ]
-    sheet['!ref'] = `A1:L${lastDataRow}`
-    sheet['!autofilter'] = { ref: `A3:L${lastDataRow}` }
+    sheet['!ref'] = `A1:J${lastDataRow}`
+    sheet['!autofilter'] = { ref: `A3:J${lastDataRow}` }
     sheet['!margins'] = { left: 0.2, right: 0.2, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
 
-    const minWidths = [7, 12, 12, 20, 24, 10, 18, 18, 20, 18, 20, 24]
-    const maxWidths = [9, 14, 14, 30, 38, 12, 24, 26, 34, 26, 34, 34]
+    const minWidths = [7, 12, 12, 20, 24, 10, 18, 18, 20, 24]
+    const maxWidths = [9, 14, 14, 30, 38, 12, 24, 26, 34, 34]
     const widths = minWidths.map((minimum, columnIndex) => {
       let longest = 0
       for (let rowIndex = 0; rowIndex < lastDataRow; rowIndex += 1) {
