@@ -104,7 +104,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await req.json()
-    const { processes, status, qc, coating, flags, cancel_job: cancelJob, reopen_cancel: reopenCancel } = body
+    const { processes, status, qc, coating, flags, cancel_job: cancelJob, reopen_cancel: reopenCancel, repeat } = body
     const marker = body.marker === undefined ? undefined : parseJobMarker(body.marker)
     if (marker === null) return NextResponse.json({ message: 'กรุณาระบุเหตุผล Reject / Rework ไม่เกิน 500 ตัวอักษร' }, { status: 400 })
 
@@ -118,6 +118,30 @@ export async function PUT(
 
     const normalizedRole = String(auth.role ?? '').trim().toLowerCase()
     const canManageCancellation = normalizedRole === 'superadmin'
+
+    if (repeat !== undefined) {
+      if (normalizedRole !== 'superadmin') {
+        return NextResponse.json({ message: 'เฉพาะ Superadmin เท่านั้นที่ Repeat ใบงานได้' }, { status: 403 })
+      }
+      const reason = typeof repeat?.reason === 'string' ? repeat.reason.trim() : ''
+      if (!reason || reason.length > 500) {
+        return NextResponse.json({ message: 'กรุณาระบุเหตุผล Repeat ไม่เกิน 500 ตัวอักษร' }, { status: 400 })
+      }
+      const entry = { reason, created_at: new Date().toISOString(), actor: auth.username ?? '' }
+      const repeatUpdate: any = {
+        $set: {
+          status: 'กำลังดำเนินการ',
+          'flags.awaiting_finish_decision': false,
+          'flags.has_repeat': true,
+          updated_at: new Date(),
+        },
+        $push: { repeat_history: entry },
+      }
+      await db.collection('projects').updateOne({ project_id: id }, repeatUpdate)
+      await db.collection('jobs').updateMany({ job_code: id }, { $set: { status: 'กำลังดำเนินการ' } })
+      emitRealtimeUpdate()
+      return NextResponse.json({ status: 'กำลังดำเนินการ', repeat_history: entry })
+    }
 
     if (body.rename_project !== undefined) {
       if (normalizedRole === 'user' || normalizedRole === 'ช่าง') {
@@ -307,9 +331,19 @@ export async function PUT(
       }
     }
 
+    const updateOperation: Record<string, unknown> = { $set: update }
+    if ((status === 'รับงาน' || status === 'ไม่รับงาน') && currentProject.status !== status) {
+      updateOperation.$push = {
+        finish_history: {
+          status,
+          created_at: new Date().toISOString(),
+          actor: auth.username ?? '',
+        },
+      }
+    }
     const result = await db
       .collection('projects')
-      .updateOne({ project_id: id }, { $set: update })
+      .updateOne({ project_id: id }, updateOperation)
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ message: `ไม่พบใบงาน "${id}"` }, { status: 404 })

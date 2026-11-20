@@ -642,8 +642,22 @@ interface CancellationInfo {
   reopened_at?: string
 }
 
+interface FinishHistoryEntry {
+  status: 'รับงาน' | 'ไม่รับงาน'
+  created_at: string
+  actor?: string
+}
+
+interface RepeatHistoryEntry {
+  reason: string
+  created_at: string
+  actor?: string
+}
+
 interface ProjectData {
   marker_history?: JobMarker[]
+  finish_history?: FinishHistoryEntry[]
+  repeat_history?: RepeatHistoryEntry[]
   project_id: string
   job_note?: string
   dwg_name?: string
@@ -707,6 +721,7 @@ export default function ProcessDetailsPage() {
   const [actionModal, setActionModal] = useState<{ mode: 'start' | 'stop'; row: number; col: number; workerId: string; processName: string } | null>(null)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelSaving, setCancelSaving] = useState(false)
+  const [repeatDialogOpen, setRepeatDialogOpen] = useState(false)
   // สแกนหยุดงานผ่านบาร์โค้ดโดยตรง (ไม่ผ่าน ActionModal) — รอเลือกเหตุผลก่อนถึงจะบันทึกจริง
   const [pendingStop, setPendingStop] = useState<{ rowIndex: number; workerIdStr: string; workerName: string; processName: string; nowTime: string } | null>(null)
   const actionModalRef = useRef<typeof actionModal>(null)
@@ -1037,6 +1052,27 @@ export default function ProcessDetailsPage() {
       setReopeningFinishDecision(false)
     }
   }, [id, reopeningFinishDecision, showToast])
+
+  const repeatJob = useCallback(async (reason: string) => {
+    if (role.trim().toLowerCase() !== 'superadmin' || !projectRef.current) return
+    const response = await fetch(`/api/projects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ repeat: { reason } }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.message || 'Repeat ใบงานไม่สำเร็จ')
+    const entry = data.repeat_history as RepeatHistoryEntry
+    const next = projectRef.current
+      ? { ...projectRef.current, status: 'กำลังดำเนินการ', repeat_history: [...(projectRef.current.repeat_history ?? []), entry], flags: { ...projectRef.current.flags, awaiting_finish_decision: false, has_repeat: true } }
+      : null
+    if (next) {
+      projectRef.current = next
+      setProject(next)
+    }
+    setRepeatDialogOpen(false)
+    showToast('success', 'Repeat ใบงานแล้ว', reason)
+  }, [id, role, showToast])
 
   useEffect(() => {
     const handleLocalScan = (e: any) => {
@@ -1670,6 +1706,7 @@ export default function ProcessDetailsPage() {
 
   // ── Main ──
   const isJobFinished = ['รับงาน', 'ไม่รับงาน', 'จบงาน', 'ยกเลิก', 'ยกเลิกงาน', 'REJECT'].includes(project.status)
+  const canRepeat = role.trim().toLowerCase() === 'superadmin' && ['รับงาน', 'ไม่รับงาน'].includes(project.status.trim())
 
   return (
     <>
@@ -1711,6 +1748,13 @@ export default function ProcessDetailsPage() {
             showToast('success', `บันทึก ${markerTarget.type === 'reject' ? 'Reject' : 'Rework'} แล้ว`, reason)
           } finally { markerSavingRef.current = false }
         }}
+      />
+    )}
+    {repeatDialogOpen && (
+      <HoldReasonDialog
+        kind="Repeat"
+        onCancel={() => setRepeatDialogOpen(false)}
+        onConfirm={repeatJob}
       />
     )}
     {actionModal && (
@@ -1777,6 +1821,16 @@ export default function ProcessDetailsPage() {
               ย้อนกลับไปเลือกผล
             </Button>
           )}
+          {canRepeat && (
+            <Button
+              variant="outline"
+              onClick={() => setRepeatDialogOpen(true)}
+              className="h-8 gap-1.5 rounded-full border-orange-200 px-3 text-xs font-semibold text-orange-700 hover:bg-orange-50"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Repeat
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1803,6 +1857,8 @@ export default function ProcessDetailsPage() {
             hasRework={!!project.flags?.has_rework}
             hasReject={!!project.flags?.has_reject}
             markerHistory={project.marker_history}
+            finishHistory={project.finish_history}
+            repeatHistory={project.repeat_history}
             hasHold={!!project.flags?.has_hold}
             activeHolds={processList.filter(row => row.on_hold && !row.next_confirmed_at).map(row => ({ process: row.process, reason: row.hold_reason }))}
             pastHolds={processList.flatMap(row => getPastHolds(row).map(hold => ({ ...hold, process: row.process })))}

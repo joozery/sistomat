@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 
 export function HoldReasonDialog({ processName, kind = 'HOLD', onCancel, onConfirm }: {
   processName?: string
-  kind?: 'HOLD' | 'Reject' | 'Rework'
+  kind?: 'HOLD' | 'Reject' | 'Rework' | 'Repeat'
   onCancel: () => void
   onConfirm: (reason: string) => Promise<void>
 }) {

@@ -19,6 +19,18 @@ interface JobHeaderAttachment {
   file_name: string
 }
 
+interface FinishHistoryEntry {
+  status: 'รับงาน' | 'ไม่รับงาน'
+  created_at: string
+  actor?: string
+}
+
+interface RepeatHistoryEntry {
+  reason: string
+  created_at: string
+  actor?: string
+}
+
 interface JobHeaderProps {
   id: string
   jobNote?: string
@@ -34,13 +46,15 @@ interface JobHeaderProps {
   hasRework?: boolean
   hasReject?: boolean
   markerHistory?: JobMarker[]
+  finishHistory?: FinishHistoryEntry[]
+  repeatHistory?: RepeatHistoryEntry[]
   hasHold?: boolean
   activeHolds?: { process: string; reason?: string }[]
   pastHolds?: { process: string; reason?: string; round: number; held_at: string | null; released_at: string | null }[]
   cancellation?: { reason: string; cancelled_by: string; cancelled_at: string; reopened_by?: string; reopened_at?: string }
 }
 
-export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrinted, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasReject, hasHold, markerHistory = [], activeHolds = [], pastHolds = [], cancellation }: JobHeaderProps) {
+export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrinted, receivedDate, dueDate, fileUrl, fileName, attachments, hasRework, hasReject, hasHold, markerHistory = [], finishHistory = [], repeatHistory = [], activeHolds = [], pastHolds = [], cancellation }: JobHeaderProps) {
   const fullJobId = [id, jobNote?.trim()].filter(Boolean).join('-')
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
@@ -179,6 +193,18 @@ export function JobHeader({ id, jobNote, dwgName, quantity, hasNoProcess, isPrin
                 </div>
               )
             })}
+            {finishHistory.map((entry, index) => (
+              <div key={`finish-${entry.created_at}-${index}`} className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 break-words">
+                <p role="status"><span className="font-bold">{entry.status} รอบที่ {index + 1}</span></p>
+                <p className="text-xs">{new Date(entry.created_at).toLocaleString('th-TH')} {entry.actor ? `• ${entry.actor}` : ''}</p>
+              </div>
+            ))}
+            {repeatHistory.map((entry, index) => (
+              <div key={`repeat-${entry.created_at}-${index}`} className="mt-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800 break-words whitespace-pre-wrap">
+                <p role="status"><span className="font-bold">Repeat รอบที่ {index + 1}</span>: {entry.reason}</p>
+                <p className="text-xs">{new Date(entry.created_at).toLocaleString('th-TH')} {entry.actor ? `• ${entry.actor}` : ''}</p>
+              </div>
+            ))}
             {(hasRework || hasReject || (canViewHoldHistory && hasHold)) && (
               <div className="flex items-center justify-center md:justify-start gap-1.5 pt-1">
                 {hasReject && !markerHistory.some(entry => entry.type === 'reject') && (
