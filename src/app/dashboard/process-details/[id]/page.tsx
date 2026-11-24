@@ -828,7 +828,7 @@ export default function ProcessDetailsPage() {
         setAwaitingFinishDecision(!!data.flags?.awaiting_finish_decision)
 
         // Migrate legacy data and format workers array
-        const mappedProcesses = (data.processes ?? []).map((p: any) => {
+        const mappedProcesses = (data.processes ?? []).map((p: any, index) => {
           let workers = p.workers || []
           if (!p.workers && p.worker_id !== undefined) {
             workers = [
@@ -840,6 +840,7 @@ export default function ProcessDetailsPage() {
           }
           return {
             ...p,
+            coating: p.coating ?? (index === 0 ? data.coating ?? '' : ''),
             target_time: normalizeTargetTime(p.target_time),
             skill: p.skill || '0',
             workers: workers.slice(0, 4)
@@ -851,7 +852,8 @@ export default function ProcessDetailsPage() {
         const targetTimeWasNormalized = mappedProcesses.some(
           (process, index) => process.target_time !== (data.processes?.[index]?.target_time || '00:00')
         )
-        if (targetTimeWasNormalized) {
+        const legacyCoatingNeedsMigration = Boolean(data.coating) && !(data.processes ?? []).some((process: any) => Boolean(process.coating))
+        if (targetTimeWasNormalized || legacyCoatingNeedsMigration) {
           fetch(`/api/projects/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
@@ -936,12 +938,6 @@ export default function ProcessDetailsPage() {
       next[index] = { ...next[index], [field]: value }
       return next
     })
-    setEditVersion((v) => v + 1)
-  }
-
-  const handleCoatingChange = (value: string) => {
-    setProject((prev) => prev ? { ...prev, coating: value } : prev)
-    projectRef.current = projectRef.current ? { ...projectRef.current, coating: value } : projectRef.current
     setEditVersion((v) => v + 1)
   }
 
@@ -1882,8 +1878,6 @@ export default function ProcessDetailsPage() {
           <ProcessTable
             processList={processList}
             processOptions={processOptions}
-            coating={project.coating ?? ''}
-            onCoatingChange={handleCoatingChange}
             disabled={project.status === 'ยกเลิกงาน'}
             activeRowIndex={activeRowIndex}
             activeWorkerSlot={activeWorkerSlot}

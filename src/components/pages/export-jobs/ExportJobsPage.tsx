@@ -243,7 +243,7 @@ export function ExportJobsPage() {
       const base: Record<string, string | number> = {
         'Job': r.job_code,
         'DWG': r.dwg_name,
-        'Coating / Heat Treatment': r.coating,
+        'Coating': r.coating,
         'จำนวนชิ้นงาน': r.quantity ?? 1,
         'วันรับงาน': formatDate(r.received_date),
         'วันกำหนดส่งมอบ': formatDate(r.due_date),
@@ -343,6 +343,11 @@ export function ExportJobsPage() {
           .map((row) => row.remark?.trim())
           .filter((remark): remark is string => Boolean(remark)),
       )].join(' / ')
+      const coatings = [...new Set(
+        jobRows
+          .map((row) => row.coating?.trim())
+          .filter((coating): coating is string => Boolean(coating)),
+      )].join(' / ')
       const damageByProcess = jobRows
         .map((row) => ({
           process: row.process?.trim() || 'ไม่ระบุ process',
@@ -363,7 +368,7 @@ export function ExportJobsPage() {
       setCell(`E${rowNumber}`, first.dwg_name || '')
       setCell(`F${rowNumber}`, first.quantity ?? 1)
       setCell(`G${rowNumber}`, first.sender || '')
-      setCell(`H${rowNumber}`, first.coating || '')
+      setCell(`H${rowNumber}`, coatings)
       setCell(`I${rowNumber}`, remarks)
       setCell(`J${rowNumber}`, totalDamage > 0
         ? `${damageByProcess.length > 0 ? `${damageByProcess.join('\n')}\n` : ''}รวม: ${totalDamage.toLocaleString('th-TH', {

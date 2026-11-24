@@ -23,6 +23,7 @@ interface ProcessRow {
   elapsed_time?: string
   damage_cost?: string | number
   remark?: string
+  coating?: string
   workers?: WorkerLog[]
   next_confirmed_at?: string | Date | null
 }
@@ -237,7 +238,7 @@ export async function GET(req: NextRequest) {
           remark: row.remark ?? '',
           workers: workerNames.join(', '),
           completed: processStatus === 'เสร็จแล้ว' || processStatus === 'รับงาน' || processStatus === 'ไม่รับงาน',
-          coating: p.coating ?? '',
+          coating: row.coating ?? (i === 0 ? p.coating ?? '' : ''),
         })
       })
     }

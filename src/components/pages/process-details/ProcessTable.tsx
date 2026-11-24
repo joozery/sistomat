@@ -118,6 +118,7 @@ export interface ProcessRow {
   elapsed_time: string
   damage_cost?: string
   remark: string
+  coating?: string
   next_confirmed_at?: string
   on_hold?: boolean
   hold_reason?: string
@@ -127,8 +128,6 @@ export interface ProcessRow {
 interface ProcessTableProps {
   processList: ProcessRow[]
   processOptions: string[]
-  coating?: string
-  onCoatingChange?: (value: string) => void
   disabled?: boolean
   onChange: (index: number, field: keyof ProcessRow, value: string) => void
   onWorkerChange: (rowIndex: number, workerIndex: number, field: keyof WorkerLog, value: string) => void
@@ -150,7 +149,7 @@ const workerColors = [
   { header: '#fbcfe8', subHeader: '#fce7f3', cell: '#fdf2f8' },
 ]
 
-export function ProcessTable({ processList, processOptions, coating = '', onCoatingChange, disabled = false, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
+export function ProcessTable({ processList, processOptions, disabled = false, activeRowIndex, activeWorkerSlot, onRowClick, onWorkerSlotActivate, onStartClick, onStopClick, onChange, onWorkerChange, onAddRow, onInsertRow, onDeleteRow }: ProcessTableProps) {
   const { role } = useCurrentUser()
   const canViewHoldHistory = ['admin', 'superadmin'].includes(role.trim().toLowerCase())
   const canSeeSkill = role !== 'User' && role !== 'ช่าง'
@@ -524,15 +523,15 @@ export function ProcessTable({ processList, processOptions, coating = '', onCoat
                   </td>
 
                   <td className="border border-slate-300 p-0 align-top">
-                    {isReadOnly || !onCoatingChange ? (
+                    {isReadOnly ? (
                       <div className="min-h-9 flex items-center px-2 text-slate-700" style={{ fontSize: '12px' }}>
-                        {coating || '-'}
+                        {row.coating || '-'}
                       </div>
                     ) : (
                       <input
                         type="text"
-                        value={coating}
-                        onChange={(e) => onCoatingChange(e.target.value)}
+                        value={row.coating ?? ''}
+                        onChange={(e) => onChange(index, 'coating', e.target.value)}
                         placeholder="ระบุ Coating"
                         className="w-full min-h-9 border-0 bg-white px-1 text-slate-700 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400"
                         style={{ fontSize: '12px' }}
