@@ -34,7 +34,7 @@ function formatThaiDate(dateStr: string) {
 function splitProcesses(list: ProcessRow[]) {
   const padded = [...list]
   while (padded.length < 20) {
-    padded.push({ id: 0, process: '', target_time: '', skill: '', workers: [], elapsed_time: '', remark: '' })
+    padded.push({ id: 0, process: '', target_time: '', skill: '', workers: [], elapsed_time: '', remark: '', coating: '' })
   }
   return { left: padded.slice(0, 10), right: padded.slice(10, 20) }
 }
@@ -81,6 +81,7 @@ export default function PrintPreviewPage() {
           ],
           elapsed_time: p.elapsed_time ?? '',
           remark: p.remark ?? '',
+          coating: p.coating ?? '',
         })))
       }
     } catch {
@@ -371,7 +372,7 @@ export default function PrintPreviewPage() {
                 <th style={th({ width: '100px' })}>กระบวนการ</th>
                 <th style={th({ width: '40px', borderLeft: '2px solid #333' })}>ลำดับที่</th>
                 <th style={th({ width: '100px' })}>กระบวนการ</th>
-                <th style={th()}>หมายเหตุ</th>
+                <th style={th()}>Coating</th>
               </tr>
             </thead>
             <tbody>
@@ -390,7 +391,7 @@ export default function PrintPreviewPage() {
                     <td style={td({ color: isQcFnR ? '#7B1A1A' : '#000', fontWeight: isQcFnR ? 'bold' : 'normal', backgroundColor: isQcFnR ? '#fef08a' : '#fff' })}>
                       {rowR?.process || '\u00A0'}
                     </td>
-                    <td style={td()}>{[rowL.remark, rowR?.remark].map((remark) => remark?.trim()).filter(Boolean).join(' / ') || '\u00A0'}</td>
+                    <td style={td()}>{[rowL.coating, rowR?.coating].map((coating) => coating?.trim()).filter(Boolean).join(' / ') || '\u00A0'}</td>
                   </tr>
                 )
               })}

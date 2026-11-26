@@ -89,6 +89,14 @@ export default function ProcessQRCodePage() {
       const res = await fetch(API_URL, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('auth')
+        localStorage.removeItem('user')
+        document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+        router.push('/login')
+        return
+      }
       const data = await res.json()
       setProjects(Array.isArray(data) ? data : [])
     } catch {
@@ -96,7 +104,7 @@ export default function ProcessQRCodePage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => {
     fetchProjects()

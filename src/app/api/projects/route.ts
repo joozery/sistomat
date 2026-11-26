@@ -51,7 +51,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    jwt.verify(token, JWT_SECRET)
+    // Authentication failures are expected client errors, not server errors.
+    // Keep them outside the data-loading catch path so an expired JWT returns
+    // the same 401 response as a missing or otherwise invalid token.
+    try {
+      jwt.verify(token, JWT_SECRET)
+    } catch {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
 
     const client = await getClientPromise()
     const db = client.db('sistomat')
